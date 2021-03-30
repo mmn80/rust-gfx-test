@@ -1,0 +1,8 @@
+[package]
+name = "rts"
+version = "0.1.0"
+authors = ["Călin Ardelean <mmn80cpu@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+rts-lib = { path = "../rts-lib" }
