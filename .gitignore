@@ -1,3 +1,5 @@
 /target
 /sled-db
 config.toml
+rts-lib/res/rounded-cube*
+*.spv
