@@ -66,13 +66,7 @@ impl Camera {
             self.position.z += self.speed * dt;
         }
         if input.last_scroll != 0.0 {
-            self.position.y += self.scroll_speed * input.last_scroll * dt;
-        }
-        if input.key_pressed.contains(&VirtualKeyCode::Up) {
-            self.pitch += cgmath::Rad(dt);
-        }
-        if input.key_pressed.contains(&VirtualKeyCode::Down) {
-            self.pitch -= cgmath::Rad(dt);
+            self.position.y += self.scroll_speed * input.last_scroll * dt * (self.position.y / 10.0);
         }
         if input.key_pressed.contains(&VirtualKeyCode::Left) {
             self.yaw += cgmath::Rad(dt);
@@ -81,6 +75,7 @@ impl Camera {
             self.yaw -= cgmath::Rad(dt);
         }
 
+        self.pitch = cgmath::Deg(-90.0 + (1.0 - (self.position.y / 100.0).powi(2)).min(1.0).max(0.0) * 45.0).into();
         if self.pitch < -Rad(SAFE_FRAC_PI_2) {
             self.pitch = -Rad(SAFE_FRAC_PI_2);
         } else if self.pitch > Rad(SAFE_FRAC_PI_2) {
@@ -91,6 +86,9 @@ impl Camera {
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
+const ZNEAR: f32 = 0.1;
+const ZFAR: f32 = 500.0;
+
 pub struct Projection {
     aspect: f32,
     fovy: Rad<f32>,
@@ -99,12 +97,12 @@ pub struct Projection {
 }
 
 impl Projection {
-    pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F, znear: f32, zfar: f32) -> Self {
+    pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F) -> Self {
         Self {
             aspect: width as f32 / height as f32,
             fovy: fovy.into(),
-            znear,
-            zfar,
+            znear: ZNEAR,
+            zfar: ZFAR,
         }
     }
 

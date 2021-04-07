@@ -188,7 +188,7 @@ impl State {
 
         let camera = camera::Camera::new((0.0, 50.0, 0.0));
         let projection =
-            camera::Projection::new(gpu.sc_desc.width, gpu.sc_desc.height, cgmath::Deg(45.0), 0.1, 100.0);
+            camera::Projection::new(gpu.sc_desc.width, gpu.sc_desc.height, cgmath::Deg(45.0));
 
         let mut uniforms = Uniforms::new();
         uniforms.update_view_proj(&camera, &projection);
