@@ -1,5 +1,8 @@
 /target
-/sled-db
+Cargo.lock
 config.toml
-rts-lib/res/rounded-cube*
-*.spv
+/sled-db
+/assets-unused
+.assets_db
+rts/assets/blender
+rts/assets/fonts
