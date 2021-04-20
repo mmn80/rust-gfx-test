@@ -10,7 +10,7 @@ publish = false
 toml = "0.5"
 winit = "0.24"
 rayon = "1.4"
-rafx = { path = "../../rafx/rafx", features = ["renderer"] }
+rafx = { path = "../../rafx/rafx", features = ["renderer", "rafx-vulkan"] }
 shaders = { path = "shaders" }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"

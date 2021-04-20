@@ -16,6 +16,7 @@ use rafx::assets::distill_impl::AssetResource;
 use rafx::nodes::ExtractResources;
 use rafx::renderer::ViewportsResource;
 use rafx::renderer::{AssetSource, Renderer};
+use rafx::visibility::VisibilityRegion;
 
 pub mod assets;
 mod components;
@@ -518,19 +519,12 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 };
             }
 
+            add_to_extract_resources!(VisibilityRegion);
             add_to_extract_resources!(RafxSwapchainHelper);
             add_to_extract_resources!(ViewportsResource);
             add_to_extract_resources!(AssetManager);
             add_to_extract_resources!(TimeState);
             add_to_extract_resources!(RenderOptions);
-            add_to_extract_resources!(
-                rafx::visibility::DynamicVisibilityNodeSet,
-                dynamic_visibility_node_set
-            );
-            add_to_extract_resources!(
-                rafx::visibility::StaticVisibilityNodeSet,
-                static_visibility_node_set
-            );
             add_to_extract_resources!(
                 crate::features::mesh::MeshRenderNodeSet,
                 mesh_render_node_set
