@@ -379,10 +379,31 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
 
             text_resource.add_text(
-                "RTS MMO".to_string(),
+                "Lorem Ipsum".to_string(),
                 glam::Vec3::new(100.0, 400.0, 0.0),
                 &font,
-                40.0,
+                20.0,
+                glam::Vec4::new(1.0, 0.0, 0.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 430.0, 0.0),
+                &font,
+                25.0,
+                glam::Vec4::new(0.0, 1.0, 0.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 460.0, 0.0),
+                &font,
+                30.0,
+                glam::Vec4::new(0.0, 0.0, 1.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 500.0, 0.0),
+                &font,
+                35.0,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
         }

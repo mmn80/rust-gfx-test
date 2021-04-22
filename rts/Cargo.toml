@@ -10,7 +10,7 @@ publish = false
 toml = "0.5"
 winit = "0.24"
 rayon = "1.4"
-rafx = { path = "../../rafx/rafx", features = ["renderer", "rafx-vulkan"] }
+rafx = { path = "../../rafx/rafx", features = ["renderer"] }
 shaders = { path = "shaders" }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
@@ -60,6 +60,7 @@ default = [
     "sdl2-static-link",
     "use-imgui",
     "profile-with-puffin",
+    "rafx-vulkan",
     #"profile-with-stats-alloc", # Cannot be enabled with "profile-with-tracy-memory". Will run renderer / game loop single-threaded.
     #"profile-with-optick",
     #"profile-with-tracy",

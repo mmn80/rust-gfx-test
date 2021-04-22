@@ -33,6 +33,7 @@ pub fn sdl2_init() -> Sdl2Systems {
         .position_centered()
         .allow_highdpi()
         .resizable()
+        //.fullscreen_desktop()
         .build()
         .expect("Failed to create window");
 
