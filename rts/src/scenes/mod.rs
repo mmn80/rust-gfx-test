@@ -8,17 +8,16 @@ use legion::{Read, Resources, World};
 use rand::Rng;
 use sdl2::event::Event;
 
+mod menu_scene;
+use menu_scene::MenuScene;
 mod shadows_scene;
 use shadows_scene::ShadowsScene;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
+    Menu,
     Shadows,
 }
-
-pub const ALL_SCENES: [Scene; 1] = [
-    Scene::Shadows,
-];
 
 fn random_color(rng: &mut impl Rng) -> Vec3 {
     let r = rng.gen_range(0.2, 1.0);
@@ -28,117 +27,70 @@ fn random_color(rng: &mut impl Rng) -> Vec3 {
     v.normalize()
 }
 
-fn create_scene(
-    scene: Scene,
-    world: &mut World,
-    resources: &Resources,
-) -> Box<dyn TestScene> {
+fn create_scene(scene: Scene, world: &mut World, resources: &Resources) -> Box<dyn GameScene> {
     match scene {
+        Scene::Menu => Box::new(MenuScene::new(world, resources)),
         Scene::Shadows => Box::new(ShadowsScene::new(world, resources)),
     }
 }
 
-//
-// All scenes implement this and new()
-//
-pub trait TestScene {
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum SceneManagerAction {
+    None,
+    Scene(Scene),
+    Exit,
+}
+
+pub trait GameScene {
     fn update(
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-    );
+        events: Vec<Event>,
+    ) -> SceneManagerAction;
 
-    fn process_input(
-        &mut self,
-        _world: &mut World,
-        _resources: &Resources,
-        _event: Event,
-    ) {
-    }
-
-    fn cleanup(
-        &mut self,
-        _world: &mut World,
-        _resources: &Resources,
-    ) {
-    }
+    fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
 }
 
 pub struct SceneManager {
-    current_scene_index: usize,
-    current_scene: Option<Box<dyn TestScene>>,
-    next_scene: Option<usize>,
+    scene: Option<Box<dyn GameScene>>,
+    current_scene: Scene,
 }
 
 impl Default for SceneManager {
     fn default() -> Self {
         SceneManager {
-            current_scene: None,
-            current_scene_index: 0,
-            next_scene: Some(0),
+            scene: None,
+            current_scene: Scene::Menu,
         }
     }
 }
 
 impl SceneManager {
-    pub fn queue_load_previous_scene(&mut self) {
-        if self.current_scene_index == 0 {
-            self.next_scene = Some(ALL_SCENES.len() - 1)
-        } else {
-            self.next_scene = Some(self.current_scene_index - 1)
+    pub fn try_load_scene(&mut self, world: &mut World, resources: &Resources, next_scene: Scene) {
+        if let Some(scene) = &mut self.scene {
+            scene.cleanup(world, resources);
         }
-    }
-
-    pub fn queue_load_next_scene(&mut self) {
-        self.next_scene = Some((self.current_scene_index + 1) % ALL_SCENES.len());
-    }
-
-    pub fn process_input(
-        &mut self,
-        world: &mut World,
-        resources: &Resources,
-        event: Event,
-    ) {
-        if let Some(current_scene) = &mut self.current_scene {
-            current_scene.process_input(world, resources, event);
-        }
-    }
-
-    pub fn try_create_next_scene(
-        &mut self,
-        world: &mut World,
-        resources: &Resources,
-    ) {
-        if let Some(next_scene_index) = self.next_scene.take() {
-            if let Some(current_scene) = &mut self.current_scene {
-                current_scene.cleanup(world, resources);
-            }
-
-            world.clear();
-
-            let next_scene = ALL_SCENES[next_scene_index];
-            log::info!("Load scene {:?}", next_scene);
-            self.current_scene_index = next_scene_index;
-            self.current_scene = Some(create_scene(next_scene, world, resources));
-        }
+        world.clear();
+        log::info!("Load scene {:?}", next_scene);
+        self.scene = Some(create_scene(next_scene, world, resources));
     }
 
     pub fn update_scene(
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-    ) {
-        self.current_scene
-            .as_mut()
-            .unwrap()
-            .update(world, resources);
+        events: Vec<Event>,
+    ) -> SceneManagerAction {
+        if let Some(scene) = &mut self.scene {
+            scene.update(world, resources, events)
+        } else {
+            SceneManagerAction::None
+        }
     }
 }
 
-fn add_light_debug_draw(
-    resources: &Resources,
-    world: &World,
-) {
+fn add_light_debug_draw(resources: &Resources, world: &World) {
     let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
 
     let mut query = <Read<DirectionalLightComponent>>::query();

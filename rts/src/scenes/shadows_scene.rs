@@ -1,3 +1,5 @@
+use super::{Scene, SceneManagerAction};
+use crate::assets::font::FontAsset;
 use crate::assets::gltf::MeshAsset;
 use crate::components::{
     DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
@@ -7,6 +9,7 @@ use crate::features::debug3d::Debug3DRenderFeature;
 use crate::features::imgui::ImGuiRenderFeature;
 use crate::features::mesh::{MeshRenderFeature, MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextRenderFeature;
+use crate::features::text::TextResource;
 use crate::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
 };
@@ -23,16 +26,16 @@ use rafx::rafx_visibility::{DepthRange, PerspectiveParameters, Projection};
 use rafx::renderer::{RenderViewMeta, ViewportsResource};
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
+use sdl2::{event::Event, keyboard::Keycode};
 
 pub(super) struct ShadowsScene {
     main_view_frustum: ViewFrustumArc,
+    font: Handle<FontAsset>,
+    text_size: f32,
 }
 
 impl ShadowsScene {
-    pub(super) fn new(
-        world: &mut World,
-        resources: &Resources,
-    ) -> Self {
+    pub(super) fn new(world: &mut World, resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
 
@@ -42,6 +45,8 @@ impl ShadowsScene {
         let mut mesh_render_nodes = resources.get_mut::<MeshRenderNodeSet>().unwrap();
 
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+
+        let font = asset_resource.load_asset_path::<FontAsset, _>("fonts/mplus-1p-regular.ttf");
 
         let floor_mesh_asset =
             asset_resource.load_asset_path::<MeshAsset, _>("blender/cement_floor.glb");
@@ -233,16 +238,23 @@ impl ShadowsScene {
 
         let main_view_frustum = visibility_region.register_view_frustum();
 
-        ShadowsScene { main_view_frustum }
+        let text_size = 15.;
+
+        ShadowsScene {
+            main_view_frustum,
+            font,
+            text_size,
+        }
     }
 }
 
-impl super::TestScene for ShadowsScene {
+impl super::GameScene for ShadowsScene {
     fn update(
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-    ) {
+        events: Vec<Event>,
+    ) -> SceneManagerAction {
         super::add_light_debug_draw(&resources, &world);
 
         {
@@ -305,6 +317,92 @@ impl super::TestScene for ShadowsScene {
                 transform.translation = light_from;
             }
         }
+
+        {
+            let mut text_resource = resources.get_mut::<TextResource>().unwrap();
+
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 400.0, 0.0),
+                &self.font,
+                20.0,
+                glam::Vec4::new(1.0, 0.0, 0.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 430.0, 0.0),
+                &self.font,
+                25.0,
+                glam::Vec4::new(0.0, 1.0, 0.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 460.0, 0.0),
+                &self.font,
+                30.0,
+                glam::Vec4::new(0.0, 0.0, 1.0, 1.0),
+            );
+            text_resource.add_text(
+                "Lorem Ipsum".to_string(),
+                glam::Vec3::new(100.0, 500.0, 0.0),
+                &self.font,
+                35.0,
+                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+            );
+            let font_size = self.text_size.min(100.).max(5.).round();
+            text_resource.add_text(format!("Font size: {}px.
+Veritatis incidunt tempore eum voluptas. At excepturi corporis ullam. Ab sint omnis illum possimus.
+Quis voluptatum et et quibusdam. Inventore eaque id atque veritatis dolor autem veritatis.
+
+Maxime non cum tempore. Quia est modi voluptatem omnis totam culpa.
+Qui voluptatem molestias repudiandae veritatis nostrum.
+Reiciendis facere et eum sit quis.
+
+Facere qui debitis eligendi dolores laboriosam. Qui ut quis voluptatem excepturi natus accusamus.
+Velit consequuntur quis sunt unde distinctio quae.
+Quas mollitia vel dicta impedit earum nesciunt sapiente libero. Est consequatur odit dolor rerum.
+
+Ut voluptatem autem eos. Veniam voluptatem voluptatem fuga dolorem voluptatibus ducimus veniam alias.
+Atque at itaque minima enim dolorem vero libero officia. Itaque voluptatibus rerum non sapiente assumenda libero sint non.
+Autem quibusdam nam officiis quia et ducimus qui. Est sed excepturi et ab ut sit quia provident.
+
+Quis deserunt enim eligendi sed. Ab adipisci minus quo tenetur nihil debitis sapiente distinctio.
+Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placeat nisi adipisci nostrum.", font_size),
+                glam::Vec3::new(400.0, 400.0, 0.0),
+                &self.font,
+                font_size,
+                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+            );
+        }
+
+        let mut action = SceneManagerAction::None;
+        for event in events {
+            match event {
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    keymod: _modifiers,
+                    ..
+                } => {
+                    if keycode == Keycode::Escape {
+                        action = SceneManagerAction::Scene(Scene::Menu);
+                    }
+                    if keycode == Keycode::Equals {
+                        let time = resources.get::<TimeState>().unwrap();
+                        self.text_size = (self.text_size + 40. * time.previous_update_dt())
+                            .min(100.)
+                            .max(5.);
+                    }
+                    if keycode == Keycode::Minus {
+                        let time = resources.get::<TimeState>().unwrap();
+                        self.text_size = (self.text_size - 40. * time.previous_update_dt())
+                            .min(100.)
+                            .max(5.);
+                    }
+                }
+                _ => {}
+            }
+        }
+        action
     }
 }
 

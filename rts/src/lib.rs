@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use legion::*;
+use scenes::SceneManagerAction;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use structopt::StructOpt;
@@ -29,8 +30,7 @@ mod scenes;
 mod time;
 
 mod demo_plugin;
-use crate::assets::font::FontAsset;
-use crate::features::text::TextResource;
+
 pub use demo_plugin::DemoRendererPlugin;
 
 #[cfg(all(
@@ -124,10 +124,7 @@ impl From<i32> for TonemapperType {
 }
 
 impl std::fmt::Display for TonemapperType {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.display_name())
     }
 }
@@ -176,10 +173,7 @@ impl RenderOptions {
 
 impl RenderOptions {
     #[cfg(feature = "use-imgui")]
-    pub fn window(
-        &mut self,
-        ui: &imgui::Ui<'_>,
-    ) -> bool {
+    pub fn window(&mut self, ui: &imgui::Ui<'_>) -> bool {
         let mut open = true;
         //TODO: tweak this and use imgui-inspect
         imgui::Window::new(imgui::im_str!("Render Options"))
@@ -191,10 +185,7 @@ impl RenderOptions {
     }
 
     #[cfg(feature = "use-imgui")]
-    pub fn ui(
-        &mut self,
-        ui: &imgui::Ui<'_>,
-    ) {
+    pub fn ui(&mut self, ui: &imgui::Ui<'_>) {
         ui.checkbox(imgui::im_str!("enable_msaa"), &mut self.enable_msaa);
         ui.checkbox(imgui::im_str!("enable_hdr"), &mut self.enable_hdr);
         ui.checkbox(imgui::im_str!("enable_bloom"), &mut self.enable_bloom);
@@ -246,7 +237,6 @@ pub struct DebugUiState {
 
     #[cfg(feature = "profile-with-puffin")]
     show_profiler: bool,
-    text_size: f32,
 }
 
 #[derive(StructOpt)]
@@ -273,7 +263,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
     let mut resources = Resources::default();
     resources.insert(TimeState::new());
     resources.insert(RenderOptions::default_2d());
-    resources.insert(DebugUiState { text_size: 15.0, ..DebugUiState::default() });
+    resources.insert(DebugUiState::default());
 
     let asset_source = if let Some(packfile) = &args.packfile {
         AssetSource::Packfile(packfile.to_path_buf())
@@ -299,10 +289,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
     #[cfg(feature = "profile-with-puffin")]
     let mut profiler_ui = puffin_imgui::ProfilerUi::default();
 
-    let font = {
-        let asset_resource = resources.get::<AssetResource>().unwrap();
-        asset_resource.load_asset_path::<FontAsset, _>("fonts/mplus-1p-regular.ttf")
-    };
+    let mut scene_action = SceneManagerAction::Scene(scenes::Scene::Menu);
 
     'running: loop {
         profiling::scope!("Main Loop");
@@ -313,8 +300,8 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
             viewports_resource.main_window_size = RafxExtents2D { width, height }
         }
 
-        {
-            scene_manager.try_create_next_scene(&mut world, &resources);
+        if let SceneManagerAction::Scene(scene) = scene_action {
+            scene_manager.try_load_scene(&mut world, &resources, scene);
         }
 
         let t0 = std::time::Instant::now();
@@ -362,7 +349,17 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
         //
         // Process input
         //
-        if !process_input(&mut scene_manager, &mut world, &resources, &mut event_pump) {
+        let events = process_input(&resources, &mut event_pump);
+
+        if scene_action == SceneManagerAction::Exit
+            || events.iter().any(|event| {
+                if let Event::Quit { timestamp: _ } = event {
+                    true
+                } else {
+                    false
+                }
+            })
+        {
             break 'running;
         }
         //
@@ -377,65 +374,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
         }
 
         {
-            let mut text_resource = resources.get_mut::<TextResource>().unwrap();
-
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 400.0, 0.0),
-                &font,
-                20.0,
-                glam::Vec4::new(1.0, 0.0, 0.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 430.0, 0.0),
-                &font,
-                25.0,
-                glam::Vec4::new(0.0, 1.0, 0.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 460.0, 0.0),
-                &font,
-                30.0,
-                glam::Vec4::new(0.0, 0.0, 1.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 500.0, 0.0),
-                &font,
-                35.0,
-                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            );
-            let debug_ui_state = resources.get::<DebugUiState>().unwrap();
-            let font_size = debug_ui_state.text_size.min(100.).max(5.).round();
-            text_resource.add_text(format!("Font size: {}px.
-Veritatis incidunt tempore eum voluptas. At excepturi corporis ullam. Ab sint omnis illum possimus.
-Quis voluptatum et et quibusdam. Inventore eaque id atque veritatis dolor autem veritatis.
-
-Maxime non cum tempore. Quia est modi voluptatem omnis totam culpa.
-Qui voluptatem molestias repudiandae veritatis nostrum.
-Reiciendis facere et eum sit quis.
-
-Facere qui debitis eligendi dolores laboriosam. Qui ut quis voluptatem excepturi natus accusamus.
-Velit consequuntur quis sunt unde distinctio quae.
-Quas mollitia vel dicta impedit earum nesciunt sapiente libero. Est consequatur odit dolor rerum.
-
-Ut voluptatem autem eos. Veniam voluptatem voluptatem fuga dolorem voluptatibus ducimus veniam alias.
-Atque at itaque minima enim dolorem vero libero officia. Itaque voluptatibus rerum non sapiente assumenda libero sint non.
-Autem quibusdam nam officiis quia et ducimus qui. Est sed excepturi et ab ut sit quia provident.
-
-Quis deserunt enim eligendi sed. Ab adipisci minus quo tenetur nihil debitis sapiente distinctio.
-Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placeat nisi adipisci nostrum.", font_size),
-                glam::Vec3::new(400.0, 400.0, 0.0),
-                &font,
-                font_size,
-                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            );
-        }
-
-        {
-            scene_manager.update_scene(&mut world, &mut resources);
+            scene_action = scene_manager.update_scene(&mut world, &mut resources, events);
         }
 
         //
@@ -602,12 +541,8 @@ Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placea
     init::rendering_destroy(&mut resources)
 }
 
-fn process_input(
-    scene_manager: &mut SceneManager,
-    world: &mut World,
-    resources: &Resources,
-    event_pump: &mut sdl2::EventPump,
-) -> bool {
+fn process_input(resources: &Resources, event_pump: &mut sdl2::EventPump) -> Vec<Event> {
+    let mut events = vec![];
     #[cfg(feature = "use-imgui")]
     let imgui_manager = resources
         .get::<crate::features::imgui::Sdl2ImguiManager>()
@@ -626,24 +561,12 @@ fn process_input(
             //log::trace!("{:?}", event);
             let mut was_handled = false;
             match event {
-                //
-                // Halt if the user requests to close the window
-                //
-                Event::Quit { .. } => return false,
-
-                //
-                // Close if the escape key is hit
-                //
                 Event::KeyDown {
                     keycode: Some(keycode),
                     keymod: _modifiers,
                     ..
                 } => {
                     //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
-                    if keycode == Keycode::Escape {
-                        return false;
-                    }
-
                     #[cfg(feature = "rafx-vulkan")]
                     if keycode == Keycode::D {
                         let stats = resources
@@ -658,30 +581,6 @@ fn process_input(
                         was_handled = true;
                     }
 
-                    if keycode == Keycode::Left {
-                        scene_manager.queue_load_previous_scene();
-                        was_handled = true;
-                    }
-
-                    if keycode == Keycode::Right {
-                        scene_manager.queue_load_next_scene();
-                        was_handled = true;
-                    }
-
-                    if keycode == Keycode::Equals {
-                        let time = resources.get::<TimeState>().unwrap();
-                        let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
-                        debug_ui_state.text_size = (debug_ui_state.text_size + 10. * time.previous_update_dt()).min(100.).max(5.);
-                        was_handled = true;
-                    }
-                    if keycode == Keycode::Minus {
-                        let time = resources.get::<TimeState>().unwrap();
-                        let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
-                        debug_ui_state.text_size = (debug_ui_state.text_size - 10. * time.previous_update_dt()).min(100.).max(5.);
-                        was_handled = true;
-                    }
-                    
-
                     if keycode == Keycode::M {
                         let metrics = resources.get::<AssetManager>().unwrap().metrics();
                         println!("{:#?}", metrics);
@@ -692,10 +591,10 @@ fn process_input(
             }
 
             if !was_handled {
-                scene_manager.process_input(world, resources, event);
+                events.push(event);
             }
         }
     }
 
-    true
+    events
 }
