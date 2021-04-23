@@ -246,6 +246,7 @@ pub struct DebugUiState {
 
     #[cfg(feature = "profile-with-puffin")]
     show_profiler: bool,
+    text_size: f32,
 }
 
 #[derive(StructOpt)]
@@ -272,7 +273,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
     let mut resources = Resources::default();
     resources.insert(TimeState::new());
     resources.insert(RenderOptions::default_2d());
-    resources.insert(DebugUiState::default());
+    resources.insert(DebugUiState { text_size: 15.0, ..DebugUiState::default() });
 
     let asset_source = if let Some(packfile) = &args.packfile {
         AssetSource::Packfile(packfile.to_path_buf())
@@ -404,6 +405,31 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 glam::Vec3::new(100.0, 500.0, 0.0),
                 &font,
                 35.0,
+                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+            );
+            let debug_ui_state = resources.get::<DebugUiState>().unwrap();
+            let font_size = debug_ui_state.text_size.min(100.).max(5.).round();
+            text_resource.add_text(format!("Font size: {}px.
+Veritatis incidunt tempore eum voluptas. At excepturi corporis ullam. Ab sint omnis illum possimus.
+Quis voluptatum et et quibusdam. Inventore eaque id atque veritatis dolor autem veritatis.
+
+Maxime non cum tempore. Quia est modi voluptatem omnis totam culpa.
+Qui voluptatem molestias repudiandae veritatis nostrum.
+Reiciendis facere et eum sit quis.
+
+Facere qui debitis eligendi dolores laboriosam. Qui ut quis voluptatem excepturi natus accusamus.
+Velit consequuntur quis sunt unde distinctio quae.
+Quas mollitia vel dicta impedit earum nesciunt sapiente libero. Est consequatur odit dolor rerum.
+
+Ut voluptatem autem eos. Veniam voluptatem voluptatem fuga dolorem voluptatibus ducimus veniam alias.
+Atque at itaque minima enim dolorem vero libero officia. Itaque voluptatibus rerum non sapiente assumenda libero sint non.
+Autem quibusdam nam officiis quia et ducimus qui. Est sed excepturi et ab ut sit quia provident.
+
+Quis deserunt enim eligendi sed. Ab adipisci minus quo tenetur nihil debitis sapiente distinctio.
+Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placeat nisi adipisci nostrum.", font_size),
+                glam::Vec3::new(400.0, 400.0, 0.0),
+                &font,
+                font_size,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
         }
@@ -641,6 +667,20 @@ fn process_input(
                         scene_manager.queue_load_next_scene();
                         was_handled = true;
                     }
+
+                    if keycode == Keycode::Equals {
+                        let time = resources.get::<TimeState>().unwrap();
+                        let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
+                        debug_ui_state.text_size = (debug_ui_state.text_size + 10. * time.previous_update_dt()).min(100.).max(5.);
+                        was_handled = true;
+                    }
+                    if keycode == Keycode::Minus {
+                        let time = resources.get::<TimeState>().unwrap();
+                        let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
+                        debug_ui_state.text_size = (debug_ui_state.text_size - 10. * time.previous_update_dt()).min(100.).max(5.);
+                        was_handled = true;
+                    }
+                    
 
                     if keycode == Keycode::M {
                         let metrics = resources.get::<AssetManager>().unwrap().metrics();
