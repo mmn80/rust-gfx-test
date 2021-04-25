@@ -520,6 +520,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 debug_draw_3d_resource
             );
             add_to_extract_resources!(crate::features::text::TextResource, text_resource);
+            #[cfg(feature = "use-imgui")]
             add_to_extract_resources!(crate::features::imgui::Sdl2ImguiManager, sdl2_imgui_manager);
 
             extract_resources.insert(&mut world);

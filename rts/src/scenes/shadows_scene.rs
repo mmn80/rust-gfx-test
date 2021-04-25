@@ -6,6 +6,7 @@ use crate::components::{
 };
 use crate::components::{SpotLightComponent, VisibilityComponent};
 use crate::features::debug3d::Debug3DRenderFeature;
+#[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
 use crate::features::mesh::{MeshRenderFeature, MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextRenderFeature;
@@ -82,6 +83,7 @@ impl ShadowsScene {
 
             let transform_component = TransformComponent {
                 translation: position,
+                scale: Vec3::new(10.0, 10.0, 1.0),
                 ..Default::default()
             };
 
@@ -420,9 +422,13 @@ fn update_main_view_3d(
         .add_render_phase::<UiRenderPhase>()
         .build();
 
+    #[cfg(feature = "use-imgui")]
     let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
         .add_render_feature::<MeshRenderFeature>()
         .add_render_feature::<ImGuiRenderFeature>();
+    #[cfg(not(feature = "use-imgui"))]
+    let mut feature_mask_builder =
+        RenderFeatureMaskBuilder::default().add_render_feature::<MeshRenderFeature>();
 
     if render_options.show_text {
         feature_mask_builder = feature_mask_builder.add_render_feature::<TextRenderFeature>();

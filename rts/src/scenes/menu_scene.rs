@@ -1,4 +1,5 @@
 use super::SceneManagerAction;
+#[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
 use crate::phases::UiRenderPhase;
 use crate::scenes::Scene;
@@ -23,9 +24,12 @@ impl MenuScene {
             .add_render_phase::<UiRenderPhase>()
             .build();
 
+        #[cfg(feature = "use-imgui")]
         let main_camera_feature_mask = RenderFeatureMaskBuilder::default()
             .add_render_feature::<ImGuiRenderFeature>()
             .build();
+        #[cfg(not(feature = "use-imgui"))]
+        let main_camera_feature_mask = RenderFeatureMaskBuilder::default().build();
 
         let eye = glam::Vec3::new(1400.0, -200.0, 1000.0);
 
@@ -122,6 +126,9 @@ impl super::GameScene for MenuScene {
                 } => {
                     if keycode == Keycode::Escape {
                         action = SceneManagerAction::Exit;
+                    }
+                    if keycode == Keycode::S {
+                        action = SceneManagerAction::Scene(Scene::Shadows);
                     }
                 }
                 _ => {}
