@@ -20,6 +20,7 @@ use rafx::renderer::{AssetSource, Renderer};
 use rafx::visibility::VisibilityRegion;
 
 pub mod assets;
+mod camera;
 mod components;
 pub mod daemon_args;
 mod features;
@@ -568,19 +569,19 @@ fn process_input(resources: &Resources, event_pump: &mut sdl2::EventPump) -> Vec
                     ..
                 } => {
                     //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
-                    #[cfg(feature = "rafx-vulkan")]
-                    if keycode == Keycode::D {
-                        let stats = resources
-                            .get::<rafx::api::RafxDeviceContext>()
-                            .unwrap()
-                            .vk_device_context()
-                            .unwrap()
-                            .allocator()
-                            .calculate_stats()
-                            .unwrap();
-                        println!("{:#?}", stats);
-                        was_handled = true;
-                    }
+                    // #[cfg(feature = "rafx-vulkan")]
+                    // if keycode == Keycode::D {
+                    //     let stats = resources
+                    //         .get::<rafx::api::RafxDeviceContext>()
+                    //         .unwrap()
+                    //         .vk_device_context()
+                    //         .unwrap()
+                    //         .allocator()
+                    //         .calculate_stats()
+                    //         .unwrap();
+                    //     println!("{:#?}", stats);
+                    //     was_handled = true;
+                    // }
 
                     if keycode == Keycode::M {
                         let metrics = resources.get::<AssetManager>().unwrap().metrics();

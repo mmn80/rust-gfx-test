@@ -1,19 +1,13 @@
 use super::{Scene, SceneManagerAction};
 use crate::assets::font::FontAsset;
 use crate::assets::gltf::MeshAsset;
+use crate::camera::RTSCamera;
 use crate::components::{
     DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
 };
 use crate::components::{SpotLightComponent, VisibilityComponent};
-use crate::features::debug3d::Debug3DRenderFeature;
-#[cfg(feature = "use-imgui")]
-use crate::features::imgui::ImGuiRenderFeature;
-use crate::features::mesh::{MeshRenderFeature, MeshRenderNode, MeshRenderNodeSet};
-use crate::features::text::TextRenderFeature;
+use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextResource;
-use crate::phases::{
-    DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
-};
 use crate::time::TimeState;
 use crate::RenderOptions;
 use distill::loader::handle::Handle;
@@ -22,9 +16,7 @@ use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
 use rafx::assets::distill_impl::AssetResource;
 use rafx::assets::AssetManager;
-use rafx::nodes::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange};
-use rafx::rafx_visibility::{DepthRange, PerspectiveParameters, Projection};
-use rafx::renderer::{RenderViewMeta, ViewportsResource};
+use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
 use sdl2::{event::Event, keyboard::Keycode};
@@ -83,7 +75,6 @@ impl ShadowsScene {
 
             let transform_component = TransformComponent {
                 translation: position,
-                scale: Vec3::new(10.0, 10.0, 1.0),
                 ..Default::default()
             };
 
@@ -136,7 +127,7 @@ impl ShadowsScene {
             };
 
             let mut rng = thread_rng();
-            for i in 0..1000 {
+            for i in 0..100 {
                 let position = Vec3::new(((i / 9) * 3) as f32, ((i % 9) * 3) as f32, 0.0);
                 let mesh_render_node = example_meshes[i % example_meshes.len()].clone();
                 let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
@@ -263,12 +254,14 @@ impl super::GameScene for ShadowsScene {
             let time_state = resources.get::<TimeState>().unwrap();
             let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
             let render_options = resources.get::<RenderOptions>().unwrap();
+            let mut camera = resources.get_mut::<RTSCamera>().unwrap();
 
-            update_main_view_3d(
+            camera.update_main_view_3d(
                 &*time_state,
                 &*render_options,
                 &mut self.main_view_frustum,
                 &mut *viewports_resource,
+                &events,
             );
         }
 
@@ -406,81 +399,4 @@ Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placea
         }
         action
     }
-}
-
-#[profiling::function]
-fn update_main_view_3d(
-    time_state: &TimeState,
-    render_options: &RenderOptions,
-    main_view_frustum: &mut ViewFrustumArc,
-    viewports_resource: &mut ViewportsResource,
-) {
-    let phase_mask = RenderPhaseMaskBuilder::default()
-        .add_render_phase::<DepthPrepassRenderPhase>()
-        .add_render_phase::<OpaqueRenderPhase>()
-        .add_render_phase::<TransparentRenderPhase>()
-        .add_render_phase::<UiRenderPhase>()
-        .build();
-
-    #[cfg(feature = "use-imgui")]
-    let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
-        .add_render_feature::<MeshRenderFeature>()
-        .add_render_feature::<ImGuiRenderFeature>();
-    #[cfg(not(feature = "use-imgui"))]
-    let mut feature_mask_builder =
-        RenderFeatureMaskBuilder::default().add_render_feature::<MeshRenderFeature>();
-
-    if render_options.show_text {
-        feature_mask_builder = feature_mask_builder.add_render_feature::<TextRenderFeature>();
-    }
-
-    if render_options.show_debug3d {
-        feature_mask_builder = feature_mask_builder.add_render_feature::<Debug3DRenderFeature>();
-    }
-
-    let main_camera_feature_mask = feature_mask_builder.build();
-
-    const CAMERA_XY_DISTANCE: f32 = 12.0;
-    const CAMERA_Z: f32 = 6.0;
-    const CAMERA_ROTATE_SPEED: f32 = -0.10;
-    const CAMERA_LOOP_OFFSET: f32 = -0.3;
-    let loop_time = time_state.total_time().as_secs_f32();
-    let eye = glam::Vec3::new(
-        CAMERA_XY_DISTANCE * f32::cos(CAMERA_ROTATE_SPEED * loop_time + CAMERA_LOOP_OFFSET),
-        CAMERA_XY_DISTANCE * f32::sin(CAMERA_ROTATE_SPEED * loop_time + CAMERA_LOOP_OFFSET),
-        CAMERA_Z,
-    );
-
-    let aspect_ratio = viewports_resource.main_window_size.width as f32
-        / viewports_resource.main_window_size.height.max(1) as f32;
-
-    let look_at = glam::Vec3::ZERO;
-    let up = glam::Vec3::new(0.0, 0.0, 1.0);
-    let view = glam::Mat4::look_at_rh(eye, look_at, up);
-
-    let fov_y_radians = std::f32::consts::FRAC_PI_4;
-    let near_plane = 0.01;
-
-    let projection = Projection::Perspective(PerspectiveParameters::new(
-        fov_y_radians,
-        aspect_ratio,
-        near_plane,
-        10000.,
-        DepthRange::InfiniteReverse,
-    ));
-
-    main_view_frustum
-        .set_projection(&projection)
-        .set_transform(eye, look_at, up);
-
-    viewports_resource.main_view_meta = Some(RenderViewMeta {
-        view_frustum: main_view_frustum.clone(),
-        eye_position: eye,
-        view,
-        proj: projection.as_rh_mat4(),
-        depth_range: RenderViewDepthRange::from_projection(&projection),
-        render_phase_mask: phase_mask,
-        render_feature_mask: main_camera_feature_mask,
-        debug_name: "main".to_string(),
-    });
 }

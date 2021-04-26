@@ -1,5 +1,6 @@
 use crate::assets::font::FontAssetTypeRendererPlugin;
 use crate::assets::gltf::GltfAssetTypeRendererPlugin;
+use crate::camera::RTSCamera;
 use crate::features::debug3d::Debug3DRendererPlugin;
 use crate::features::mesh::MeshRendererPlugin;
 use crate::features::text::TextRendererPlugin;
@@ -51,6 +52,7 @@ pub fn rendering_init(
 ) -> RafxResult<()> {
     resources.insert(VisibilityRegion::new());
     resources.insert(ViewportsResource::default());
+    resources.insert(RTSCamera::default());
 
     MeshRendererPlugin::legion_init(resources);
     Debug3DRendererPlugin::legion_init(resources);
