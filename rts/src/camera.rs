@@ -32,7 +32,7 @@ impl Default for RTSCamera {
     fn default() -> Self {
         Self {
             look_at: Vec3::new(0., 0., 0.),
-            look_at_dist: 20.,
+            look_at_dist: 40.,
             yaw: 0.,
             pitch: RTSCamera::pitch_by_distance(20.),
             move_speed: 20.,
@@ -100,8 +100,10 @@ impl RTSCamera {
                 Event::MouseWheel { y, .. } => {
                     if *y != 0 {
                         let scroll = *y as f32;
-                        self.look_at_dist +=
-                            self.scroll_speed * scroll * dt * (self.look_at_dist / 10.0);
+                        self.look_at_dist = (self.look_at_dist
+                            + self.scroll_speed * scroll * dt * (self.look_at_dist / 10.0))
+                            .max(1.)
+                            .min(1000.);
                         self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
                     }
                 }

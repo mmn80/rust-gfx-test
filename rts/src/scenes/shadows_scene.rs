@@ -11,7 +11,7 @@ use crate::features::text::TextResource;
 use crate::time::TimeState;
 use crate::RenderOptions;
 use distill::loader::handle::Handle;
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
 use rafx::assets::distill_impl::AssetResource;
@@ -63,42 +63,48 @@ impl ShadowsScene {
             )
         };
 
+        const FLOOR_SIZE: f32 = 48.;
+        const FLOOR_NUM: i32 = 10;
+
         //
         // Add a floor
         //
         {
-            let position = Vec3::new(0.0, 0.0, -1.0);
-
             let floor_mesh = mesh_render_nodes.register_mesh(MeshRenderNode {
                 mesh: floor_mesh_asset.clone(),
             });
 
-            let transform_component = TransformComponent {
-                translation: position,
-                ..Default::default()
-            };
+            for x in -FLOOR_NUM..FLOOR_NUM {
+                for y in -FLOOR_NUM..FLOOR_NUM {
+                    let position = Vec3::new(x as f32 * FLOOR_SIZE, y as f32 * FLOOR_SIZE, -1.0);
+                    let transform_component = TransformComponent {
+                        translation: position,
+                        ..Default::default()
+                    };
 
-            let mesh_component = MeshComponent {
-                render_node: floor_mesh.clone(),
-            };
+                    let mesh_component = MeshComponent {
+                        render_node: floor_mesh.clone(),
+                    };
 
-            let entity = world.push((transform_component.clone(), mesh_component));
-            let mut entry = world.entry(entity).unwrap();
-            entry.add_component(VisibilityComponent {
-                handle: {
-                    let handle = visibility_region.register_static_object(
-                        EntityId::from(entity),
-                        load_visible_bounds(&floor_mesh_asset),
-                    );
-                    handle.set_transform(
-                        transform_component.translation,
-                        transform_component.rotation,
-                        transform_component.scale,
-                    );
-                    handle.add_feature(floor_mesh.as_raw_generic_handle());
-                    handle
-                },
-            });
+                    let entity = world.push((transform_component.clone(), mesh_component));
+                    let mut entry = world.entry(entity).unwrap();
+                    entry.add_component(VisibilityComponent {
+                        handle: {
+                            let handle = visibility_region.register_static_object(
+                                EntityId::from(entity),
+                                load_visible_bounds(&floor_mesh_asset),
+                            );
+                            handle.set_transform(
+                                transform_component.translation,
+                                transform_component.rotation,
+                                transform_component.scale,
+                            );
+                            handle.add_feature(floor_mesh.as_raw_generic_handle());
+                            handle
+                        },
+                    });
+                }
+            }
         }
 
         //
@@ -126,22 +132,27 @@ impl ShadowsScene {
                 meshes
             };
 
+            const SCALE_MIN: f32 = 0.5;
+            const SCALE_MAX: f32 = 2.;
+
             let mut rng = thread_rng();
-            for i in 0..100 {
-                let position = Vec3::new(((i / 9) * 3) as f32, ((i % 9) * 3) as f32, 0.0);
+            let floors = 1.5;
+            for i in 0..500 {
+                let position = Vec3::new(
+                    rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
+                    rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
+                    0.0,
+                );
                 let mesh_render_node = example_meshes[i % example_meshes.len()].clone();
                 let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
 
-                let rand_scale_z = rng.gen_range(0.8, 1.2);
+                let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
+                let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
                 let offset = rand_scale_z - 1.;
                 let transform_component = TransformComponent {
                     translation: position + Vec3::new(0., 0., offset),
-                    scale: Vec3::new(
-                        rng.gen_range(0.8, 1.2),
-                        rng.gen_range(0.8, 1.2),
-                        rand_scale_z,
-                    ),
-                    ..Default::default()
+                    scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
+                    rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
                 };
 
                 let mesh_component = MeshComponent {
@@ -316,16 +327,17 @@ impl super::GameScene for ShadowsScene {
         {
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+            let camera = resources.get::<RTSCamera>().unwrap();
 
             text_resource.add_text(
-                "rts mmo test ...".to_string(),
+                format!("camera: {}m", camera.look_at_dist),
                 glam::Vec3::new(
                     10.0,
-                    viewports_resource.main_window_size.height as f32 - 45.,
+                    viewports_resource.main_window_size.height as f32 - 30.,
                     0.0,
                 ),
                 &self.font,
-                35.0,
+                20.0,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
         }
