@@ -50,10 +50,7 @@ impl ShadowMapResource {
         &self.shadow_map_render_views
     }
 
-    pub fn append_render_views(
-        &self,
-        render_views: &mut Vec<RenderView>,
-    ) {
+    pub fn append_render_views(&self, render_views: &mut Vec<RenderView>) {
         for shadow_map_view in &self.shadow_map_render_views {
             match shadow_map_view {
                 ShadowMapRenderView::Single(view) => {
@@ -117,10 +114,7 @@ impl ShadowMapResource {
         self.image_usage_ids = image_usage_ids;
     }
 
-    pub fn set_shadow_map_image_views(
-        &mut self,
-        prepared_render_graph: &PreparedRenderGraph,
-    ) {
+    pub fn set_shadow_map_image_views(&mut self, prepared_render_graph: &PreparedRenderGraph) {
         let shadow_map_image_views: Vec<_> = self
             .image_usage_ids
             .iter()
@@ -238,7 +232,7 @@ fn calculate_shadow_map_views(
 
         let near_plane = 0.25;
         let far_plane = 100.0;
-        let ortho_projection_size = 10.0;
+        let ortho_projection_size = 40.0;
         let view_frustum: ViewFrustumArc = light.view_frustum.clone();
         let projection = Projection::Orthographic(OrthographicParameters::new(
             -ortho_projection_size,
@@ -261,7 +255,7 @@ fn calculate_shadow_map_views(
             eye_position,
             view,
             projection.as_rh_mat4(),
-            (SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION),
+            (SHADOW_MAP_RESOLUTION * 4, SHADOW_MAP_RESOLUTION * 4),
             RenderViewDepthRange::from_projection(&projection),
             shadow_map_phase_mask,
             shadow_map_feature_mask,

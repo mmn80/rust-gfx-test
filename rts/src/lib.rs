@@ -162,7 +162,7 @@ impl RenderOptions {
             enable_msaa: true,
             enable_hdr: true,
             enable_bloom: true,
-            show_debug3d: true,
+            show_debug3d: false,
             show_text: true,
             show_shadows: true,
             show_feature_toggles: true,

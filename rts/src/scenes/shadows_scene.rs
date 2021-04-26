@@ -203,8 +203,8 @@ impl ShadowsScene {
             world,
             DirectionalLightComponent {
                 direction: light_direction,
-                intensity: 1.0,
-                color: [0.0, 0.0, 1.0, 1.0].into(),
+                intensity: 5.0,
+                color: [1.0, 1.0, 1.0, 1.0].into(),
                 view_frustum: visibility_region.register_view_frustum(),
             },
         );
@@ -271,7 +271,7 @@ impl super::GameScene for ShadowsScene {
             for mut light in query.iter_mut(world) {
                 const LIGHT_XY_DISTANCE: f32 = 50.0;
                 const LIGHT_Z: f32 = 50.0;
-                const LIGHT_ROTATE_SPEED: f32 = 0.0;
+                const LIGHT_ROTATE_SPEED: f32 = 0.2;
                 const LIGHT_LOOP_OFFSET: f32 = 2.0;
                 let loop_time = time_state.total_time().as_secs_f32();
                 let light_from = glam::Vec3::new(
@@ -315,57 +315,17 @@ impl super::GameScene for ShadowsScene {
 
         {
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
+            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
 
             text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 400.0, 0.0),
-                &self.font,
-                20.0,
-                glam::Vec4::new(1.0, 0.0, 0.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 430.0, 0.0),
-                &self.font,
-                25.0,
-                glam::Vec4::new(0.0, 1.0, 0.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 460.0, 0.0),
-                &self.font,
-                30.0,
-                glam::Vec4::new(0.0, 0.0, 1.0, 1.0),
-            );
-            text_resource.add_text(
-                "Lorem Ipsum".to_string(),
-                glam::Vec3::new(100.0, 500.0, 0.0),
+                "rts mmo test ...".to_string(),
+                glam::Vec3::new(
+                    10.0,
+                    viewports_resource.main_window_size.height as f32 - 45.,
+                    0.0,
+                ),
                 &self.font,
                 35.0,
-                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            );
-            let font_size = self.text_size.min(100.).max(5.).round();
-            text_resource.add_text(format!("Font size: {}px.
-Veritatis incidunt tempore eum voluptas. At excepturi corporis ullam. Ab sint omnis illum possimus.
-Quis voluptatum et et quibusdam. Inventore eaque id atque veritatis dolor autem veritatis.
-
-Maxime non cum tempore. Quia est modi voluptatem omnis totam culpa.
-Qui voluptatem molestias repudiandae veritatis nostrum.
-Reiciendis facere et eum sit quis.
-
-Facere qui debitis eligendi dolores laboriosam. Qui ut quis voluptatem excepturi natus accusamus.
-Velit consequuntur quis sunt unde distinctio quae.
-Quas mollitia vel dicta impedit earum nesciunt sapiente libero. Est consequatur odit dolor rerum.
-
-Ut voluptatem autem eos. Veniam voluptatem voluptatem fuga dolorem voluptatibus ducimus veniam alias.
-Atque at itaque minima enim dolorem vero libero officia. Itaque voluptatibus rerum non sapiente assumenda libero sint non.
-Autem quibusdam nam officiis quia et ducimus qui. Est sed excepturi et ab ut sit quia provident.
-
-Quis deserunt enim eligendi sed. Ab adipisci minus quo tenetur nihil debitis sapiente distinctio.
-Dolores repudiandae minus qui est itaque. Aspernatur fuga qui consequatur placeat nisi adipisci nostrum.", font_size),
-                glam::Vec3::new(400.0, 400.0, 0.0),
-                &self.font,
-                font_size,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
         }
