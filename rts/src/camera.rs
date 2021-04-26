@@ -20,10 +20,11 @@ use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 #[derive(Clone, Copy)]
 pub struct RTSCamera {
     pub look_at: Vec3,
-    pub distance: f32,
+    pub look_at_dist: f32,
     pub yaw: f32,
     pub pitch: f32,
-    speed: f32,
+    move_speed: f32,
+    yaw_speed: f32,
     scroll_speed: f32,
 }
 
@@ -31,10 +32,11 @@ impl Default for RTSCamera {
     fn default() -> Self {
         Self {
             look_at: Vec3::new(0., 0., 0.),
-            distance: 20.,
+            look_at_dist: 20.,
             yaw: 0.,
             pitch: RTSCamera::pitch_by_distance(20.),
-            speed: 10.,
+            move_speed: 20.,
+            yaw_speed: 5.,
             scroll_speed: 50.,
         }
     }
@@ -43,12 +45,9 @@ impl Default for RTSCamera {
 impl RTSCamera {
     pub fn eye(&self) -> Vec3 {
         if self.pitch.abs() < f32::EPSILON {
-            Vec3::new(self.look_at.x, self.look_at.y, self.distance)
+            Vec3::new(self.look_at.x, self.look_at.y, self.look_at_dist)
         } else {
-            let up = self.up();
-            let proj = Vec3::new(up.x, up.y, 0.).normalize();
-            let rot = Quat::from_rotation_z(FRAC_PI_2);
-            self.look_at - rot.mul_vec3(proj).cross(up) * self.distance
+            self.look_at - self.right().cross(self.up()) * self.look_at_dist
         }
     }
 
@@ -56,6 +55,15 @@ impl RTSCamera {
         let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
         Vec3::new(cos_pitch * sin_yaw, cos_pitch * cos_yaw, sin_pitch).normalize()
+    }
+
+    pub fn forward(&self) -> Vec3 {
+        let up = self.up();
+        Vec3::new(up.x, up.y, 0.).normalize()
+    }
+
+    pub fn right(&self) -> Vec3 {
+        Quat::from_rotation_z(FRAC_PI_2).mul_vec3(self.forward())
     }
 
     fn pitch_by_distance(distance: f32) -> f32 {
@@ -71,29 +79,30 @@ impl RTSCamera {
                     ..
                 } => {
                     if keycode == &Keycode::W {
-                        self.look_at.y += dt * self.speed;
+                        self.look_at += dt * self.move_speed * self.forward();
                     }
                     if keycode == &Keycode::S {
-                        self.look_at.y -= dt * self.speed;
+                        self.look_at -= dt * self.move_speed * self.forward();
                     }
                     if keycode == &Keycode::A {
-                        self.look_at.x -= dt * self.speed;
+                        self.look_at += dt * self.move_speed * self.right();
                     }
                     if keycode == &Keycode::D {
-                        self.look_at.x += dt * self.speed;
+                        self.look_at -= dt * self.move_speed * self.right();
                     }
                     if keycode == &Keycode::Q {
-                        self.yaw -= dt;
+                        self.yaw -= dt * self.yaw_speed;
                     }
                     if keycode == &Keycode::E {
-                        self.yaw += dt;
+                        self.yaw += dt * self.yaw_speed;
                     }
                 }
                 Event::MouseWheel { y, .. } => {
                     if *y != 0 {
                         let scroll = *y as f32;
-                        self.distance += self.scroll_speed * scroll * dt * (self.distance / 10.0);
-                        self.pitch = RTSCamera::pitch_by_distance(self.distance);
+                        self.look_at_dist +=
+                            self.scroll_speed * scroll * dt * (self.look_at_dist / 10.0);
+                        self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
                     }
                 }
                 _ => {}
