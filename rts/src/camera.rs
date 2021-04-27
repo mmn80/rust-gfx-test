@@ -1,4 +1,3 @@
-use crate::features::debug3d::Debug3DRenderFeature;
 #[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
 use crate::features::mesh::MeshRenderFeature;
@@ -6,6 +5,7 @@ use crate::features::text::TextRenderFeature;
 use crate::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
 };
+use crate::{features::debug3d::Debug3DRenderFeature, input::InputState};
 use crate::{time::TimeState, RenderOptions};
 use glam::{Quat, Vec3};
 use rafx::{
@@ -15,7 +15,7 @@ use rafx::{
     visibility::ViewFrustumArc,
 };
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
-use winit::event::{Event, KeyboardInput, MouseScrollDelta, VirtualKeyCode, WindowEvent};
+use winit::event::VirtualKeyCode;
 
 #[derive(Clone, Copy)]
 pub struct RTSCamera {
@@ -70,54 +70,31 @@ impl RTSCamera {
         (1.0 - (distance / 100.0).powi(2)).min(1.0).max(0.0) * FRAC_PI_4
     }
 
-    fn update(&mut self, dt: f32, event: &Event<()>) {
-        match event {
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(keycode),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                if keycode == &VirtualKeyCode::W {
-                    self.look_at += dt * self.move_speed * self.forward();
-                }
-                if keycode == &VirtualKeyCode::S {
-                    self.look_at -= dt * self.move_speed * self.forward();
-                }
-                if keycode == &VirtualKeyCode::A {
-                    self.look_at += dt * self.move_speed * self.right();
-                }
-                if keycode == &VirtualKeyCode::D {
-                    self.look_at -= dt * self.move_speed * self.right();
-                }
-                if keycode == &VirtualKeyCode::Q {
-                    self.yaw -= dt * self.yaw_speed;
-                }
-                if keycode == &VirtualKeyCode::E {
-                    self.yaw += dt * self.yaw_speed;
-                }
-            }
-            Event::WindowEvent {
-                event: WindowEvent::MouseWheel { delta, .. },
-                ..
-            } => {
-                let scroll = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => *y as f32,
-                    MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
-                };
-                self.look_at_dist = (self.look_at_dist
-                    + self.scroll_speed * scroll * dt * (self.look_at_dist / 10.0))
-                    .max(1.)
-                    .min(1000.);
-                self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
-            }
-            _ => {}
+    fn update(&mut self, dt: f32, input: &InputState) {
+        if input.key_pressed.contains(&VirtualKeyCode::W) {
+            self.look_at += dt * self.move_speed * self.forward();
+        }
+        if input.key_pressed.contains(&VirtualKeyCode::S) {
+            self.look_at -= dt * self.move_speed * self.forward();
+        }
+        if input.key_pressed.contains(&VirtualKeyCode::A) {
+            self.look_at += dt * self.move_speed * self.right();
+        }
+        if input.key_pressed.contains(&VirtualKeyCode::D) {
+            self.look_at -= dt * self.move_speed * self.right();
+        }
+        if input.key_pressed.contains(&VirtualKeyCode::Q) {
+            self.yaw -= dt * self.yaw_speed;
+        }
+        if input.key_pressed.contains(&VirtualKeyCode::E) {
+            self.yaw += dt * self.yaw_speed;
+        }
+        if input.last_scroll.abs() > f32::EPSILON {
+            self.look_at_dist = (self.look_at_dist
+                + self.scroll_speed * input.last_scroll * dt * (self.look_at_dist / 10.0))
+                .max(1.)
+                .min(1000.);
+            self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
         }
     }
 
@@ -128,7 +105,7 @@ impl RTSCamera {
         render_options: &RenderOptions,
         main_view_frustum: &mut ViewFrustumArc,
         viewports_resource: &mut ViewportsResource,
-        event: &Event<()>,
+        input: &InputState,
     ) {
         let phase_mask = RenderPhaseMaskBuilder::default()
             .add_render_phase::<DepthPrepassRenderPhase>()
@@ -156,7 +133,7 @@ impl RTSCamera {
 
         let main_camera_feature_mask = feature_mask_builder.build();
 
-        self.update(time_state.previous_update_dt(), event);
+        self.update(time_state.previous_update_dt(), input);
 
         let aspect_ratio = viewports_resource.main_window_size.width as f32
             / viewports_resource.main_window_size.height.max(1) as f32;

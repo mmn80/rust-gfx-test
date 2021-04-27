@@ -1,15 +1,15 @@
 use super::SceneManagerAction;
 #[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
-use crate::phases::UiRenderPhase;
 use crate::scenes::Scene;
+use crate::{input::InputState, phases::UiRenderPhase};
 use legion::{Resources, World};
 use rafx::nodes::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange};
 use rafx::rafx_visibility::{DepthRange, OrthographicParameters, Projection};
 use rafx::renderer::RenderViewMeta;
 use rafx::visibility::{ViewFrustumArc, VisibilityRegion};
 use rafx::{api::RafxSwapchainHelper, renderer::ViewportsResource};
-use winit::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event::VirtualKeyCode;
 
 pub(super) struct MenuScene {
     main_view_frustum: ViewFrustumArc,
@@ -75,12 +75,7 @@ impl MenuScene {
 }
 
 impl super::GameScene for MenuScene {
-    fn update(
-        &mut self,
-        _world: &mut World,
-        resources: &mut Resources,
-        event: Event<()>,
-    ) -> SceneManagerAction {
+    fn update(&mut self, _world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         let mut action = SceneManagerAction::None;
         #[cfg(feature = "use-imgui")]
         {
@@ -118,27 +113,13 @@ impl super::GameScene for MenuScene {
             });
         }
 
-        match event {
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(keycode),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                if keycode == VirtualKeyCode::Escape {
-                    action = SceneManagerAction::Exit;
-                }
-                if keycode == VirtualKeyCode::S {
-                    action = SceneManagerAction::Scene(Scene::Shadows);
-                }
-            }
-            _ => {}
+        let input = resources.get::<InputState>().unwrap();
+
+        if input.key_trigger.contains(&VirtualKeyCode::Escape) {
+            action = SceneManagerAction::Exit;
+        }
+        if input.key_trigger.contains(&VirtualKeyCode::S) {
+            action = SceneManagerAction::Scene(Scene::Shadows);
         }
 
         action

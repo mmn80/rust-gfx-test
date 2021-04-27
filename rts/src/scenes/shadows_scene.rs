@@ -1,5 +1,4 @@
 use super::{Scene, SceneManagerAction};
-use crate::assets::font::FontAsset;
 use crate::assets::gltf::MeshAsset;
 use crate::camera::RTSCamera;
 use crate::components::{
@@ -10,6 +9,7 @@ use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextResource;
 use crate::time::TimeState;
 use crate::RenderOptions;
+use crate::{assets::font::FontAsset, input::InputState};
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
 use legion::IntoQuery;
@@ -19,7 +19,7 @@ use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
-use winit::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use winit::event::VirtualKeyCode;
 
 pub(super) struct ShadowsScene {
     main_view_frustum: ViewFrustumArc,
@@ -253,13 +253,10 @@ impl ShadowsScene {
 }
 
 impl super::GameScene for ShadowsScene {
-    fn update(
-        &mut self,
-        world: &mut World,
-        resources: &mut Resources,
-        event: Event<()>,
-    ) -> SceneManagerAction {
+    fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         super::add_light_debug_draw(&resources, &world);
+
+        let input = resources.get::<InputState>().unwrap();
 
         {
             let time_state = resources.get::<TimeState>().unwrap();
@@ -272,7 +269,7 @@ impl super::GameScene for ShadowsScene {
                 &*render_options,
                 &mut self.main_view_frustum,
                 &mut *viewports_resource,
-                &event,
+                &input,
             );
         }
 
@@ -343,37 +340,20 @@ impl super::GameScene for ShadowsScene {
         }
 
         let mut action = SceneManagerAction::None;
-        match event {
-            Event::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(keycode),
-                                ..
-                            },
-                        ..
-                    },
-                ..
-            } => {
-                if keycode == VirtualKeyCode::Escape {
-                    action = SceneManagerAction::Scene(Scene::Menu);
-                }
-                if keycode == VirtualKeyCode::Equals {
-                    let time = resources.get::<TimeState>().unwrap();
-                    self.text_size = (self.text_size + 40. * time.previous_update_dt())
-                        .min(100.)
-                        .max(5.);
-                }
-                if keycode == VirtualKeyCode::Minus {
-                    let time = resources.get::<TimeState>().unwrap();
-                    self.text_size = (self.text_size - 40. * time.previous_update_dt())
-                        .min(100.)
-                        .max(5.);
-                }
-            }
-            _ => {}
+        if input.key_trigger.contains(&VirtualKeyCode::Escape) {
+            action = SceneManagerAction::Scene(Scene::Menu);
+        } else if input.key_pressed.contains(&VirtualKeyCode::Equals) {
+            let time = resources.get::<TimeState>().unwrap();
+            self.text_size = (self.text_size + 40. * time.previous_update_dt())
+                .min(100.)
+                .max(5.);
+        } else if input.key_pressed.contains(&VirtualKeyCode::Minus) {
+            let time = resources.get::<TimeState>().unwrap();
+            self.text_size = (self.text_size - 40. * time.previous_update_dt())
+                .min(100.)
+                .max(5.);
         }
+
         action
     }
 }

@@ -11,7 +11,6 @@ mod menu_scene;
 use menu_scene::MenuScene;
 mod shadows_scene;
 use shadows_scene::ShadowsScene;
-use winit::event::Event;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
@@ -42,12 +41,7 @@ pub enum SceneManagerAction {
 }
 
 pub trait GameScene {
-    fn update(
-        &mut self,
-        world: &mut World,
-        resources: &mut Resources,
-        event: Event<()>,
-    ) -> SceneManagerAction;
+    fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction;
 
     fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
 }
@@ -80,10 +74,9 @@ impl SceneManager {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-        event: Event<()>,
     ) -> SceneManagerAction {
         if let Some(scene) = &mut self.scene {
-            scene.update(world, resources, event)
+            scene.update(world, resources)
         } else {
             SceneManagerAction::None
         }
