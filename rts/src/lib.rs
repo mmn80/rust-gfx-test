@@ -469,6 +469,9 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                     #[cfg(feature = "use-imgui")]
                     add_to_extract_resources!(crate::features::imgui::ImguiManager, imgui_manager);
 
+                    let mut camera = resources.get_mut::<camera::RTSCamera>().unwrap();
+                    extract_resources.insert(&mut *camera);
+
                     extract_resources.insert(&mut world);
 
                     game_renderer

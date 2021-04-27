@@ -1,9 +1,12 @@
 use super::MeshRenderFeature;
-use crate::components::{
-    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
-};
 use crate::phases::ShadowMapRenderPhase;
 use crate::RenderOptions;
+use crate::{
+    camera::RTSCamera,
+    components::{
+        DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+    },
+};
 use fnv::FnvHashMap;
 use legion::*;
 use rafx::framework::visibility::VisibilityRegion;
@@ -221,18 +224,15 @@ fn calculate_shadow_map_views(
         assert!(old.is_none());
     }
 
+    let camera = extract_resources.fetch::<RTSCamera>();
     let mut query = <(Entity, Read<DirectionalLightComponent>)>::query();
     for (entity, light) in query.iter(world) {
-        let eye_position = light.direction * -40.0;
-        let view = glam::Mat4::look_at_rh(
-            eye_position,
-            glam::Vec3::ZERO,
-            glam::Vec3::new(0.0, 0.0, 1.0),
-        );
-
+        let look_at = camera.look_at;
+        let eye_position = look_at - light.direction * camera.look_at_dist;
         let near_plane = 0.25;
-        let far_plane = 100.0;
-        let ortho_projection_size = 40.0;
+        let far_plane = 1500.0;
+        let ortho_projection_size = camera.look_at_dist * 1.5;
+
         let view_frustum: ViewFrustumArc = light.view_frustum.clone();
         let projection = Projection::Orthographic(OrthographicParameters::new(
             -ortho_projection_size,
@@ -246,14 +246,14 @@ fn calculate_shadow_map_views(
 
         view_frustum.set_projection(&projection).set_transform(
             eye_position,
-            glam::Vec3::ZERO,
+            look_at,
             glam::Vec3::new(0.0, 0.0, 1.0),
         );
 
         let view = render_view_set.create_view(
             view_frustum,
             eye_position,
-            view,
+            glam::Mat4::look_at_rh(eye_position, look_at, glam::Vec3::new(0.0, 0.0, 1.0)),
             projection.as_rh_mat4(),
             (SHADOW_MAP_RESOLUTION * 4, SHADOW_MAP_RESOLUTION * 4),
             RenderViewDepthRange::from_projection(&projection),
