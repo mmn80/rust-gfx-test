@@ -16,7 +16,7 @@ use rafx::renderer::ViewportsResource;
 use rafx::renderer::{AssetSource, Renderer, RendererBuilder, SwapchainHandler};
 use winit::{event_loop::EventLoop, window::Window};
 
-pub fn init(event_loop: &EventLoop<()>) -> Window {
+pub fn window_init(event_loop: &EventLoop<()>) -> Window {
     // Set up the coordinate system to be fixed at 900x600, and use this as the default window size
     // This means the drawing code can be written as though the window is always 900x600. The
     // output will be automatically scaled so that it's always visible.
@@ -26,6 +26,7 @@ pub fn init(event_loop: &EventLoop<()>) -> Window {
     winit::window::WindowBuilder::new()
         .with_title("RTS MMO")
         .with_inner_size(logical_size)
+        //.with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
         .build(event_loop)
         .expect("Failed to create window")
 }

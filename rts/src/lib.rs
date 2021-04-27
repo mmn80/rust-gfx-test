@@ -282,7 +282,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
 
     // Create the winit event loop
     let event_loop = winit::event_loop::EventLoop::<()>::with_user_event();
-    let window = init::init(&event_loop);
+    let window = init::window_init(&event_loop);
     init::rendering_init(&mut resources, &window, asset_source)?;
 
     let mut world = World::default();
@@ -301,6 +301,26 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 .unwrap();
             #[cfg(feature = "use-imgui")]
             imgui_manager.handle_event(&window, &event);
+        }
+
+        {
+            let mut input = resources.get_mut::<InputState>().unwrap();
+            if input
+                .key_trigger
+                .contains(&winit::event::VirtualKeyCode::Return)
+                && input
+                    .key_pressed
+                    .contains(&winit::event::VirtualKeyCode::LAlt)
+            {
+                input
+                    .key_trigger
+                    .remove(&winit::event::VirtualKeyCode::Return);
+                if let None = window.fullscreen() {
+                    window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                } else {
+                    window.set_fullscreen(None);
+                }
+            }
         }
 
         match event {
@@ -371,7 +391,6 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 {
                     profiling::scope!("update asset loaders");
                     let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-
                     asset_manager.update_asset_loaders().unwrap();
                 }
 
