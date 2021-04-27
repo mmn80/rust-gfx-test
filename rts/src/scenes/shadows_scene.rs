@@ -137,7 +137,7 @@ impl ShadowsScene {
 
             let mut rng = thread_rng();
             let floors = 1.5;
-            for i in 0..500 {
+            for i in 0..200 {
                 let position = Vec3::new(
                     rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
                     rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
