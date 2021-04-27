@@ -9,7 +9,7 @@ use rafx::rafx_visibility::{DepthRange, OrthographicParameters, Projection};
 use rafx::renderer::RenderViewMeta;
 use rafx::visibility::{ViewFrustumArc, VisibilityRegion};
 use rafx::{api::RafxSwapchainHelper, renderer::ViewportsResource};
-use sdl2::{event::Event, keyboard::Keycode};
+use winit::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub(super) struct MenuScene {
     main_view_frustum: ViewFrustumArc,
@@ -79,14 +79,14 @@ impl super::GameScene for MenuScene {
         &mut self,
         _world: &mut World,
         resources: &mut Resources,
-        events: Vec<Event>,
+        event: Event<()>,
     ) -> SceneManagerAction {
         let mut action = SceneManagerAction::None;
         #[cfg(feature = "use-imgui")]
         {
-            use crate::features::imgui::Sdl2ImguiManager;
+            use crate::features::imgui::ImguiManager;
             profiling::scope!("imgui");
-            let imgui_manager = resources.get::<Sdl2ImguiManager>().unwrap();
+            let imgui_manager = resources.get::<ImguiManager>().unwrap();
             let swapchain_helper = resources.get::<RafxSwapchainHelper>().unwrap();
             imgui_manager.with_ui(|ui| {
                 profiling::scope!("main game menu");
@@ -117,23 +117,30 @@ impl super::GameScene for MenuScene {
                     });
             });
         }
-        for event in events {
-            match event {
-                Event::KeyDown {
-                    keycode: Some(keycode),
-                    keymod: _modifiers,
-                    ..
-                } => {
-                    if keycode == Keycode::Escape {
-                        action = SceneManagerAction::Exit;
-                    }
-                    if keycode == Keycode::S {
-                        action = SceneManagerAction::Scene(Scene::Shadows);
-                    }
+
+        match event {
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if keycode == VirtualKeyCode::Escape {
+                    action = SceneManagerAction::Exit;
                 }
-                _ => {}
+                if keycode == VirtualKeyCode::S {
+                    action = SceneManagerAction::Scene(Scene::Shadows);
+                }
             }
+            _ => {}
         }
+
         action
     }
 }

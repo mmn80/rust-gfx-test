@@ -6,12 +6,12 @@ use glam::Vec3;
 use legion::IntoQuery;
 use legion::{Read, Resources, World};
 use rand::Rng;
-use sdl2::event::Event;
 
 mod menu_scene;
 use menu_scene::MenuScene;
 mod shadows_scene;
 use shadows_scene::ShadowsScene;
+use winit::event::Event;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
@@ -46,7 +46,7 @@ pub trait GameScene {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-        events: Vec<Event>,
+        event: Event<()>,
     ) -> SceneManagerAction;
 
     fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
@@ -80,10 +80,10 @@ impl SceneManager {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-        events: Vec<Event>,
+        event: Event<()>,
     ) -> SceneManagerAction {
         if let Some(scene) = &mut self.scene {
-            scene.update(world, resources, events)
+            scene.update(world, resources, event)
         } else {
             SceneManagerAction::None
         }

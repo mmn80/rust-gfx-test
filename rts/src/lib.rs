@@ -3,12 +3,14 @@
 
 use legion::*;
 use scenes::SceneManagerAction;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use structopt::StructOpt;
 
 use rafx::api::{RafxExtents2D, RafxResult, RafxSwapchainHelper};
 use rafx::assets::AssetManager;
+use winit::{
+    event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::EventLoop,
+};
 
 use crate::daemon_args::AssetDaemonArgs;
 use crate::scenes::SceneManager;
@@ -275,14 +277,10 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
         }
     };
 
-    let sdl2_systems = init::sdl2_init();
-    init::rendering_init(&mut resources, &sdl2_systems.window, asset_source)?;
-
-    log::info!("Starting window event loop");
-    let mut event_pump = sdl2_systems
-        .context
-        .event_pump()
-        .expect("Could not create sdl event pump");
+    // Create the winit event loop
+    let event_loop = winit::event_loop::EventLoop::<()>::with_user_event();
+    let window = init::init(&event_loop);
+    init::rendering_init(&mut resources, &window, asset_source)?;
 
     let mut world = World::default();
     let mut print_time_event = crate::time::PeriodicEvent::default();
@@ -292,311 +290,341 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
 
     let mut scene_action = SceneManagerAction::Scene(scenes::Scene::Menu);
 
-    'running: loop {
-        profiling::scope!("Main Loop");
-
+    // Start the window event loop. Winit will not return once run is called. We will get notified
+    // when important events happen.
+    event_loop.run(move |event, _window_target, control_flow| {
         {
-            let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
-            let (width, height) = sdl2_systems.window.vulkan_drawable_size();
-            viewports_resource.main_window_size = RafxExtents2D { width, height }
-        }
-
-        if let SceneManagerAction::Scene(scene) = scene_action {
-            scene_manager.try_load_scene(&mut world, &resources, scene);
-        }
-
-        let t0 = std::time::Instant::now();
-
-        //
-        // Update time
-        //
-        {
-            resources.get_mut::<TimeState>().unwrap().update();
-        }
-
-        //
-        // Print FPS
-        //
-        {
-            let time_state = resources.get::<TimeState>().unwrap();
-            if print_time_event.try_take_event(
-                time_state.current_instant(),
-                std::time::Duration::from_secs_f32(1.0),
-            ) {
-                log::info!("FPS: {}", time_state.updates_per_second());
-                //renderer.dump_stats();
-            }
-        }
-
-        //
-        // Update assets
-        //
-        {
-            profiling::scope!("update asset resource");
-            let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
-            asset_resource.update();
-        }
-
-        //
-        // Update graphics resources
-        //
-        {
-            profiling::scope!("update asset loaders");
-            let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-
-            asset_manager.update_asset_loaders().unwrap();
-        }
-
-        //
-        // Process input
-        //
-        let events = process_input(&resources, &mut event_pump);
-
-        if scene_action == SceneManagerAction::Exit
-            || events.iter().any(|event| {
-                if let Event::Quit { timestamp: _ } = event {
-                    true
-                } else {
-                    false
-                }
-            })
-        {
-            break 'running;
-        }
-        //
-        // Notify imgui of frame begin
-        //
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::Sdl2ImguiManager;
-            use sdl2::mouse::MouseState;
-            let imgui_manager = resources.get::<Sdl2ImguiManager>().unwrap();
-            imgui_manager.begin_frame(&sdl2_systems.window, &MouseState::new(&event_pump));
-        }
-
-        {
-            scene_action = scene_manager.update_scene(&mut world, &mut resources, events);
-        }
-
-        //
-        // imgui debug draw,
-        //
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::Sdl2ImguiManager;
-            profiling::scope!("imgui");
-            let imgui_manager = resources.get::<Sdl2ImguiManager>().unwrap();
-            let time_state = resources.get::<TimeState>().unwrap();
-            let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
-            let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
-            let asset_manager = resources.get::<AssetResource>().unwrap();
-            imgui_manager.with_ui(|ui| {
-                profiling::scope!("main menu bar");
-                ui.main_menu_bar(|| {
-                    ui.menu(imgui::im_str!("Windows"), true, || {
-                        ui.checkbox(
-                            imgui::im_str!("Render Options"),
-                            &mut debug_ui_state.show_render_options,
-                        );
-
-                        ui.checkbox(
-                            imgui::im_str!("Asset List"),
-                            &mut debug_ui_state.show_asset_list,
-                        );
-
-                        #[cfg(feature = "profile-with-puffin")]
-                        if ui.checkbox(
-                            imgui::im_str!("Profiler"),
-                            &mut debug_ui_state.show_profiler,
-                        ) {
-                            log::info!(
-                                "Setting puffin profiler enabled: {:?}",
-                                debug_ui_state.show_profiler
-                            );
-                            profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
-                        }
-                    });
-                    ui.text(imgui::im_str!(
-                        "FPS: {:.1}",
-                        time_state.updates_per_second_smoothed()
-                    ));
-                    ui.separator();
-                    ui.text(imgui::im_str!("Frame: {}", time_state.update_count()));
-                });
-
-                if debug_ui_state.show_render_options {
-                    imgui::Window::new(imgui::im_str!("Render Options")).build(ui, || {
-                        render_options.window(ui);
-                    });
-                }
-
-                if debug_ui_state.show_asset_list {
-                    imgui::Window::new(imgui::im_str!("Asset List"))
-                        .opened(&mut debug_ui_state.show_asset_list)
-                        .build(ui, || {
-                            let loader = asset_manager.loader();
-                            let mut asset_info = loader
-                                .get_active_loads()
-                                .into_iter()
-                                .map(|item| loader.get_load_info(item))
-                                .collect::<Vec<_>>();
-                            asset_info.sort_by(|x, y| {
-                                x.as_ref()
-                                    .map(|x| &x.path)
-                                    .cmp(&y.as_ref().map(|y| &y.path))
-                            });
-                            for info in asset_info {
-                                if let Some(info) = info {
-                                    let id = info.asset_id;
-                                    ui.text(format!(
-                                        "{}:{} .. {}",
-                                        info.file_name.unwrap_or_else(|| "???".to_string()),
-                                        info.asset_name.unwrap_or_else(|| format!("{}", id)),
-                                        info.refs
-                                    ));
-                                } else {
-                                    ui.text("NO INFO");
-                                }
-                            }
-                        });
-                }
-
-                #[cfg(feature = "profile-with-puffin")]
-                if debug_ui_state.show_profiler {
-                    profiling::scope!("puffin profiler");
-                    profiler_ui.window(ui);
-                }
-            });
-        }
-
-        //
-        // Close imgui input for this frame and render the results to memory
-        //
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::Sdl2ImguiManager;
-            let imgui_manager = resources.get::<Sdl2ImguiManager>().unwrap();
-            imgui_manager.render(&sdl2_systems.window);
-        }
-
-        let t1 = std::time::Instant::now();
-        log::trace!(
-            "[main] Simulation took {} ms",
-            (t1 - t0).as_secs_f32() * 1000.0
-        );
-
-        //
-        // Redraw
-        //
-        {
-            profiling::scope!("Start Next Frame Render");
-            let game_renderer = resources.get::<Renderer>().unwrap();
-
-            let mut extract_resources = ExtractResources::default();
-
-            macro_rules! add_to_extract_resources {
-                ($ty: ident) => {
-                    #[allow(non_snake_case)]
-                    let mut $ty = resources.get_mut::<$ty>().unwrap();
-                    extract_resources.insert(&mut *$ty);
-                };
-                ($ty: path, $name: ident) => {
-                    let mut $name = resources.get_mut::<$ty>().unwrap();
-                    extract_resources.insert(&mut *$name);
-                };
-            }
-
-            add_to_extract_resources!(VisibilityRegion);
-            add_to_extract_resources!(RafxSwapchainHelper);
-            add_to_extract_resources!(ViewportsResource);
-            add_to_extract_resources!(AssetManager);
-            add_to_extract_resources!(TimeState);
-            add_to_extract_resources!(RenderOptions);
-            add_to_extract_resources!(
-                crate::features::mesh::MeshRenderNodeSet,
-                mesh_render_node_set
-            );
-            add_to_extract_resources!(
-                crate::features::debug3d::DebugDraw3DResource,
-                debug_draw_3d_resource
-            );
-            add_to_extract_resources!(crate::features::text::TextResource, text_resource);
             #[cfg(feature = "use-imgui")]
-            add_to_extract_resources!(crate::features::imgui::Sdl2ImguiManager, sdl2_imgui_manager);
-
-            extract_resources.insert(&mut world);
-
-            game_renderer
-                .start_rendering_next_frame(&mut extract_resources)
+            let imgui_manager = resources
+                .get::<crate::features::imgui::ImguiManager>()
                 .unwrap();
+            #[cfg(feature = "use-imgui")]
+            imgui_manager.handle_event(&window, &event);
         }
 
-        let t2 = std::time::Instant::now();
-        log::trace!(
-            "[main] start rendering took {} ms",
-            (t2 - t1).as_secs_f32() * 1000.0
-        );
+        match event {
+            //
+            // Halt if the user requests to close the window
+            //
+            Event::WindowEvent {
+                event: winit::event::WindowEvent::CloseRequested,
+                ..
+            } => *control_flow = winit::event_loop::ControlFlow::Exit,
 
-        profiling::finish_frame!();
-    }
+            //
+            // Request a redraw any time we finish processing events
+            //
+            winit::event::Event::MainEventsCleared => {
+                // Queue a RedrawRequested event.
+                window.request_redraw();
+            }
 
-    init::rendering_destroy(&mut resources)
-}
+            //
+            // Redraw
+            //
+            winit::event::Event::RedrawRequested(_window_id) => {
+                profiling::scope!("Main Loop");
 
-fn process_input(resources: &Resources, event_pump: &mut sdl2::EventPump) -> Vec<Event> {
-    let mut events = vec![];
-    #[cfg(feature = "use-imgui")]
-    let imgui_manager = resources
-        .get::<crate::features::imgui::Sdl2ImguiManager>()
-        .unwrap();
-    for event in event_pump.poll_iter() {
-        #[cfg(feature = "use-imgui")]
-        let ignore_event = {
-            imgui_manager.handle_event(&event);
-            imgui_manager.ignore_event(&event)
-        };
-
-        #[cfg(not(feature = "use-imgui"))]
-        let ignore_event = false;
-
-        if !ignore_event {
-            //log::trace!("{:?}", event);
-            let mut was_handled = false;
-            match event {
-                Event::KeyDown {
-                    keycode: Some(keycode),
-                    keymod: _modifiers,
-                    ..
-                } => {
-                    //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
-                    // #[cfg(feature = "rafx-vulkan")]
-                    // if keycode == Keycode::D {
-                    //     let stats = resources
-                    //         .get::<rafx::api::RafxDeviceContext>()
-                    //         .unwrap()
-                    //         .vk_device_context()
-                    //         .unwrap()
-                    //         .allocator()
-                    //         .calculate_stats()
-                    //         .unwrap();
-                    //     println!("{:#?}", stats);
-                    //     was_handled = true;
-                    // }
-
-                    if keycode == Keycode::M {
-                        let metrics = resources.get::<AssetManager>().unwrap().metrics();
-                        println!("{:#?}", metrics);
-                        was_handled = true;
+                {
+                    let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
+                    let window_size = window.inner_size();
+                    viewports_resource.main_window_size = RafxExtents2D {
+                        width: window_size.width,
+                        height: window_size.height,
                     }
                 }
-                _ => {}
+
+                if let SceneManagerAction::Scene(scene) = scene_action {
+                    scene_manager.try_load_scene(&mut world, &resources, scene);
+                }
+
+                let t0 = std::time::Instant::now();
+
+                //
+                // Update time
+                //
+                {
+                    resources.get_mut::<TimeState>().unwrap().update();
+                }
+
+                //
+                // Print FPS
+                //
+                {
+                    let time_state = resources.get::<TimeState>().unwrap();
+                    if print_time_event.try_take_event(
+                        time_state.current_instant(),
+                        std::time::Duration::from_secs_f32(1.0),
+                    ) {
+                        log::info!("FPS: {}", time_state.updates_per_second());
+                        //renderer.dump_stats();
+                    }
+                }
+
+                //
+                // Update assets
+                //
+                {
+                    profiling::scope!("update asset resource");
+                    let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
+                    asset_resource.update();
+                }
+
+                //
+                // Update graphics resources
+                //
+                {
+                    profiling::scope!("update asset loaders");
+                    let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+
+                    asset_manager.update_asset_loaders().unwrap();
+                }
+
+                if scene_action == SceneManagerAction::Exit {
+                    *control_flow = winit::event_loop::ControlFlow::Exit
+                }
+                //
+                // Notify imgui of frame begin
+                //
+                #[cfg(feature = "use-imgui")]
+                {
+                    use crate::features::imgui::ImguiManager;
+                    let imgui_manager = resources.get::<ImguiManager>().unwrap();
+                    imgui_manager.begin_frame(&window);
+                }
+
+                {
+                    scene_action = scene_manager.update_scene(&mut world, &mut resources, event);
+                }
+
+                //
+                // imgui debug draw,
+                //
+                #[cfg(feature = "use-imgui")]
+                {
+                    use crate::features::imgui::ImguiManager;
+                    profiling::scope!("imgui");
+                    let imgui_manager = resources.get::<ImguiManager>().unwrap();
+                    let time_state = resources.get::<TimeState>().unwrap();
+                    let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
+                    let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
+                    let asset_manager = resources.get::<AssetResource>().unwrap();
+                    imgui_manager.with_ui(|ui| {
+                        profiling::scope!("main menu bar");
+                        ui.main_menu_bar(|| {
+                            ui.menu(imgui::im_str!("Windows"), true, || {
+                                ui.checkbox(
+                                    imgui::im_str!("Render Options"),
+                                    &mut debug_ui_state.show_render_options,
+                                );
+
+                                ui.checkbox(
+                                    imgui::im_str!("Asset List"),
+                                    &mut debug_ui_state.show_asset_list,
+                                );
+
+                                #[cfg(feature = "profile-with-puffin")]
+                                if ui.checkbox(
+                                    imgui::im_str!("Profiler"),
+                                    &mut debug_ui_state.show_profiler,
+                                ) {
+                                    log::info!(
+                                        "Setting puffin profiler enabled: {:?}",
+                                        debug_ui_state.show_profiler
+                                    );
+                                    profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
+                                }
+                            });
+                            ui.text(imgui::im_str!(
+                                "FPS: {:.1}",
+                                time_state.updates_per_second_smoothed()
+                            ));
+                            ui.separator();
+                            ui.text(imgui::im_str!("Frame: {}", time_state.update_count()));
+                        });
+
+                        if debug_ui_state.show_render_options {
+                            imgui::Window::new(imgui::im_str!("Render Options")).build(ui, || {
+                                render_options.window(ui);
+                            });
+                        }
+
+                        if debug_ui_state.show_asset_list {
+                            imgui::Window::new(imgui::im_str!("Asset List"))
+                                .opened(&mut debug_ui_state.show_asset_list)
+                                .build(ui, || {
+                                    let loader = asset_manager.loader();
+                                    let mut asset_info = loader
+                                        .get_active_loads()
+                                        .into_iter()
+                                        .map(|item| loader.get_load_info(item))
+                                        .collect::<Vec<_>>();
+                                    asset_info.sort_by(|x, y| {
+                                        x.as_ref()
+                                            .map(|x| &x.path)
+                                            .cmp(&y.as_ref().map(|y| &y.path))
+                                    });
+                                    for info in asset_info {
+                                        if let Some(info) = info {
+                                            let id = info.asset_id;
+                                            ui.text(format!(
+                                                "{}:{} .. {}",
+                                                info.file_name.unwrap_or_else(|| "???".to_string()),
+                                                info.asset_name
+                                                    .unwrap_or_else(|| format!("{}", id)),
+                                                info.refs
+                                            ));
+                                        } else {
+                                            ui.text("NO INFO");
+                                        }
+                                    }
+                                });
+                        }
+
+                        #[cfg(feature = "profile-with-puffin")]
+                        if debug_ui_state.show_profiler {
+                            profiling::scope!("puffin profiler");
+                            profiler_ui.window(ui);
+                        }
+                    });
+                }
+
+                //
+                // Close imgui input for this frame and render the results to memory
+                //
+                #[cfg(feature = "use-imgui")]
+                {
+                    use crate::features::imgui::ImguiManager;
+                    let imgui_manager = resources.get::<ImguiManager>().unwrap();
+                    imgui_manager.render(&window);
+                }
+
+                let t1 = std::time::Instant::now();
+                log::trace!(
+                    "[main] Simulation took {} ms",
+                    (t1 - t0).as_secs_f32() * 1000.0
+                );
+
+                //
+                // Redraw
+                //
+                {
+                    profiling::scope!("Start Next Frame Render");
+                    let game_renderer = resources.get::<Renderer>().unwrap();
+
+                    let mut extract_resources = ExtractResources::default();
+
+                    macro_rules! add_to_extract_resources {
+                        ($ty: ident) => {
+                            #[allow(non_snake_case)]
+                            let mut $ty = resources.get_mut::<$ty>().unwrap();
+                            extract_resources.insert(&mut *$ty);
+                        };
+                        ($ty: path, $name: ident) => {
+                            let mut $name = resources.get_mut::<$ty>().unwrap();
+                            extract_resources.insert(&mut *$name);
+                        };
+                    }
+
+                    add_to_extract_resources!(VisibilityRegion);
+                    add_to_extract_resources!(RafxSwapchainHelper);
+                    add_to_extract_resources!(ViewportsResource);
+                    add_to_extract_resources!(AssetManager);
+                    add_to_extract_resources!(TimeState);
+                    add_to_extract_resources!(RenderOptions);
+                    add_to_extract_resources!(
+                        crate::features::mesh::MeshRenderNodeSet,
+                        mesh_render_node_set
+                    );
+                    add_to_extract_resources!(
+                        crate::features::debug3d::DebugDraw3DResource,
+                        debug_draw_3d_resource
+                    );
+                    add_to_extract_resources!(crate::features::text::TextResource, text_resource);
+                    #[cfg(feature = "use-imgui")]
+                    add_to_extract_resources!(crate::features::imgui::ImguiManager, imgui_manager);
+
+                    extract_resources.insert(&mut world);
+
+                    game_renderer
+                        .start_rendering_next_frame(&mut extract_resources)
+                        .unwrap();
+                }
+
+                let t2 = std::time::Instant::now();
+                log::trace!(
+                    "[main] start rendering took {} ms",
+                    (t2 - t1).as_secs_f32() * 1000.0
+                );
+
+                profiling::finish_frame!();
             }
 
-            if !was_handled {
-                events.push(event);
-            }
+            //
+            // Ignore all other events
+            //
+            _ => {}
         }
-    }
-
-    events
+        if *control_flow == winit::event_loop::ControlFlow::Exit {
+            init::rendering_destroy(&mut resources);
+        }
+    });
 }
+
+// fn process_input(resources: &Resources, event_loop: &mut EventLoop<()>) -> Vec<Event> {
+//     let mut events = vec![];
+//     #[cfg(feature = "use-imgui")]
+//     let imgui_manager = resources
+//         .get::<crate::features::imgui::ImguiManager>()
+//         .unwrap();
+//     for event in event_loop.poll_iter() {
+//         #[cfg(feature = "use-imgui")]
+//         let ignore_event = {
+//             imgui_manager.handle_event(&event);
+//             imgui_manager.ignore_event(&event)
+//         };
+
+//         #[cfg(not(feature = "use-imgui"))]
+//         let ignore_event = false;
+
+//         if !ignore_event {
+//             //log::trace!("{:?}", event);
+//             let mut was_handled = false;
+//             match event {
+//                 Event::KeyDown {
+//                     keycode: Some(keycode),
+//                     keymod: _modifiers,
+//                     ..
+//                 } => {
+//                     //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
+//                     // #[cfg(feature = "rafx-vulkan")]
+//                     // if keycode == Keycode::D {
+//                     //     let stats = resources
+//                     //         .get::<rafx::api::RafxDeviceContext>()
+//                     //         .unwrap()
+//                     //         .vk_device_context()
+//                     //         .unwrap()
+//                     //         .allocator()
+//                     //         .calculate_stats()
+//                     //         .unwrap();
+//                     //     println!("{:#?}", stats);
+//                     //     was_handled = true;
+//                     // }
+
+//                     if keycode == Keycode::M {
+//                         let metrics = resources.get::<AssetManager>().unwrap().metrics();
+//                         println!("{:#?}", metrics);
+//                         was_handled = true;
+//                     }
+//                 }
+//                 _ => {}
+//             }
+
+//             if !was_handled {
+//                 events.push(event);
+//             }
+//         }
+//     }
+
+//     events
+// }

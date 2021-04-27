@@ -1,6 +1,6 @@
 use rafx::render_feature_extract_job_predule::*;
 
-use super::{ImGuiPrepareJob, ImGuiStaticResources, ImGuiUniformBufferObject, Sdl2ImguiManager};
+use super::{ImGuiPrepareJob, ImGuiStaticResources, ImGuiUniformBufferObject, ImguiManager};
 use rafx::assets::AssetManagerRenderResource;
 use rafx::graph::SwapchainSurfaceInfo;
 
@@ -27,7 +27,7 @@ impl ExtractJob for ImGuiExtractJob {
 
         let imgui_draw_data = extract_context
             .extract_resources
-            .fetch::<Sdl2ImguiManager>()
+            .fetch::<ImguiManager>()
             .copy_draw_data();
 
         let framebuffer_scale = match &imgui_draw_data {

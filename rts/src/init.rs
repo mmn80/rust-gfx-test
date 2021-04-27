@@ -14,40 +14,25 @@ use rafx::framework::visibility::VisibilityRegion;
 use rafx::nodes::{ExtractResources, RenderRegistry};
 use rafx::renderer::ViewportsResource;
 use rafx::renderer::{AssetSource, Renderer, RendererBuilder, SwapchainHandler};
+use winit::{event_loop::EventLoop, window::Window};
 
-pub struct Sdl2Systems {
-    pub context: sdl2::Sdl,
-    pub video_subsystem: sdl2::VideoSubsystem,
-    pub window: sdl2::video::Window,
-}
+pub fn init(event_loop: &EventLoop<()>) -> Window {
+    // Set up the coordinate system to be fixed at 900x600, and use this as the default window size
+    // This means the drawing code can be written as though the window is always 900x600. The
+    // output will be automatically scaled so that it's always visible.
+    let logical_size = winit::dpi::LogicalSize::new(900.0, 600.0);
 
-pub fn sdl2_init() -> Sdl2Systems {
-    // Setup SDL
-    let context = sdl2::init().expect("Failed to initialize sdl2");
-    let video_subsystem = context
-        .video()
-        .expect("Failed to create sdl video subsystem");
-
-    // Create the window
-    let window = video_subsystem
-        .window("RTS MMO", 900, 600)
-        .position_centered()
-        .allow_highdpi()
-        .resizable()
-        //.fullscreen_desktop()
-        .build()
-        .expect("Failed to create window");
-
-    Sdl2Systems {
-        context,
-        video_subsystem,
-        window,
-    }
+    // Create a single window
+    winit::window::WindowBuilder::new()
+        .with_title("RTS MMO")
+        .with_inner_size(logical_size)
+        .build(event_loop)
+        .expect("Failed to create window")
 }
 
 pub fn rendering_init(
     resources: &mut Resources,
-    sdl2_window: &sdl2::video::Window,
+    window: &Window,
     asset_source: AssetSource,
 ) -> RafxResult<()> {
     resources.insert(VisibilityRegion::new());
@@ -63,7 +48,7 @@ pub fn rendering_init(
     // considered unsafe. However, rafx APIs are only gated by unsafe if they can cause undefined
     // behavior on the CPU for reasons other than interacting with the GPU.
     //
-    let rafx_api = unsafe { rafx::api::RafxApi::new(sdl2_window, &Default::default())? };
+    let rafx_api = unsafe { rafx::api::RafxApi::new(window, &Default::default())? };
 
     let mut renderer_builder = RendererBuilder::default();
     renderer_builder = renderer_builder
@@ -77,7 +62,7 @@ pub fn rendering_init(
     #[cfg(feature = "use-imgui")]
     {
         use crate::features::imgui::ImGuiRendererPlugin;
-        ImGuiRendererPlugin::legion_init(resources, sdl2_window);
+        ImGuiRendererPlugin::legion_init(resources, window);
         renderer_builder = renderer_builder.add_plugin(Box::new(ImGuiRendererPlugin::default()));
     }
 
@@ -86,7 +71,7 @@ pub fn rendering_init(
 
         #[cfg(feature = "use-imgui")]
         let mut imgui_manager = resources
-            .get_mut::<crate::features::imgui::Sdl2ImguiManager>()
+            .get_mut::<crate::features::imgui::ImguiManager>()
             .unwrap();
         #[cfg(feature = "use-imgui")]
         extract_resources.insert(&mut *imgui_manager);
@@ -101,13 +86,13 @@ pub fn rendering_init(
         )
     }?;
 
-    let (width, height) = sdl2_window.vulkan_drawable_size();
+    let size = window.inner_size();
     let swapchain_helper = SwapchainHandler::create_swapchain(
         &mut renderer_builder_result.asset_manager,
         &mut renderer_builder_result.renderer,
-        sdl2_window,
-        width,
-        height,
+        window,
+        size.width,
+        size.height,
     )?;
 
     resources.insert(rafx_api.device_context());

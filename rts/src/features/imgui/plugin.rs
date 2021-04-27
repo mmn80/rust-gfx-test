@@ -1,12 +1,12 @@
-use rafx::render_feature_renderer_prelude::*;
-
 use super::{
-    create_font_atlas_image_view, init_sdl2_imgui_manager, ImGuiExtractJob, ImGuiRenderFeature,
-    Sdl2ImguiManager,
+    create_font_atlas_image_view, init_imgui_manager, ImGuiExtractJob, ImGuiRenderFeature,
+    ImguiManager,
 };
 use distill::loader::handle::Handle;
 use rafx::assets::MaterialAsset;
 use rafx::framework::{ImageViewResource, ResourceArc};
+use rafx::render_feature_renderer_prelude::*;
+use winit::window::Window;
 
 pub struct ImGuiStaticResources {
     pub imgui_material: Handle<MaterialAsset>,
@@ -17,16 +17,13 @@ pub struct ImGuiStaticResources {
 pub struct ImGuiRendererPlugin;
 
 impl ImGuiRendererPlugin {
-    pub fn legion_init(
-        resources: &mut legion::Resources,
-        window: &sdl2::video::Window,
-    ) {
-        let imgui_manager = init_sdl2_imgui_manager(window);
+    pub fn legion_init(resources: &mut legion::Resources, window: &Window) {
+        let imgui_manager = init_imgui_manager(window);
         resources.insert(imgui_manager);
     }
 
     pub fn legion_destroy(resources: &mut legion::Resources) {
-        resources.remove::<Sdl2ImguiManager>();
+        resources.remove::<ImguiManager>();
     }
 }
 
@@ -51,9 +48,7 @@ impl RendererPlugin for ImGuiRendererPlugin {
 
         asset_manager.wait_for_asset_to_load(&imgui_material, asset_resource, "imgui material")?;
 
-        let imgui_font_atlas_data = extract_resources
-            .fetch::<Sdl2ImguiManager>()
-            .build_font_atlas();
+        let imgui_font_atlas_data = extract_resources.fetch::<ImguiManager>().build_font_atlas();
 
         let dyn_resource_allocator = asset_manager.create_dyn_resource_allocator_set();
         let imgui_font_atlas_image_view = create_font_atlas_image_view(

@@ -11,5 +11,5 @@ rafx::declare_render_feature!(ImGuiRenderFeature, IMGUI_FEATURE_INDEX);
 mod plugin;
 pub use plugin::*;
 
-mod sdl2_imgui_manager;
-pub use sdl2_imgui_manager::*;
+mod imgui_manager;
+pub use imgui_manager::*;

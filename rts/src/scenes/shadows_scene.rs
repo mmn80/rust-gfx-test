@@ -19,7 +19,7 @@ use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
-use sdl2::{event::Event, keyboard::Keycode};
+use winit::event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub(super) struct ShadowsScene {
     main_view_frustum: ViewFrustumArc,
@@ -257,7 +257,7 @@ impl super::GameScene for ShadowsScene {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-        events: Vec<Event>,
+        event: Event<()>,
     ) -> SceneManagerAction {
         super::add_light_debug_draw(&resources, &world);
 
@@ -272,7 +272,7 @@ impl super::GameScene for ShadowsScene {
                 &*render_options,
                 &mut self.main_view_frustum,
                 &mut *viewports_resource,
-                &events,
+                &event,
             );
         }
 
@@ -343,31 +343,36 @@ impl super::GameScene for ShadowsScene {
         }
 
         let mut action = SceneManagerAction::None;
-        for event in events {
-            match event {
-                Event::KeyDown {
-                    keycode: Some(keycode),
-                    keymod: _modifiers,
-                    ..
-                } => {
-                    if keycode == Keycode::Escape {
-                        action = SceneManagerAction::Scene(Scene::Menu);
-                    }
-                    if keycode == Keycode::Equals {
-                        let time = resources.get::<TimeState>().unwrap();
-                        self.text_size = (self.text_size + 40. * time.previous_update_dt())
-                            .min(100.)
-                            .max(5.);
-                    }
-                    if keycode == Keycode::Minus {
-                        let time = resources.get::<TimeState>().unwrap();
-                        self.text_size = (self.text_size - 40. * time.previous_update_dt())
-                            .min(100.)
-                            .max(5.);
-                    }
+        match event {
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(keycode),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                if keycode == VirtualKeyCode::Escape {
+                    action = SceneManagerAction::Scene(Scene::Menu);
                 }
-                _ => {}
+                if keycode == VirtualKeyCode::Equals {
+                    let time = resources.get::<TimeState>().unwrap();
+                    self.text_size = (self.text_size + 40. * time.previous_update_dt())
+                        .min(100.)
+                        .max(5.);
+                }
+                if keycode == VirtualKeyCode::Minus {
+                    let time = resources.get::<TimeState>().unwrap();
+                    self.text_size = (self.text_size - 40. * time.previous_update_dt())
+                        .min(100.)
+                        .max(5.);
+                }
             }
+            _ => {}
         }
         action
     }

@@ -15,9 +15,8 @@ shaders = { path = "shaders" }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
 type-uuid = "0.1"
-sdl2 = { version = "0.34", features = ["raw-window-handle"] }
 imgui = { version = "0.7", optional = true }
-imgui-sdl2 = { version = "0.14.0", optional = true }
+imgui-winit-support = { version = "0.7", optional = true }
 legion = { version = "0.4.0", default-features = false, features = ["serialize"] }
 image = "0.23.12"
 image2 = { version = "0.11", features = ["ser"] }
@@ -56,8 +55,6 @@ stats_alloc = { version = "0.1.8", optional = true }
 
 [features]
 default = [
-    "sdl2-bundled",
-    "sdl2-static-link",
     "use-imgui",
     "profile-with-puffin",
     "rafx-vulkan",
@@ -67,12 +64,10 @@ default = [
     #"profile-with-tracy-memory", # Cannot be enabled with "profile-with-stats-alloc".
     #"profile-with-superluminal"
 ]
-use-imgui = ["imgui", "imgui-sdl2"]
+use-imgui = ["imgui", "imgui-winit-support"]
 rafx-empty = ["rafx/rafx-empty"]
 rafx-vulkan = ["rafx/rafx-vulkan"]
 rafx-metal = ["rafx/rafx-metal"]
-sdl2-bundled = ["sdl2/bundled"]
-sdl2-static-link = ["sdl2/static-link"]
 static-vulkan = ["rafx/static-vulkan"]
 profile-with-stats-alloc = ["stats_alloc", "rafx/no-render-thread"]
 profile-with-puffin = [
