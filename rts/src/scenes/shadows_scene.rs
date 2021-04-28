@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 use super::{Scene, SceneManagerAction};
-use crate::assets::gltf::MeshAsset;
 use crate::camera::RTSCamera;
 use crate::components::{
     DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
@@ -10,6 +11,7 @@ use crate::features::text::TextResource;
 use crate::time::TimeState;
 use crate::RenderOptions;
 use crate::{assets::font::FontAsset, input::InputState};
+use crate::{assets::gltf::MeshAsset, features::mesh::MeshRenderNodeHandle};
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
 use legion::IntoQuery;
@@ -19,12 +21,19 @@ use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
-use winit::event::VirtualKeyCode;
+use winit::event::{MouseButton, VirtualKeyCode};
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum UnitType {
+    Container1,
+    Container2,
+    BlueIcosphere,
+}
 
 pub(super) struct ShadowsScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
-    text_size: f32,
+    meshes: HashMap<UnitType, MeshRenderNodeHandle>,
 }
 
 impl ShadowsScene {
@@ -48,20 +57,18 @@ impl ShadowsScene {
         let blue_icosphere_asset =
             asset_resource.load_asset::<MeshAsset>("d5aed900-1e31-4f47-94ba-e356b0b0b8b0".into());
 
-        let mut load_visible_bounds = |asset_handle: &Handle<MeshAsset>| {
-            asset_manager
-                .wait_for_asset_to_load(asset_handle, &mut asset_resource, "")
-                .unwrap();
-
-            CullModel::VisibleBounds(
-                asset_manager
-                    .committed_asset(&floor_mesh_asset)
-                    .unwrap()
-                    .inner
-                    .asset_data
-                    .visible_bounds,
-            )
-        };
+        asset_manager
+            .wait_for_asset_to_load(&floor_mesh_asset, &mut asset_resource, "")
+            .unwrap();
+        asset_manager
+            .wait_for_asset_to_load(&container_1_asset, &mut asset_resource, "")
+            .unwrap();
+        asset_manager
+            .wait_for_asset_to_load(&container_2_asset, &mut asset_resource, "")
+            .unwrap();
+        asset_manager
+            .wait_for_asset_to_load(&blue_icosphere_asset, &mut asset_resource, "")
+            .unwrap();
 
         const FLOOR_SIZE: f32 = 48.;
         const FLOOR_NUM: i32 = 10;
@@ -92,7 +99,14 @@ impl ShadowsScene {
                         handle: {
                             let handle = visibility_region.register_static_object(
                                 EntityId::from(entity),
-                                load_visible_bounds(&floor_mesh_asset),
+                                CullModel::VisibleBounds(
+                                    asset_manager
+                                        .committed_asset(&floor_mesh_asset)
+                                        .unwrap()
+                                        .inner
+                                        .asset_data
+                                        .visible_bounds,
+                                ),
                             );
                             handle.set_transform(
                                 transform_component.translation,
@@ -110,74 +124,26 @@ impl ShadowsScene {
         //
         // Add some meshes
         //
-        {
-            let example_meshes = {
-                let mut meshes = Vec::default();
 
-                // container1
-                meshes.push(mesh_render_nodes.register_mesh(MeshRenderNode {
-                    mesh: container_1_asset,
-                }));
-
-                // container2
-                meshes.push(mesh_render_nodes.register_mesh(MeshRenderNode {
-                    mesh: container_2_asset,
-                }));
-
-                // blue icosphere - load by UUID since it's one of several meshes in the file
-                meshes.push(mesh_render_nodes.register_mesh(MeshRenderNode {
-                    mesh: blue_icosphere_asset,
-                }));
-
-                meshes
-            };
-
-            const SCALE_MIN: f32 = 0.5;
-            const SCALE_MAX: f32 = 2.;
-
-            let mut rng = thread_rng();
-            let floors = 1.5;
-            for i in 0..200 {
-                let position = Vec3::new(
-                    rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
-                    rng.gen_range(-FLOOR_SIZE * floors, FLOOR_SIZE * floors),
-                    0.0,
-                );
-                let mesh_render_node = example_meshes[i % example_meshes.len()].clone();
-                let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
-
-                let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
-                let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
-                let offset = rand_scale_z - 1.;
-                let transform_component = TransformComponent {
-                    translation: position + Vec3::new(0., 0., offset),
-                    scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
-                    rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
-                };
-
-                let mesh_component = MeshComponent {
-                    render_node: mesh_render_node.clone(),
-                };
-
-                let entity = world.push((transform_component.clone(), mesh_component));
-                let mut entry = world.entry(entity).unwrap();
-                entry.add_component(VisibilityComponent {
-                    handle: {
-                        let handle = visibility_region.register_dynamic_object(
-                            EntityId::from(entity),
-                            load_visible_bounds(&asset_handle),
-                        );
-                        handle.set_transform(
-                            transform_component.translation,
-                            transform_component.rotation,
-                            transform_component.scale,
-                        );
-                        handle.add_feature(mesh_render_node.as_raw_generic_handle());
-                        handle
-                    },
-                });
-            }
-        }
+        let mut meshes = HashMap::new();
+        meshes.insert(
+            UnitType::Container1,
+            mesh_render_nodes.register_mesh(MeshRenderNode {
+                mesh: container_1_asset,
+            }),
+        );
+        meshes.insert(
+            UnitType::Container2,
+            mesh_render_nodes.register_mesh(MeshRenderNode {
+                mesh: container_2_asset,
+            }),
+        );
+        meshes.insert(
+            UnitType::BlueIcosphere,
+            mesh_render_nodes.register_mesh(MeshRenderNode {
+                mesh: blue_icosphere_asset,
+            }),
+        );
 
         //
         // POINT LIGHT
@@ -242,12 +208,10 @@ impl ShadowsScene {
 
         let main_view_frustum = visibility_region.register_view_frustum();
 
-        let text_size = 15.;
-
         ShadowsScene {
             main_view_frustum,
             font,
-            text_size,
+            meshes,
         }
     }
 }
@@ -321,22 +285,80 @@ impl super::GameScene for ShadowsScene {
             }
         }
 
-        let camera = resources.get::<RTSCamera>().unwrap();
-        let viewports_resource = resources.get::<ViewportsResource>().unwrap();
-        let cursor = camera.ray_cast(
-            input.cursor_pos.0,
-            input.cursor_pos.1,
-            viewports_resource.main_window_size.width,
-            viewports_resource.main_window_size.height,
-        );
-
         {
+            let camera = resources.get::<RTSCamera>().unwrap();
+            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+            if input.mouse_trigger.contains(&MouseButton::Left) {
+                let cursor = camera.ray_cast(
+                    input.cursor_pos.0,
+                    input.cursor_pos.1,
+                    viewports_resource.main_window_size.width,
+                    viewports_resource.main_window_size.height,
+                );
+
+                const SCALE_MIN: f32 = 0.5;
+                const SCALE_MAX: f32 = 2.;
+
+                let asset_manager = resources.get::<AssetManager>().unwrap();
+                let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+                let mesh_render_nodes = resources.get::<MeshRenderNodeSet>().unwrap();
+
+                let unit_type = if input.key_pressed.contains(&VirtualKeyCode::Key1) {
+                    UnitType::Container1
+                } else if input.key_pressed.contains(&VirtualKeyCode::Key2) {
+                    UnitType::Container2
+                } else {
+                    UnitType::BlueIcosphere
+                };
+                let mut rng = thread_rng();
+                let position = Vec3::new(cursor.x, cursor.y, 0.0);
+                let mesh_render_node = self.meshes.get(&unit_type).unwrap().clone();
+                let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
+
+                let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
+                let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
+                let offset = rand_scale_z - 1.;
+                let transform_component = TransformComponent {
+                    translation: position + Vec3::new(0., 0., offset),
+                    scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
+                    rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
+                };
+
+                log::info!("Spawn entity {:?} at: {}", unit_type, cursor);
+
+                let mesh_component = MeshComponent {
+                    render_node: mesh_render_node.clone(),
+                };
+
+                let entity = world.push((transform_component.clone(), mesh_component));
+                let mut entry = world.entry(entity).unwrap();
+                entry.add_component(VisibilityComponent {
+                    handle: {
+                        let handle = visibility_region.register_dynamic_object(
+                            EntityId::from(entity),
+                            CullModel::VisibleBounds(
+                                asset_manager
+                                    .committed_asset(&asset_handle)
+                                    .unwrap()
+                                    .inner
+                                    .asset_data
+                                    .visible_bounds,
+                            ),
+                        );
+                        handle.set_transform(
+                            transform_component.translation,
+                            transform_component.rotation,
+                            transform_component.scale,
+                        );
+                        handle.add_feature(mesh_render_node.as_raw_generic_handle());
+                        handle
+                    },
+                });
+            }
+
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
             text_resource.add_text(
-                format!(
-                    "camera: {:.2}m, cursor: [{:.2} {:.2} {:.2}]",
-                    camera.look_at_dist, cursor.x, cursor.y, cursor.z
-                ),
+                format!("camera: {:.2}m", camera.look_at_dist),
                 glam::Vec3::new(
                     10.0,
                     viewports_resource.main_window_size.height as f32 - 30.,
@@ -348,21 +370,10 @@ impl super::GameScene for ShadowsScene {
             );
         }
 
-        let mut action = SceneManagerAction::None;
         if input.key_trigger.contains(&VirtualKeyCode::Escape) {
-            action = SceneManagerAction::Scene(Scene::Menu);
-        } else if input.key_pressed.contains(&VirtualKeyCode::Equals) {
-            let time = resources.get::<TimeState>().unwrap();
-            self.text_size = (self.text_size + 40. * time.previous_update_dt())
-                .min(100.)
-                .max(5.);
-        } else if input.key_pressed.contains(&VirtualKeyCode::Minus) {
-            let time = resources.get::<TimeState>().unwrap();
-            self.text_size = (self.text_size - 40. * time.previous_update_dt())
-                .min(100.)
-                .max(5.);
+            SceneManagerAction::Scene(Scene::Menu)
+        } else {
+            SceneManagerAction::None
         }
-
-        action
     }
 }
