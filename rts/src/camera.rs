@@ -7,7 +7,12 @@ use crate::phases::{
 };
 use crate::{features::debug3d::Debug3DRenderFeature, input::InputState};
 use crate::{time::TimeState, RenderOptions};
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec3, Vec4Swizzles};
+use parry3d::{
+    bounding_volume::AABB,
+    math::{Point, Vector},
+    query::{Ray, RayCast},
+};
 use rafx::{
     nodes::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange},
     rafx_visibility::{DepthRange, PerspectiveParameters, Projection},
@@ -26,6 +31,11 @@ pub struct RTSCamera {
     move_speed: f32,
     yaw_speed: f32,
     scroll_speed: f32,
+    fov_y: f32,
+    near_plane: f32,
+    far_plane: f32,
+    view_matrix: glam::Mat4,
+    projection_matrix: glam::Mat4,
 }
 
 impl Default for RTSCamera {
@@ -38,6 +48,11 @@ impl Default for RTSCamera {
             move_speed: 20.,
             yaw_speed: 5.,
             scroll_speed: 50.,
+            fov_y: std::f32::consts::FRAC_PI_4,
+            near_plane: 0.01,
+            far_plane: 10000.,
+            view_matrix: glam::Mat4::IDENTITY,
+            projection_matrix: glam::Mat4::IDENTITY,
         }
     }
 }
@@ -70,7 +85,39 @@ impl RTSCamera {
         (1.0 - (distance / 100.0).powi(2)).min(1.0).max(0.0) * FRAC_PI_4
     }
 
-    fn update(&mut self, dt: f32, input: &InputState) {
+    pub fn make_ray(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> glam::Vec3 {
+        // https://antongerdelan.net/opengl/raycasting.html
+        let ray_nds = glam::Vec3::new(
+            (2. * mouse_x as f32) / width as f32 - 1.,
+            1. - (2. * mouse_y as f32) / height as f32,
+            1.,
+        );
+        let ray_clip = glam::Vec4::new(ray_nds.x, ray_nds.y, -1.0, 1.0);
+        let ray_eye = self.projection_matrix.inverse() * ray_clip;
+        let ray_eye = glam::Vec4::new(ray_eye.x, ray_eye.y, -1.0, 0.0);
+        let ray_wor = (self.view_matrix.inverse() * ray_eye).xyz().normalize();
+        ray_wor
+    }
+
+    pub fn ray_cast(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> glam::Vec3 {
+        let ray_vec = self.make_ray(mouse_x, mouse_y, width, height);
+        let floor = AABB::new(
+            Point::new(-1000., -1000., -2.),
+            Point::new(1000., 1000., -1.),
+        );
+        let eye = self.eye();
+        let ray = Ray::new(
+            Point::new(eye.x, eye.y, eye.z),
+            Vector::new(ray_vec.x, ray_vec.y, ray_vec.z),
+        );
+        if let Some(toi) = floor.cast_local_ray(&ray, 10000., true) {
+            eye + ray_vec * toi
+        } else {
+            glam::Vec3::ONE
+        }
+    }
+
+    fn update_transform(&mut self, dt: f32, input: &InputState) {
         if input.key_pressed.contains(&VirtualKeyCode::W) {
             self.look_at += dt * self.move_speed * self.forward();
         }
@@ -98,14 +145,13 @@ impl RTSCamera {
         }
     }
 
-    #[profiling::function]
-    pub fn update_main_view_3d(
+    fn update_main_view_meta(
         &mut self,
-        time_state: &TimeState,
         render_options: &RenderOptions,
         main_view_frustum: &mut ViewFrustumArc,
         viewports_resource: &mut ViewportsResource,
-        input: &InputState,
+        projection: &Projection,
+        eye: Vec3,
     ) {
         let phase_mask = RenderPhaseMaskBuilder::default()
             .add_render_phase::<DepthPrepassRenderPhase>()
@@ -133,7 +179,28 @@ impl RTSCamera {
 
         let main_camera_feature_mask = feature_mask_builder.build();
 
-        self.update(time_state.previous_update_dt(), input);
+        viewports_resource.main_view_meta = Some(RenderViewMeta {
+            view_frustum: main_view_frustum.clone(),
+            eye_position: eye,
+            view: self.view_matrix,
+            proj: self.projection_matrix,
+            depth_range: RenderViewDepthRange::from_projection(projection),
+            render_phase_mask: phase_mask,
+            render_feature_mask: main_camera_feature_mask,
+            debug_name: "main".to_string(),
+        });
+    }
+
+    #[profiling::function]
+    pub fn update(
+        &mut self,
+        time_state: &TimeState,
+        render_options: &RenderOptions,
+        main_view_frustum: &mut ViewFrustumArc,
+        viewports_resource: &mut ViewportsResource,
+        input: &InputState,
+    ) {
+        self.update_transform(time_state.previous_update_dt(), input);
 
         let aspect_ratio = viewports_resource.main_window_size.width as f32
             / viewports_resource.main_window_size.height.max(1) as f32;
@@ -141,16 +208,13 @@ impl RTSCamera {
         let eye = self.eye();
         let look_at = self.look_at;
         let up = self.up();
-        let view = glam::Mat4::look_at_rh(eye, look_at, up);
-
-        let fov_y_radians = std::f32::consts::FRAC_PI_4;
-        let near_plane = 0.01;
+        self.view_matrix = glam::Mat4::look_at_rh(eye, look_at, up);
 
         let projection = Projection::Perspective(PerspectiveParameters::new(
-            fov_y_radians,
+            self.fov_y,
             aspect_ratio,
-            near_plane,
-            10000.,
+            self.near_plane,
+            self.far_plane,
             DepthRange::InfiniteReverse,
         ));
 
@@ -158,15 +222,14 @@ impl RTSCamera {
             .set_projection(&projection)
             .set_transform(eye, look_at, up);
 
-        viewports_resource.main_view_meta = Some(RenderViewMeta {
-            view_frustum: main_view_frustum.clone(),
-            eye_position: eye,
-            view,
-            proj: projection.as_rh_mat4(),
-            depth_range: RenderViewDepthRange::from_projection(&projection),
-            render_phase_mask: phase_mask,
-            render_feature_mask: main_camera_feature_mask,
-            debug_name: "main".to_string(),
-        });
+        self.projection_matrix = projection.as_rh_mat4();
+
+        self.update_main_view_meta(
+            render_options,
+            main_view_frustum,
+            viewports_resource,
+            &projection,
+            eye,
+        );
     }
 }

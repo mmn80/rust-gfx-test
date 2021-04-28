@@ -76,7 +76,7 @@ impl ShadowsScene {
 
             for x in -FLOOR_NUM..FLOOR_NUM {
                 for y in -FLOOR_NUM..FLOOR_NUM {
-                    let position = Vec3::new(x as f32 * FLOOR_SIZE, y as f32 * FLOOR_SIZE, -1.0);
+                    let position = Vec3::new(x as f32 * FLOOR_SIZE, y as f32 * FLOOR_SIZE, -1.);
                     let transform_component = TransformComponent {
                         translation: position,
                         ..Default::default()
@@ -264,7 +264,7 @@ impl super::GameScene for ShadowsScene {
             let render_options = resources.get::<RenderOptions>().unwrap();
             let mut camera = resources.get_mut::<RTSCamera>().unwrap();
 
-            camera.update_main_view_3d(
+            camera.update(
                 &*time_state,
                 &*render_options,
                 &mut self.main_view_frustum,
@@ -321,13 +321,22 @@ impl super::GameScene for ShadowsScene {
             }
         }
 
+        let camera = resources.get::<RTSCamera>().unwrap();
+        let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+        let cursor = camera.ray_cast(
+            input.cursor_pos.0,
+            input.cursor_pos.1,
+            viewports_resource.main_window_size.width,
+            viewports_resource.main_window_size.height,
+        );
+
         {
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
-            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
-            let camera = resources.get::<RTSCamera>().unwrap();
-
             text_resource.add_text(
-                format!("camera: {}m", camera.look_at_dist),
+                format!(
+                    "camera: {:.2}m, cursor: [{:.2} {:.2} {:.2}]",
+                    camera.look_at_dist, cursor.x, cursor.y, cursor.z
+                ),
                 glam::Vec3::new(
                     10.0,
                     viewports_resource.main_window_size.height as f32 - 30.,
