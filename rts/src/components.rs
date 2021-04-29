@@ -57,7 +57,7 @@ pub struct SpotLightComponent {
     pub view_frustum: ViewFrustumArc,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum UnitType {
     Container1,
     Container2,

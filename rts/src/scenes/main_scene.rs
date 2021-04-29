@@ -13,6 +13,7 @@ use crate::{assets::gltf::MeshAsset, features::mesh::MeshRenderNodeHandle};
 use crate::{camera::RTSCamera, components::UnitType};
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
+use imgui::im_str;
 use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
 use rafx::assets::distill_impl::AssetResource;
@@ -27,6 +28,8 @@ pub(super) struct MainScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
     meshes: HashMap<UnitType, MeshRenderNodeHandle>,
+    ui_spawning: bool,
+    ui_unit_type: UnitType,
 }
 
 impl MainScene {
@@ -205,6 +208,8 @@ impl MainScene {
             main_view_frustum,
             font,
             meshes,
+            ui_spawning: false,
+            ui_unit_type: UnitType::Container1,
         }
     }
 }
@@ -297,20 +302,56 @@ impl super::GameScene for MainScene {
             }
         }
 
-        {
+        if self.ui_spawning {
             let input = resources.get::<InputState>().unwrap();
             if input.mouse_trigger.contains(&MouseButton::Left) {
                 let camera = resources.get::<RTSCamera>().unwrap();
                 let cursor = camera.ray_cast_terrain(resources);
-                let unit_type = if input.key_pressed.contains(&VirtualKeyCode::Key1) {
-                    UnitType::Container1
-                } else if input.key_pressed.contains(&VirtualKeyCode::Key2) {
-                    UnitType::Container2
-                } else {
-                    UnitType::BlueIcosphere
-                };
-                self.spawn_unit(unit_type, cursor, resources, world);
+                self.spawn_unit(self.ui_unit_type, cursor, resources, world);
+                self.ui_spawning = false;
             }
+        }
+
+        #[cfg(feature = "use-imgui")]
+        {
+            use crate::features::imgui::ImguiManager;
+            profiling::scope!("imgui");
+            let imgui_manager = resources.get::<ImguiManager>().unwrap();
+            imgui_manager.with_ui(|ui| {
+                profiling::scope!("main game menu");
+
+                let game_window = imgui::Window::new(im_str!("Commands"));
+                game_window
+                    .position([100., 100.], imgui::Condition::FirstUseEver)
+                    .always_auto_resize(true)
+                    .resizable(false)
+                    .build(&ui, || {
+                        let group = ui.begin_group();
+                        if self.ui_spawning {
+                            ui.text_wrapped(im_str!("Click a location on the map to spawn unit"))
+                        } else {
+                            ui.radio_button(
+                                im_str!("Container1"),
+                                &mut self.ui_unit_type,
+                                UnitType::Container1,
+                            );
+                            ui.radio_button(
+                                im_str!("Container2"),
+                                &mut self.ui_unit_type,
+                                UnitType::Container2,
+                            );
+                            ui.radio_button(
+                                im_str!("BlueIcosphere"),
+                                &mut self.ui_unit_type,
+                                UnitType::BlueIcosphere,
+                            );
+                            if ui.button(im_str!("Spawn new unit"), [100., 30.]) {
+                                self.ui_spawning = true;
+                            }
+                        }
+                        group.end(ui);
+                    });
+            });
         }
 
         {
