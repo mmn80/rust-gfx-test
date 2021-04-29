@@ -9,13 +9,13 @@ use rand::Rng;
 
 mod menu_scene;
 use menu_scene::MenuScene;
-mod shadows_scene;
-use shadows_scene::ShadowsScene;
+mod main_scene;
+use main_scene::MainScene;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
     Menu,
-    Shadows,
+    Main,
 }
 
 fn random_color(rng: &mut impl Rng) -> Vec3 {
@@ -29,7 +29,7 @@ fn random_color(rng: &mut impl Rng) -> Vec3 {
 fn create_scene(scene: Scene, world: &mut World, resources: &Resources) -> Box<dyn GameScene> {
     match scene {
         Scene::Menu => Box::new(MenuScene::new(world, resources)),
-        Scene::Shadows => Box::new(ShadowsScene::new(world, resources)),
+        Scene::Main => Box::new(MainScene::new(world, resources)),
     }
 }
 

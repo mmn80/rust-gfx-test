@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use super::{Scene, SceneManagerAction};
 use crate::components::{
     DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
@@ -22,15 +20,16 @@ use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
+use std::collections::HashMap;
 use winit::event::{MouseButton, VirtualKeyCode};
 
-pub(super) struct ShadowsScene {
+pub(super) struct MainScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
     meshes: HashMap<UnitType, MeshRenderNodeHandle>,
 }
 
-impl ShadowsScene {
+impl MainScene {
     pub(super) fn new(world: &mut World, resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
@@ -202,7 +201,7 @@ impl ShadowsScene {
 
         let main_view_frustum = visibility_region.register_view_frustum();
 
-        ShadowsScene {
+        MainScene {
             main_view_frustum,
             font,
             meshes,
@@ -210,7 +209,7 @@ impl ShadowsScene {
     }
 }
 
-impl super::GameScene for ShadowsScene {
+impl super::GameScene for MainScene {
     fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         super::add_light_debug_draw(&resources, &world);
 
@@ -342,7 +341,7 @@ impl super::GameScene for ShadowsScene {
     }
 }
 
-impl ShadowsScene {
+impl MainScene {
     fn spawn_unit(
         &mut self,
         unit_type: UnitType,

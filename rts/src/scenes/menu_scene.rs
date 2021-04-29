@@ -103,8 +103,8 @@ impl super::GameScene for MenuScene {
                     .scroll_bar(false)
                     .collapsible(false)
                     .build(&ui, || {
-                        if ui.button(imgui::im_str!("Shadows"), [200.0_f32, 100.0]) {
-                            action = SceneManagerAction::Scene(Scene::Shadows);
+                        if ui.button(imgui::im_str!("Play"), [200.0_f32, 100.0]) {
+                            action = SceneManagerAction::Scene(Scene::Main);
                         }
                         if ui.button(imgui::im_str!("Exit"), [200.0_f32, 100.0]) {
                             action = SceneManagerAction::Exit;
@@ -119,7 +119,7 @@ impl super::GameScene for MenuScene {
             action = SceneManagerAction::Exit;
         }
         if input.key_trigger.contains(&VirtualKeyCode::S) {
-            action = SceneManagerAction::Scene(Scene::Shadows);
+            action = SceneManagerAction::Scene(Scene::Main);
         }
 
         action
