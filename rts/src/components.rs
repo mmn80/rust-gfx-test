@@ -41,7 +41,7 @@ pub struct PointLightComponent {
 
 #[derive(Clone)]
 pub struct DirectionalLightComponent {
-    pub direction: glam::Vec3,
+    pub direction: Vec3,
     pub color: glam::Vec4,
     pub intensity: f32,
     pub view_frustum: ViewFrustumArc,
@@ -49,10 +49,26 @@ pub struct DirectionalLightComponent {
 
 #[derive(Clone)]
 pub struct SpotLightComponent {
-    pub direction: glam::Vec3,
+    pub direction: Vec3,
     pub color: glam::Vec4,
     pub spotlight_half_angle: f32,
     pub range: f32,
     pub intensity: f32,
     pub view_frustum: ViewFrustumArc,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum UnitType {
+    Container1,
+    Container2,
+    BlueIcosphere,
+}
+
+#[derive(Clone)]
+pub struct UnitComponent {
+    pub unit_type: UnitType,
+    pub health: f32,
+    pub aim: Vec3,
+    pub speed: f32,
+    pub move_target: Option<Vec3>,
 }

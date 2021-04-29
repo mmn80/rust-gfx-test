@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use super::{Scene, SceneManagerAction};
-use crate::camera::RTSCamera;
 use crate::components::{
     DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
+    UnitComponent,
 };
 use crate::components::{SpotLightComponent, VisibilityComponent};
 use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
@@ -12,6 +12,7 @@ use crate::time::TimeState;
 use crate::RenderOptions;
 use crate::{assets::font::FontAsset, input::InputState};
 use crate::{assets::gltf::MeshAsset, features::mesh::MeshRenderNodeHandle};
+use crate::{camera::RTSCamera, components::UnitType};
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
 use legion::IntoQuery;
@@ -22,13 +23,6 @@ use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
 use winit::event::{MouseButton, VirtualKeyCode};
-
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum UnitType {
-    Container1,
-    Container2,
-    BlueIcosphere,
-}
 
 pub(super) struct ShadowsScene {
     main_view_frustum: ViewFrustumArc,
@@ -159,8 +153,8 @@ impl ShadowsScene {
         super::add_point_light(
             resources,
             world,
-            //glam::Vec3::new(-3.0, 3.0, 2.0),
-            glam::Vec3::new(5.0, 5.0, 2.0),
+            //Vec3::new(-3.0, 3.0, 2.0),
+            Vec3::new(5.0, 5.0, 2.0),
             PointLightComponent {
                 color: [0.0, 1.0, 0.0, 1.0].into(),
                 intensity: 50.0,
@@ -172,8 +166,8 @@ impl ShadowsScene {
         //
         // DIRECTIONAL LIGHT
         //
-        let light_from = glam::Vec3::new(-5.0, 5.0, 5.0);
-        let light_to = glam::Vec3::ZERO;
+        let light_from = Vec3::new(-5.0, 5.0, 5.0);
+        let light_to = Vec3::ZERO;
         let light_direction = (light_to - light_from).normalize();
         super::add_directional_light(
             resources,
@@ -189,8 +183,8 @@ impl ShadowsScene {
         //
         // SPOT LIGHT
         //
-        let light_from = glam::Vec3::new(-3.0, -3.0, 5.0);
-        let light_to = glam::Vec3::ZERO;
+        let light_from = Vec3::new(-3.0, -3.0, 5.0);
+        let light_to = Vec3::ZERO;
         let light_direction = (light_to - light_from).normalize();
         super::add_spot_light(
             resources,
@@ -220,9 +214,8 @@ impl super::GameScene for ShadowsScene {
     fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         super::add_light_debug_draw(&resources, &world);
 
-        let input = resources.get::<InputState>().unwrap();
-
         {
+            let input = resources.get::<InputState>().unwrap();
             let time_state = resources.get::<TimeState>().unwrap();
             let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
             let render_options = resources.get::<RenderOptions>().unwrap();
@@ -246,7 +239,7 @@ impl super::GameScene for ShadowsScene {
                 const LIGHT_ROTATE_SPEED: f32 = 0.2;
                 const LIGHT_LOOP_OFFSET: f32 = 2.0;
                 let loop_time = time_state.total_time().as_secs_f32();
-                let light_from = glam::Vec3::new(
+                let light_from = Vec3::new(
                     LIGHT_XY_DISTANCE
                         * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
                     LIGHT_XY_DISTANCE
@@ -256,7 +249,7 @@ impl super::GameScene for ShadowsScene {
                     //0.2
                     //2.0
                 );
-                let light_to = glam::Vec3::default();
+                let light_to = Vec3::default();
 
                 light.direction = (light_to - light_from).normalize();
             }
@@ -271,7 +264,7 @@ impl super::GameScene for ShadowsScene {
                 const LIGHT_ROTATE_SPEED: f32 = 0.5;
                 const LIGHT_LOOP_OFFSET: f32 = 2.0;
                 let loop_time = time_state.total_time().as_secs_f32();
-                let light_from = glam::Vec3::new(
+                let light_from = Vec3::new(
                     LIGHT_XY_DISTANCE
                         * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
                     LIGHT_XY_DISTANCE
@@ -286,23 +279,30 @@ impl super::GameScene for ShadowsScene {
         }
 
         {
-            let camera = resources.get::<RTSCamera>().unwrap();
-            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+            let time_state = resources.get::<TimeState>().unwrap();
+            let mut query = <(Write<TransformComponent>, Write<UnitComponent>)>::query();
+            for (transform, unit) in query.iter_mut(world) {
+                if let Some(target) = unit.move_target {
+                    let dt = time_state.previous_update_dt();
+                    let target_dir = (target - transform.translation).normalize();
+                    let orig_dir = Vec3::X;
+                    if (target_dir - orig_dir).length() > 0.001 {
+                        transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
+                    }
+                    const TARGET_SPEED: f32 = 10.; // m/s
+                    if unit.speed < TARGET_SPEED {
+                        unit.speed = (unit.speed + dt).min(TARGET_SPEED);
+                    }
+                    transform.translation += unit.speed * dt * target_dir;
+                }
+            }
+        }
+
+        {
+            let input = resources.get::<InputState>().unwrap();
             if input.mouse_trigger.contains(&MouseButton::Left) {
-                let cursor = camera.ray_cast(
-                    input.cursor_pos.0,
-                    input.cursor_pos.1,
-                    viewports_resource.main_window_size.width,
-                    viewports_resource.main_window_size.height,
-                );
-
-                const SCALE_MIN: f32 = 0.5;
-                const SCALE_MAX: f32 = 2.;
-
-                let asset_manager = resources.get::<AssetManager>().unwrap();
-                let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-                let mesh_render_nodes = resources.get::<MeshRenderNodeSet>().unwrap();
-
+                let camera = resources.get::<RTSCamera>().unwrap();
+                let cursor = camera.ray_cast_terrain(resources);
                 let unit_type = if input.key_pressed.contains(&VirtualKeyCode::Key1) {
                     UnitType::Container1
                 } else if input.key_pressed.contains(&VirtualKeyCode::Key2) {
@@ -310,56 +310,17 @@ impl super::GameScene for ShadowsScene {
                 } else {
                     UnitType::BlueIcosphere
                 };
-                let mut rng = thread_rng();
-                let position = Vec3::new(cursor.x, cursor.y, 0.0);
-                let mesh_render_node = self.meshes.get(&unit_type).unwrap().clone();
-                let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
-
-                let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
-                let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
-                let offset = rand_scale_z - 1.;
-                let transform_component = TransformComponent {
-                    translation: position + Vec3::new(0., 0., offset),
-                    scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
-                    rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
-                };
-
-                log::info!("Spawn entity {:?} at: {}", unit_type, cursor);
-
-                let mesh_component = MeshComponent {
-                    render_node: mesh_render_node.clone(),
-                };
-
-                let entity = world.push((transform_component.clone(), mesh_component));
-                let mut entry = world.entry(entity).unwrap();
-                entry.add_component(VisibilityComponent {
-                    handle: {
-                        let handle = visibility_region.register_dynamic_object(
-                            EntityId::from(entity),
-                            CullModel::VisibleBounds(
-                                asset_manager
-                                    .committed_asset(&asset_handle)
-                                    .unwrap()
-                                    .inner
-                                    .asset_data
-                                    .visible_bounds,
-                            ),
-                        );
-                        handle.set_transform(
-                            transform_component.translation,
-                            transform_component.rotation,
-                            transform_component.scale,
-                        );
-                        handle.add_feature(mesh_render_node.as_raw_generic_handle());
-                        handle
-                    },
-                });
+                self.spawn_unit(unit_type, cursor, resources, world);
             }
+        }
 
+        {
+            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
+            let camera = resources.get::<RTSCamera>().unwrap();
             text_resource.add_text(
                 format!("camera: {:.2}m", camera.look_at_dist),
-                glam::Vec3::new(
+                Vec3::new(
                     10.0,
                     viewports_resource.main_window_size.height as f32 - 30.,
                     0.0,
@@ -370,10 +331,76 @@ impl super::GameScene for ShadowsScene {
             );
         }
 
-        if input.key_trigger.contains(&VirtualKeyCode::Escape) {
-            SceneManagerAction::Scene(Scene::Menu)
-        } else {
-            SceneManagerAction::None
+        {
+            let input = resources.get::<InputState>().unwrap();
+            if input.key_trigger.contains(&VirtualKeyCode::Escape) {
+                SceneManagerAction::Scene(Scene::Menu)
+            } else {
+                SceneManagerAction::None
+            }
         }
+    }
+}
+
+impl ShadowsScene {
+    fn spawn_unit(
+        &mut self,
+        unit_type: UnitType,
+        position: Vec3,
+        resources: &Resources,
+        world: &mut World,
+    ) {
+        const SCALE_MIN: f32 = 0.5;
+        const SCALE_MAX: f32 = 2.;
+        let asset_manager = resources.get::<AssetManager>().unwrap();
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+        let mesh_render_nodes = resources.get::<MeshRenderNodeSet>().unwrap();
+        let mut rng = thread_rng();
+        let position = Vec3::new(position.x, position.y, 0.0);
+        let mesh_render_node = self.meshes.get(&unit_type).unwrap().clone();
+        let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
+        let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
+        let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
+        let offset = rand_scale_z - 1.;
+        let transform_component = TransformComponent {
+            translation: position + Vec3::new(0., 0., offset),
+            scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
+            rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
+        };
+        log::info!("Spawn entity {:?} at: {}", unit_type, position);
+        let mesh_component = MeshComponent {
+            render_node: mesh_render_node.clone(),
+        };
+        let unit_component = UnitComponent {
+            unit_type,
+            health: 1.,
+            aim: Vec3::new(1., 0., 0.),
+            speed: 0.,
+            move_target: None,
+        };
+        let entity = world.push((transform_component.clone(), mesh_component, unit_component));
+        let mut entry = world.entry(entity).unwrap();
+        entry.add_component(VisibilityComponent {
+            handle: {
+                let handle = visibility_region.register_dynamic_object(
+                    EntityId::from(entity),
+                    CullModel::VisibleBounds(
+                        asset_manager
+                            .committed_asset(&asset_handle)
+                            .unwrap()
+                            .inner
+                            .asset_data
+                            .visible_bounds,
+                    ),
+                );
+                handle.set_transform(
+                    transform_component.translation,
+                    transform_component.rotation,
+                    transform_component.scale,
+                );
+                handle.add_feature(mesh_render_node.as_raw_generic_handle());
+                handle
+            },
+        });
     }
 }

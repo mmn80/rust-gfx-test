@@ -85,9 +85,9 @@ impl RTSCamera {
         (1.0 - (distance / 100.0).powi(2)).min(1.0).max(0.0) * FRAC_PI_4
     }
 
-    pub fn make_ray(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> glam::Vec3 {
+    pub fn make_ray(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> Vec3 {
         // https://antongerdelan.net/opengl/raycasting.html
-        let ray_nds = glam::Vec3::new(
+        let ray_nds = Vec3::new(
             (2. * mouse_x as f32) / width as f32 - 1.,
             1. - (2. * mouse_y as f32) / height as f32,
             1.,
@@ -99,7 +99,7 @@ impl RTSCamera {
         ray_wor
     }
 
-    pub fn ray_cast(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> glam::Vec3 {
+    pub fn ray_cast(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> Vec3 {
         let ray_vec = self.make_ray(mouse_x, mouse_y, width, height);
         let floor = AABB::new(
             Point::new(-1000., -1000., -2.),
@@ -113,8 +113,19 @@ impl RTSCamera {
         if let Some(toi) = floor.cast_local_ray(&ray, 10000., true) {
             eye + ray_vec * toi
         } else {
-            glam::Vec3::ONE
+            Vec3::ONE
         }
+    }
+
+    pub fn ray_cast_terrain(&self, resources: &legion::systems::Resources) -> Vec3 {
+        let input = resources.get::<InputState>().unwrap();
+        let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+        self.ray_cast(
+            input.cursor_pos.0,
+            input.cursor_pos.1,
+            viewports_resource.main_window_size.width,
+            viewports_resource.main_window_size.height,
+        )
     }
 
     fn update_transform(&mut self, dt: f32, input: &InputState) {
