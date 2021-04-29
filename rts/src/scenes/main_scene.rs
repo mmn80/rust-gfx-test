@@ -20,14 +20,14 @@ use crate::{
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3, Vec4};
 use imgui::im_str;
-use legion::IntoQuery;
+use legion::{Entity, IntoQuery};
 use legion::{Read, Resources, World, Write};
-use rafx::assets::distill_impl::AssetResource;
-use rafx::assets::AssetManager;
-use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
+use rafx::{assets::distill_impl::AssetResource, rafx_visibility::Projection};
+use rafx::{assets::AssetManager, rafx_visibility::PerspectiveParameters};
+use rafx::{rafx_visibility::DepthRange, renderer::ViewportsResource};
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use winit::event::{MouseButton, VirtualKeyCode};
 
 pub(super) struct MainScene {
@@ -36,6 +36,7 @@ pub(super) struct MainScene {
     meshes: HashMap<UnitType, MeshRenderNodeHandle>,
     ui_spawning: bool,
     ui_unit_type: UnitType,
+    ui_selection_frustum: ViewFrustumArc,
 }
 
 impl MainScene {
@@ -209,6 +210,7 @@ impl MainScene {
         );
 
         let main_view_frustum = visibility_region.register_view_frustum();
+        let ui_selection_frustum = visibility_region.register_view_frustum();
 
         MainScene {
             main_view_frustum,
@@ -216,6 +218,7 @@ impl MainScene {
             meshes,
             ui_spawning: false,
             ui_unit_type: UnitType::Container1,
+            ui_selection_frustum,
         }
     }
 }
@@ -288,10 +291,63 @@ impl super::GameScene for MainScene {
             }
         }
 
+        let mut selected = HashSet::<Entity>::new();
+        {
+            let input = resources.get::<InputState>().unwrap();
+            if input.key_pressed.contains(&VirtualKeyCode::N) {
+                self.ui_spawning = true;
+            }
+            if !self.ui_spawning {
+                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
+                    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+                    let camera = resources.get::<RTSCamera>().unwrap();
+                    let screen_center_ray = camera.make_ray(0, 0);
+                    let p0 = camera.ray_cast_screen(x0, y0, screen_center_ray);
+                    let p1 = camera.ray_cast_screen(x1, y0, screen_center_ray);
+                    let p2 = camera.ray_cast_screen(x1, y1, screen_center_ray);
+                    let p3 = camera.ray_cast_screen(x0, y1, screen_center_ray);
+                    debug_draw.add_line_loop(vec![p0, p1, p2, p3], Vec4::new(0., 1., 0., 1.));
+
+                    let fov_y = std::f32::consts::FRAC_PI_4;
+                    let aspect_ratio = 1.;
+
+                    let projection = Projection::Perspective(PerspectiveParameters::new(
+                        fov_y,
+                        aspect_ratio,
+                        0.1,
+                        10000.,
+                        DepthRange::InfiniteReverse,
+                    ));
+
+                    self.ui_selection_frustum
+                        .set_projection(&projection)
+                        .set_transform(camera.eye(), camera.look_at, camera.up());
+
+                    if let Ok(results) = self.ui_selection_frustum.clone().query_visibility() {
+                        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+                        selected = results
+                            .objects
+                            .iter()
+                            .map(|res| {
+                                visibility_region
+                                    .object_ref(rafx::visibility::VisibilityObjectId::from(
+                                        slotmap::KeyData::from_ffi(res.id),
+                                    ))
+                                    .entity_id()
+                                    .into()
+                            })
+                            .collect();
+                    } else {
+                        log::error!("Failed visibility query");
+                    }
+                }
+            }
+        }
+
         {
             let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <(Write<TransformComponent>, Write<UnitComponent>)>::query();
-            query.par_for_each_mut(world, |(transform, unit)| {
+            let mut query = <(Entity, Write<TransformComponent>, Write<UnitComponent>)>::query();
+            query.par_for_each_mut(world, |(entity, transform, unit)| {
                 if let Some(target) = unit.move_target {
                     let dt = time_state.previous_update_dt();
                     let target_dir = (target - transform.translation).normalize();
@@ -308,36 +364,33 @@ impl super::GameScene for MainScene {
                         unit.move_target = None;
                         unit.speed = 0.;
                     }
+                    unit.selected = selected.contains(entity);
                 }
             });
         }
 
         {
             let input = resources.get::<InputState>().unwrap();
-            if input.key_pressed.contains(&VirtualKeyCode::N) {
-                self.ui_spawning = true;
-            }
-            if !self.ui_spawning {
-                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+            if self.ui_spawning {
+                if input.mouse_trigger.contains(&MouseButton::Left) {
                     let camera = resources.get::<RTSCamera>().unwrap();
-                    let screen_center_ray = camera.make_ray(0, 0);
-                    let p0 = camera.ray_cast_screen(x0, y0, screen_center_ray);
-                    let p1 = camera.ray_cast_screen(x1, y0, screen_center_ray);
-                    let p2 = camera.ray_cast_screen(x1, y1, screen_center_ray);
-                    let p3 = camera.ray_cast_screen(x0, y1, screen_center_ray);
-                    debug_draw.add_line_loop(vec![p0, p1, p2, p3], Vec4::new(0., 1., 0., 1.));
+                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
+                    self.ui_spawning = false;
                 }
-            }
-        }
-
-        if self.ui_spawning {
-            let input = resources.get::<InputState>().unwrap();
-            if input.mouse_trigger.contains(&MouseButton::Left) {
-                let camera = resources.get::<RTSCamera>().unwrap();
-                let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
-                self.spawn_unit(self.ui_unit_type, cursor, resources, world);
-                self.ui_spawning = false;
+            } else if let Drag::End { .. } = input.drag {
+                let mut s = String::new();
+                for entity in &selected {
+                    let pos = world
+                        .entry(*entity)
+                        .unwrap()
+                        .get_component::<TransformComponent>()
+                        .unwrap()
+                        .translation;
+                    s.push_str(format!("{}, ", pos).as_str());
+                }
+                let count = &selected.len();
+                log::info!("{} selected: {}", count, s);
             }
         }
 
@@ -439,17 +492,21 @@ impl MainScene {
             rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
         };
         log::info!("Spawn entity {:?} at: {}", unit_type, position);
-        let mesh_component = MeshComponent {
-            render_node: mesh_render_node.clone(),
-        };
         let unit_component = UnitComponent {
             unit_type,
             health: 1.,
             aim: Vec3::new(1., 0., 0.),
             speed: 0.,
             move_target: None,
+            selected: false,
         };
-        let entity = world.push((transform_component.clone(), mesh_component, unit_component));
+        let entity = world.push((
+            transform_component.clone(),
+            MeshComponent {
+                render_node: mesh_render_node.clone(),
+            },
+            unit_component,
+        ));
         let mut entry = world.entry(entity).unwrap();
         entry.add_component(VisibilityComponent {
             handle: {

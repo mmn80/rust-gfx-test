@@ -21,6 +21,8 @@ legion = "0.4.0"
 image = "0.23.12"
 image2 = { version = "0.11", features = ["ser"] }
 
+slotmap = "1.0"
+
 # GLTF asset type
 # for https://github.com/gltf-rs/gltf/pull/288
 #gltf = "0.15"

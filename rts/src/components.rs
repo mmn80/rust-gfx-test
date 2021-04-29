@@ -71,4 +71,5 @@ pub struct UnitComponent {
     pub aim: Vec3,
     pub speed: f32,
     pub move_target: Option<Vec3>,
+    pub selected: bool,
 }
