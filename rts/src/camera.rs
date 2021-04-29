@@ -36,6 +36,8 @@ pub struct RTSCamera {
     far_plane: f32,
     view_matrix: glam::Mat4,
     projection_matrix: glam::Mat4,
+    screen_width: u32,
+    screen_height: u32,
 }
 
 impl Default for RTSCamera {
@@ -53,6 +55,8 @@ impl Default for RTSCamera {
             far_plane: 10000.,
             view_matrix: glam::Mat4::IDENTITY,
             projection_matrix: glam::Mat4::IDENTITY,
+            screen_width: 0,
+            screen_height: 0,
         }
     }
 }
@@ -85,22 +89,21 @@ impl RTSCamera {
         (1.0 - (distance / 100.0).powi(2)).min(1.0).max(0.0) * FRAC_PI_4
     }
 
-    pub fn make_ray(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> Vec3 {
+    pub fn make_ray(&self, screen_x: u32, screen_y: u32) -> Vec3 {
         // https://antongerdelan.net/opengl/raycasting.html
         let ray_nds = Vec3::new(
-            (2. * mouse_x as f32) / width as f32 - 1.,
-            1. - (2. * mouse_y as f32) / height as f32,
+            (2. * screen_x as f32) / self.screen_width as f32 - 1.,
+            1. - (2. * screen_y as f32) / self.screen_height as f32,
             1.,
         );
         let ray_clip = glam::Vec4::new(ray_nds.x, ray_nds.y, -1.0, 1.0);
         let ray_eye = self.projection_matrix.inverse() * ray_clip;
         let ray_eye = glam::Vec4::new(ray_eye.x, ray_eye.y, -1.0, 0.0);
-        let ray_wor = (self.view_matrix.inverse() * ray_eye).xyz().normalize();
-        ray_wor
+        (self.view_matrix.inverse() * ray_eye).xyz().normalize()
     }
 
-    pub fn ray_cast(&self, mouse_x: u32, mouse_y: u32, width: u32, height: u32) -> Vec3 {
-        let ray_vec = self.make_ray(mouse_x, mouse_y, width, height);
+    pub fn ray_cast_terrain(&self, screen_x: u32, screen_y: u32) -> Vec3 {
+        let ray_vec = self.make_ray(screen_x, screen_y);
         let floor = AABB::new(
             Point::new(-1000., -1000., -2.),
             Point::new(1000., 1000., -1.),
@@ -117,15 +120,11 @@ impl RTSCamera {
         }
     }
 
-    pub fn ray_cast_terrain(&self, resources: &legion::systems::Resources) -> Vec3 {
-        let input = resources.get::<InputState>().unwrap();
-        let viewports_resource = resources.get::<ViewportsResource>().unwrap();
-        self.ray_cast(
-            input.cursor_pos.0,
-            input.cursor_pos.1,
-            viewports_resource.main_window_size.width,
-            viewports_resource.main_window_size.height,
-        )
+    pub fn ray_cast_screen(&self, screen_x: u32, screen_y: u32, screen_center_ray: Vec3) -> Vec3 {
+        let ray_vec = self.make_ray(screen_x, screen_y);
+        let angle = ray_vec.angle_between(screen_center_ray);
+        let len = (self.near_plane + 1.) / f32::cos(angle);
+        self.eye() + len * ray_vec
     }
 
     fn update_transform(&mut self, dt: f32, input: &InputState) {
@@ -211,10 +210,12 @@ impl RTSCamera {
         viewports_resource: &mut ViewportsResource,
         input: &InputState,
     ) {
+        self.screen_width = viewports_resource.main_window_size.width;
+        self.screen_height = viewports_resource.main_window_size.height;
+
         self.update_transform(time_state.previous_update_dt(), input);
 
-        let aspect_ratio = viewports_resource.main_window_size.width as f32
-            / viewports_resource.main_window_size.height.max(1) as f32;
+        let aspect_ratio = self.screen_width as f32 / self.screen_height.max(1) as f32;
 
         let eye = self.eye();
         let look_at = self.look_at;

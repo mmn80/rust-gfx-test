@@ -1,9 +1,4 @@
 use super::{Scene, SceneManagerAction};
-use crate::components::{
-    DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
-    UnitComponent,
-};
-use crate::components::{SpotLightComponent, VisibilityComponent};
 use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextResource;
 use crate::time::TimeState;
@@ -11,8 +6,19 @@ use crate::RenderOptions;
 use crate::{assets::font::FontAsset, input::InputState};
 use crate::{assets::gltf::MeshAsset, features::mesh::MeshRenderNodeHandle};
 use crate::{camera::RTSCamera, components::UnitType};
+use crate::{
+    components::{
+        DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
+        UnitComponent,
+    },
+    input::Drag,
+};
+use crate::{
+    components::{SpotLightComponent, VisibilityComponent},
+    features::debug3d::DebugDraw3DResource,
+};
 use distill::loader::handle::Handle;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec3, Vec4};
 use imgui::im_str;
 use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
@@ -216,7 +222,7 @@ impl MainScene {
 
 impl super::GameScene for MainScene {
     fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
-        super::add_light_debug_draw(&resources, &world);
+        //super::add_light_debug_draw(&resources, &world);
 
         {
             let input = resources.get::<InputState>().unwrap();
@@ -298,6 +304,29 @@ impl super::GameScene for MainScene {
                         unit.speed = (unit.speed + dt).min(TARGET_SPEED);
                     }
                     transform.translation += unit.speed * dt * target_dir;
+                    if (target - transform.translation).length() < 0.1 {
+                        unit.move_target = None;
+                        unit.speed = 0.;
+                    }
+                }
+            }
+        }
+
+        {
+            let input = resources.get::<InputState>().unwrap();
+            if input.key_pressed.contains(&VirtualKeyCode::N) {
+                self.ui_spawning = true;
+            }
+            if !self.ui_spawning {
+                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
+                    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+                    let camera = resources.get::<RTSCamera>().unwrap();
+                    let screen_center_ray = camera.make_ray(0, 0);
+                    let p0 = camera.ray_cast_screen(x0, y0, screen_center_ray);
+                    let p1 = camera.ray_cast_screen(x1, y0, screen_center_ray);
+                    let p2 = camera.ray_cast_screen(x1, y1, screen_center_ray);
+                    let p3 = camera.ray_cast_screen(x0, y1, screen_center_ray);
+                    debug_draw.add_line_loop(vec![p0, p1, p2, p3], Vec4::new(0., 1., 0., 1.));
                 }
             }
         }
@@ -306,7 +335,7 @@ impl super::GameScene for MainScene {
             let input = resources.get::<InputState>().unwrap();
             if input.mouse_trigger.contains(&MouseButton::Left) {
                 let camera = resources.get::<RTSCamera>().unwrap();
-                let cursor = camera.ray_cast_terrain(resources);
+                let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
                 self.spawn_unit(self.ui_unit_type, cursor, resources, world);
                 self.ui_spawning = false;
             }
@@ -322,7 +351,7 @@ impl super::GameScene for MainScene {
 
                 let game_window = imgui::Window::new(im_str!("Commands"));
                 game_window
-                    .position([100., 100.], imgui::Condition::FirstUseEver)
+                    .position([10., 30.], imgui::Condition::FirstUseEver)
                     .always_auto_resize(true)
                     .resizable(false)
                     .build(&ui, || {
@@ -380,6 +409,8 @@ impl super::GameScene for MainScene {
             }
         }
     }
+
+    fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
 }
 
 impl MainScene {

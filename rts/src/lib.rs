@@ -166,7 +166,7 @@ impl RenderOptions {
             enable_msaa: true,
             enable_hdr: true,
             enable_bloom: true,
-            show_debug3d: false,
+            show_debug3d: true,
             show_text: true,
             show_shadows: true,
             show_feature_toggles: true,
@@ -178,15 +178,12 @@ impl RenderOptions {
 
 impl RenderOptions {
     #[cfg(feature = "use-imgui")]
-    pub fn window(&mut self, ui: &imgui::Ui<'_>) -> bool {
-        let mut open = true;
+    pub fn window(&mut self, ui: &imgui::Ui<'_>) {
         //TODO: tweak this and use imgui-inspect
         imgui::Window::new(imgui::im_str!("Render Options"))
             //.position([10.0, 25.0], imgui::Condition::FirstUseEver)
             //.size([600.0, 250.0], imgui::Condition::FirstUseEver)
-            .opened(&mut open)
             .build(ui, || self.ui(ui));
-        open
     }
 
     #[cfg(feature = "use-imgui")]
@@ -540,9 +537,11 @@ fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::Profi
         });
 
         if debug_ui_state.show_render_options {
-            imgui::Window::new(imgui::im_str!("Render Options")).build(ui, || {
-                render_options.window(ui);
-            });
+            imgui::Window::new(imgui::im_str!("Render Options"))
+                .opened(&mut debug_ui_state.show_render_options)
+                .build(ui, || {
+                    render_options.window(ui);
+                });
         }
 
         if debug_ui_state.show_asset_list {
@@ -579,7 +578,7 @@ fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::Profi
         #[cfg(feature = "profile-with-puffin")]
         if debug_ui_state.show_profiler {
             profiling::scope!("puffin profiler");
-            profiler_ui.window(ui);
+            debug_ui_state.show_profiler = profiler_ui.window(ui);
         }
     });
 }
