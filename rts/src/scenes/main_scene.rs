@@ -22,10 +22,10 @@ use glam::{Quat, Vec3, Vec4};
 use imgui::im_str;
 use legion::{Entity, IntoQuery};
 use legion::{Read, Resources, World, Write};
+use rafx::assets::distill_impl::AssetResource;
+use rafx::assets::AssetManager;
+use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
-use rafx::{assets::distill_impl::AssetResource, rafx_visibility::Projection};
-use rafx::{assets::AssetManager, rafx_visibility::PerspectiveParameters};
-use rafx::{rafx_visibility::DepthRange, renderer::ViewportsResource};
 use rand::{thread_rng, Rng};
 use std::collections::{HashMap, HashSet};
 use winit::event::{MouseButton, VirtualKeyCode};
@@ -36,7 +36,6 @@ pub(super) struct MainScene {
     meshes: HashMap<UnitType, MeshRenderNodeHandle>,
     ui_spawning: bool,
     ui_unit_type: UnitType,
-    ui_selection_frustum: ViewFrustumArc,
 }
 
 impl MainScene {
@@ -210,7 +209,6 @@ impl MainScene {
         );
 
         let main_view_frustum = visibility_region.register_view_frustum();
-        let ui_selection_frustum = visibility_region.register_view_frustum();
 
         MainScene {
             main_view_frustum,
@@ -218,7 +216,6 @@ impl MainScene {
             meshes,
             ui_spawning: false,
             ui_unit_type: UnitType::Container1,
-            ui_selection_frustum,
         }
     }
 }
@@ -307,39 +304,6 @@ impl super::GameScene for MainScene {
                     let p2 = camera.ray_cast_screen(x1, y1, screen_center_ray);
                     let p3 = camera.ray_cast_screen(x0, y1, screen_center_ray);
                     debug_draw.add_line_loop(vec![p0, p1, p2, p3], Vec4::new(0., 1., 0., 1.));
-
-                    let fov_y = std::f32::consts::FRAC_PI_4;
-                    let aspect_ratio = 1.;
-
-                    let projection = Projection::Perspective(PerspectiveParameters::new(
-                        fov_y,
-                        aspect_ratio,
-                        0.1,
-                        10000.,
-                        DepthRange::InfiniteReverse,
-                    ));
-
-                    self.ui_selection_frustum
-                        .set_projection(&projection)
-                        .set_transform(camera.eye(), camera.look_at, camera.up());
-
-                    if let Ok(results) = self.ui_selection_frustum.clone().query_visibility() {
-                        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-                        selected = results
-                            .objects
-                            .iter()
-                            .map(|res| {
-                                visibility_region
-                                    .object_ref(rafx::visibility::VisibilityObjectId::from(
-                                        slotmap::KeyData::from_ffi(res.id),
-                                    ))
-                                    .entity_id()
-                                    .into()
-                            })
-                            .collect();
-                    } else {
-                        log::error!("Failed visibility query");
-                    }
                 }
             }
         }
