@@ -17,7 +17,7 @@ uuid = "0.8"
 type-uuid = "0.1"
 imgui = { version = "0.7", optional = true }
 imgui-winit-support = { version = "0.7", optional = true }
-legion = { version = "0.4.0", default-features = false, features = ["serialize"] }
+legion = "0.4.0"
 image = "0.23.12"
 image2 = { version = "0.11", features = ["ser"] }
 

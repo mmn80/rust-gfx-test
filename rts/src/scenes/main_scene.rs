@@ -291,7 +291,7 @@ impl super::GameScene for MainScene {
         {
             let time_state = resources.get::<TimeState>().unwrap();
             let mut query = <(Write<TransformComponent>, Write<UnitComponent>)>::query();
-            for (transform, unit) in query.iter_mut(world) {
+            query.par_for_each_mut(world, |(transform, unit)| {
                 if let Some(target) = unit.move_target {
                     let dt = time_state.previous_update_dt();
                     let target_dir = (target - transform.translation).normalize();
@@ -309,7 +309,7 @@ impl super::GameScene for MainScene {
                         unit.speed = 0.;
                     }
                 }
-            }
+            });
         }
 
         {
