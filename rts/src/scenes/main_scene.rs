@@ -17,6 +17,7 @@ use crate::{
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec2, Vec3};
 use imgui::im_str;
+use itertools::Itertools;
 use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
 use rafx::assets::distill_impl::AssetResource;
@@ -33,6 +34,8 @@ pub(super) struct MainScene {
     meshes: HashMap<UnitType, MeshRenderNodeHandle>,
     ui_spawning: bool,
     ui_unit_type: UnitType,
+    ui_selected_count: u32,
+    ui_selected_str: String,
 }
 
 impl MainScene {
@@ -213,6 +216,8 @@ impl MainScene {
             meshes,
             ui_spawning: false,
             ui_unit_type: UnitType::Container1,
+            ui_selected_count: 0,
+            ui_selected_str: "".to_string(),
         }
     }
 }
@@ -290,8 +295,8 @@ impl super::GameScene for MainScene {
         }
 
         {
-            let input = resources.get::<InputState>().unwrap();
             let mut selecting = false;
+            let input = resources.get::<InputState>().unwrap();
             let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
                 selecting = !self.ui_spawning;
                 let window_size = resources
@@ -307,11 +312,14 @@ impl super::GameScene for MainScene {
             } else {
                 (0., 0., 0., 0.)
             };
+            if selecting {
+                self.ui_selected_count = 0;
+            }
             let view_proj = resources.get::<RTSCamera>().unwrap().view_proj();
             let time_state = resources.get::<TimeState>().unwrap();
             let mut query = <(
                 Write<TransformComponent>,
-                Write<VisibilityComponent>,
+                Read<VisibilityComponent>,
                 Write<UnitComponent>,
             )>::query();
             query.par_for_each_mut(world, |(transform, visibility, unit)| {
@@ -351,16 +359,21 @@ impl super::GameScene for MainScene {
                 }
             });
             if selecting {
-                let mut selected = 0;
-                let mut s = String::new();
-                let mut query = <(Read<TransformComponent>, Read<UnitComponent>)>::query();
-                for (transform, unit) in query.iter(world) {
+                let mut selected = HashMap::<UnitType, u32>::new();
+                let mut query = <Read<UnitComponent>>::query();
+                for unit in query.iter(world) {
                     if unit.selected {
-                        selected += 1;
-                        s.push_str(format!("{}, ", transform.translation).as_str());
+                        self.ui_selected_count += 1;
+                        let entry = selected.entry(unit.unit_type);
+                        entry.and_modify(|e| *e += 1).or_insert(1);
                     }
                 }
-                log::info!("{} selected: {}", selected, s);
+                let detailed = selected
+                    .iter()
+                    .map(|(ty, count)| format!("{:?}: {}", ty, count))
+                    .join(", ");
+                self.ui_selected_str =
+                    format!("{} units selected ({})", self.ui_selected_count, detailed);
             }
         }
 
@@ -442,6 +455,19 @@ impl super::GameScene for MainScene {
                 20.0,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
+            if self.ui_selected_count > 0 {
+                text_resource.add_text(
+                    self.ui_selected_str.clone(),
+                    Vec3::new(
+                        200.0,
+                        viewports_resource.main_window_size.height as f32 - 30.,
+                        0.0,
+                    ),
+                    &self.font,
+                    20.0,
+                    glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+                );
+            }
         }
 
         {
