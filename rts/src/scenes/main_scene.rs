@@ -1,4 +1,5 @@
 use super::{Scene, SceneManagerAction};
+use crate::components::{SpotLightComponent, VisibilityComponent};
 use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
 use crate::features::text::TextResource;
 use crate::time::TimeState;
@@ -13,12 +14,8 @@ use crate::{
     },
     input::Drag,
 };
-use crate::{
-    components::{SpotLightComponent, VisibilityComponent},
-    features::debug3d::DebugDraw3DResource,
-};
 use distill::loader::handle::Handle;
-use glam::{Quat, Vec3, Vec4};
+use glam::{Quat, Vec3};
 use imgui::im_str;
 use legion::{Entity, IntoQuery};
 use legion::{Read, Resources, World, Write};
@@ -289,24 +286,6 @@ impl super::GameScene for MainScene {
         }
 
         let selected = HashSet::<Entity>::new();
-        {
-            let input = resources.get::<InputState>().unwrap();
-            if input.key_pressed.contains(&VirtualKeyCode::N) {
-                self.ui_spawning = true;
-            }
-            if !self.ui_spawning {
-                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
-                    let camera = resources.get::<RTSCamera>().unwrap();
-                    let screen_center_ray = camera.make_ray(0, 0);
-                    let p0 = camera.ray_cast_screen(x0, y0, screen_center_ray);
-                    let p1 = camera.ray_cast_screen(x1, y0, screen_center_ray);
-                    let p2 = camera.ray_cast_screen(x1, y1, screen_center_ray);
-                    let p3 = camera.ray_cast_screen(x0, y1, screen_center_ray);
-                    debug_draw.add_line_loop(vec![p0, p1, p2, p3], Vec4::new(0., 1., 0., 1.));
-                }
-            }
-        }
 
         {
             let time_state = resources.get::<TimeState>().unwrap();
@@ -335,6 +314,9 @@ impl super::GameScene for MainScene {
 
         {
             let input = resources.get::<InputState>().unwrap();
+            if input.key_pressed.contains(&VirtualKeyCode::N) {
+                self.ui_spawning = true;
+            }
             if self.ui_spawning {
                 if input.mouse_trigger.contains(&MouseButton::Left) {
                     let camera = resources.get::<RTSCamera>().unwrap();
@@ -360,6 +342,7 @@ impl super::GameScene for MainScene {
 
         #[cfg(feature = "use-imgui")]
         {
+            let input = resources.get::<InputState>().unwrap();
             use crate::features::imgui::ImguiManager;
             profiling::scope!("imgui");
             let imgui_manager = resources.get::<ImguiManager>().unwrap();
@@ -397,6 +380,26 @@ impl super::GameScene for MainScene {
                         }
                         group.end(ui);
                     });
+
+                if !self.ui_spawning {
+                    if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
+                        let w = (x1 as f32 - x0 as f32).abs();
+                        let h = (y1 as f32 - y0 as f32).abs();
+                        let x = x0.min(x1) as f32;
+                        let y = y0.min(y1) as f32;
+                        if w > 30. && h > 30. {
+                            let selection_window = imgui::Window::new(im_str!("Selection"));
+                            selection_window
+                                .no_inputs()
+                                .no_decoration()
+                                .movable(false)
+                                .position([x, y], imgui::Condition::Always)
+                                .size([w, h], imgui::Condition::Always)
+                                .bg_alpha(0.2)
+                                .build(&ui, || {});
+                        }
+                    }
+                }
             });
         }
 
