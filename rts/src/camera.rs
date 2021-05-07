@@ -7,7 +7,7 @@ use crate::phases::{
 };
 use crate::{features::debug3d::Debug3DRenderFeature, input::InputState};
 use crate::{time::TimeState, RenderOptions};
-use glam::{Quat, Vec3, Vec4Swizzles};
+use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
 use parry3d::{
     bounding_volume::AABB,
     math::{Point, Vector},
@@ -83,6 +83,10 @@ impl RTSCamera {
 
     pub fn right(&self) -> Vec3 {
         Quat::from_rotation_z(FRAC_PI_2).mul_vec3(self.forward())
+    }
+
+    pub fn view_proj(&self) -> Mat4 {
+        self.projection_matrix * self.view_matrix
     }
 
     fn pitch_by_distance(distance: f32) -> f32 {

@@ -1,8 +1,9 @@
 use crate::components::{
     DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+    UnitComponent,
 };
 use crate::features::debug3d::DebugDraw3DResource;
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 use legion::IntoQuery;
 use legion::{Read, Resources, World};
 use rand::Rng;
@@ -83,13 +84,37 @@ impl SceneManager {
     }
 }
 
+fn add_units_debug_draw(resources: &Resources, world: &World) {
+    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+
+    let normal_col = Vec4::new(1., 0., 0., 1.);
+    let selected_col = Vec4::new(0., 1., 0., 1.);
+
+    let mut query = <(Read<TransformComponent>, Read<UnitComponent>)>::query();
+    for (transform, unit) in query.iter(world) {
+        let color = if unit.selected {
+            selected_col
+        } else {
+            normal_col
+        };
+        let pos = transform.translation;
+        let aim = pos + 5. * unit.aim;
+        debug_draw.add_line(pos, Vec3::new(pos.x, pos.y, pos.z + 5.), color);
+        debug_draw.add_line(pos, aim, color);
+        debug_draw.add_cone(aim, pos + 4.7 * unit.aim, 0.1, color, 6);
+        if let Some(move_target) = unit.move_target {
+            debug_draw.add_line(pos, move_target, color);
+        }
+    }
+}
+
 fn add_light_debug_draw(resources: &Resources, world: &World) {
     let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
 
     let mut query = <Read<DirectionalLightComponent>>::query();
     for light in query.iter(world) {
         let light_from = light.direction * -10.0;
-        let light_to = glam::Vec3::ZERO;
+        let light_to = Vec3::ZERO;
 
         debug_draw.add_line(light_from, light_to, light.color);
     }
@@ -127,7 +152,7 @@ fn add_directional_light(
 fn add_spot_light(
     _resources: &Resources,
     world: &mut World,
-    position: glam::Vec3,
+    position: Vec3,
     light_component: SpotLightComponent,
 ) {
     let position_component = TransformComponent {
@@ -141,7 +166,7 @@ fn add_spot_light(
 fn add_point_light(
     _resources: &Resources,
     world: &mut World,
-    position: glam::Vec3,
+    position: Vec3,
     light_component: PointLightComponent,
 ) {
     let position_component = TransformComponent {

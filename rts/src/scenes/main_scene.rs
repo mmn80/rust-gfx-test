@@ -15,16 +15,16 @@ use crate::{
     input::Drag,
 };
 use distill::loader::handle::Handle;
-use glam::{Quat, Vec3};
+use glam::{Quat, Vec2, Vec3};
 use imgui::im_str;
-use legion::{Entity, IntoQuery};
+use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
 use rafx::assets::distill_impl::AssetResource;
 use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
 use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
 use rand::{thread_rng, Rng};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use winit::event::{MouseButton, VirtualKeyCode};
 
 pub(super) struct MainScene {
@@ -220,6 +220,7 @@ impl MainScene {
 impl super::GameScene for MainScene {
     fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         //super::add_light_debug_draw(&resources, &world);
+        super::add_units_debug_draw(&resources, &world);
 
         {
             let input = resources.get::<InputState>().unwrap();
@@ -285,12 +286,43 @@ impl super::GameScene for MainScene {
             }
         }
 
-        let selected = HashSet::<Entity>::new();
+        {
+            let input = resources.get::<InputState>().unwrap();
+            if input.key_pressed.contains(&VirtualKeyCode::N) {
+                self.ui_spawning = true;
+            }
+            if self.ui_spawning {
+                if input.mouse_trigger.contains(&MouseButton::Left) {
+                    let camera = resources.get::<RTSCamera>().unwrap();
+                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
+                    self.ui_spawning = false;
+                }
+            }
+        }
 
         {
+            let input = resources.get::<InputState>().unwrap();
+            let mut selecting = false;
+            let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
+                selecting = !self.ui_spawning;
+                let window_size = resources
+                    .get::<ViewportsResource>()
+                    .unwrap()
+                    .main_window_size;
+                (
+                    (x0.min(x1) as f32 / window_size.width as f32) * 2. - 1.,
+                    (y0.max(y1) as f32 / window_size.height as f32) * -2. + 1.,
+                    (x0.max(x1) as f32 / window_size.width as f32) * 2. - 1.,
+                    (y0.min(y1) as f32 / window_size.height as f32) * -2. + 1.,
+                )
+            } else {
+                (0., 0., 0., 0.)
+            };
+            let view_proj = resources.get::<RTSCamera>().unwrap().view_proj();
             let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <(Entity, Write<TransformComponent>, Write<UnitComponent>)>::query();
-            query.par_for_each_mut(world, |(entity, transform, unit)| {
+            let mut query = <(Write<TransformComponent>, Write<UnitComponent>)>::query();
+            query.par_for_each_mut(world, |(transform, unit)| {
                 if let Some(target) = unit.move_target {
                     let dt = time_state.previous_update_dt();
                     let target_dir = (target - transform.translation).normalize();
@@ -307,36 +339,28 @@ impl super::GameScene for MainScene {
                         unit.move_target = None;
                         unit.speed = 0.;
                     }
-                    unit.selected = selected.contains(entity);
+                }
+                if selecting {
+                    let pos_hom: glam::Vec4 = (transform.translation, 1.).into();
+                    let pos_view = view_proj * pos_hom;
+                    let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
+                    unit.selected = pos_screen.x > x0
+                        && pos_screen.x < x1
+                        && pos_screen.y > y0
+                        && pos_screen.y < y1;
                 }
             });
-        }
-
-        {
-            let input = resources.get::<InputState>().unwrap();
-            if input.key_pressed.contains(&VirtualKeyCode::N) {
-                self.ui_spawning = true;
-            }
-            if self.ui_spawning {
-                if input.mouse_trigger.contains(&MouseButton::Left) {
-                    let camera = resources.get::<RTSCamera>().unwrap();
-                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
-                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
-                    self.ui_spawning = false;
-                }
-            } else if let Drag::End { .. } = input.drag {
+            if selecting {
+                let mut selected = 0;
                 let mut s = String::new();
-                for entity in &selected {
-                    let pos = world
-                        .entry(*entity)
-                        .unwrap()
-                        .get_component::<TransformComponent>()
-                        .unwrap()
-                        .translation;
-                    s.push_str(format!("{}, ", pos).as_str());
+                let mut query = <(Read<TransformComponent>, Read<UnitComponent>)>::query();
+                for (transform, unit) in query.iter(world) {
+                    if unit.selected {
+                        selected += 1;
+                        s.push_str(format!("{}, ", transform.translation).as_str());
+                    }
                 }
-                let count = &selected.len();
-                log::info!("{} selected: {}", count, s);
+                log::info!("{} selected: {}", selected, s);
             }
         }
 
