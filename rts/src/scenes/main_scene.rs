@@ -309,8 +309,12 @@ impl super::GameScene for MainScene {
             };
             let view_proj = resources.get::<RTSCamera>().unwrap().view_proj();
             let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <(Write<TransformComponent>, Write<UnitComponent>)>::query();
-            query.par_for_each_mut(world, |(transform, unit)| {
+            let mut query = <(
+                Write<TransformComponent>,
+                Write<VisibilityComponent>,
+                Write<UnitComponent>,
+            )>::query();
+            query.par_for_each_mut(world, |(transform, visibility, unit)| {
                 if let Some(target) = unit.move_target {
                     let dt = time_state.previous_update_dt();
                     let target_dir = (target - transform.translation).normalize();
@@ -326,6 +330,11 @@ impl super::GameScene for MainScene {
                         unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
                     }
                     transform.translation += unit.speed * dt * target_dir;
+                    visibility.handle.set_transform(
+                        transform.translation,
+                        transform.rotation,
+                        transform.scale,
+                    );
                     if (target - transform.translation).length() < 0.1 {
                         unit.move_target = None;
                         unit.speed = 0.;
