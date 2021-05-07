@@ -50,8 +50,8 @@ impl InputState {
                     },
                 ..
             } => {
-                self.key_pressed.insert(vkc.clone());
-                self.key_trigger.insert(vkc.clone());
+                self.key_pressed.insert(*vkc);
+                self.key_trigger.insert(*vkc);
             }
             WindowEvent::KeyboardInput {
                 input:
@@ -63,7 +63,7 @@ impl InputState {
                 ..
             } => {
                 self.key_pressed.remove(vkc);
-                self.key_release.insert(vkc.clone());
+                self.key_release.insert(*vkc);
             }
 
             WindowEvent::MouseWheel {
@@ -95,7 +95,7 @@ impl InputState {
             }
 
             WindowEvent::MouseInput { state, button, .. } => {
-                if let &ElementState::Pressed = state {
+                if let ElementState::Pressed = *state {
                     self.mouse_pressed.insert(*button);
                     self.mouse_trigger.insert(*button);
 

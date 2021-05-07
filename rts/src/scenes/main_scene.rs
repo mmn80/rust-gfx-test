@@ -95,7 +95,7 @@ impl MainScene {
                         render_node: floor_mesh.clone(),
                     };
 
-                    let entity = world.push((transform_component.clone(), mesh_component));
+                    let entity = world.push((transform_component, mesh_component));
                     let mut entry = world.entry(entity).unwrap();
                     entry.add_component(VisibilityComponent {
                         handle: {
@@ -288,7 +288,7 @@ impl super::GameScene for MainScene {
             }
         }
 
-        let mut selected = HashSet::<Entity>::new();
+        let selected = HashSet::<Entity>::new();
         {
             let input = resources.get::<InputState>().unwrap();
             if input.key_pressed.contains(&VirtualKeyCode::N) {
@@ -465,7 +465,7 @@ impl MainScene {
             selected: false,
         };
         let entity = world.push((
-            transform_component.clone(),
+            transform_component,
             MeshComponent {
                 render_node: mesh_render_node.clone(),
             },

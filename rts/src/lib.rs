@@ -103,7 +103,7 @@ pub enum TonemapperType {
     LogDerivative,
     VisualizeRGBMax,
     VisualizeLuma,
-    MAX,
+    Max,
 }
 impl TonemapperType {
     pub fn display_name(&self) -> &'static str {
@@ -117,13 +117,13 @@ impl TonemapperType {
             TonemapperType::LogDerivative => "LogDerivative",
             TonemapperType::VisualizeRGBMax => "Visualize RGB Max",
             TonemapperType::VisualizeLuma => "Visualize RGB Luma",
-            TonemapperType::MAX => "MAX_TONEMAPPER_VALUE",
+            TonemapperType::Max => "MAX_TONEMAPPER_VALUE",
         }
     }
 }
 impl From<i32> for TonemapperType {
     fn from(v: i32) -> Self {
-        assert!(v <= Self::MAX as i32);
+        assert!(v <= Self::Max as i32);
         unsafe { std::mem::transmute(v) }
     }
 }
@@ -210,7 +210,7 @@ impl RenderOptions {
         self.blur_pass_count = blur_pass_count as usize;
 
         // iterate over the valid tonemapper values and convert them into their names
-        let tonemapper_names: Vec<imgui::ImString> = (0..(TonemapperType::MAX as i32))
+        let tonemapper_names: Vec<imgui::ImString> = (0..(TonemapperType::Max as i32))
             .map(|t| imgui::ImString::new(TonemapperType::from(t).display_name()))
             .collect();
 
@@ -312,7 +312,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 input
                     .key_trigger
                     .remove(&winit::event::VirtualKeyCode::Return);
-                if let None = window.fullscreen() {
+                if window.fullscreen().is_none() {
                     window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
                 } else {
                     window.set_fullscreen(None);
