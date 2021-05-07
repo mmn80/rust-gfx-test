@@ -224,6 +224,9 @@ impl super::GameScene for MainScene {
 
         {
             let input = resources.get::<InputState>().unwrap();
+            if input.key_pressed.contains(&VirtualKeyCode::N) {
+                self.ui_spawning = true;
+            }
             let time_state = resources.get::<TimeState>().unwrap();
             let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
             let render_options = resources.get::<RenderOptions>().unwrap();
@@ -288,21 +291,6 @@ impl super::GameScene for MainScene {
 
         {
             let input = resources.get::<InputState>().unwrap();
-            if input.key_pressed.contains(&VirtualKeyCode::N) {
-                self.ui_spawning = true;
-            }
-            if self.ui_spawning {
-                if input.mouse_trigger.contains(&MouseButton::Left) {
-                    let camera = resources.get::<RTSCamera>().unwrap();
-                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
-                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
-                    self.ui_spawning = false;
-                }
-            }
-        }
-
-        {
-            let input = resources.get::<InputState>().unwrap();
             let mut selecting = false;
             let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
                 selecting = !self.ui_spawning;
@@ -330,9 +318,12 @@ impl super::GameScene for MainScene {
                     if (target_dir - orig_dir).length() > 0.001 {
                         transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
                     }
+                    if (target_dir - unit.aim).length() > 0.001 {
+                        unit.aim = (unit.aim + (target_dir - unit.aim) * dt).normalize();
+                    }
                     const TARGET_SPEED: f32 = 10.; // m/s
                     if unit.speed < TARGET_SPEED {
-                        unit.speed = (unit.speed + dt).min(TARGET_SPEED);
+                        unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
                     }
                     transform.translation += unit.speed * dt * target_dir;
                     if (target - transform.translation).length() < 0.1 {
@@ -446,6 +437,30 @@ impl super::GameScene for MainScene {
 
         {
             let input = resources.get::<InputState>().unwrap();
+            if self.ui_spawning {
+                if input.mouse_trigger.contains(&MouseButton::Left) {
+                    let camera = resources.get::<RTSCamera>().unwrap();
+                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
+                    self.ui_spawning = false;
+                }
+            } else if input.mouse_trigger.contains(&MouseButton::Right) {
+                let camera = resources.get::<RTSCamera>().unwrap();
+                let mut first = true;
+                let mut target = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+                let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
+                for (transform, unit) in query.iter_mut(world) {
+                    if unit.selected {
+                        if !first {
+                            target.x += transform.scale.x;
+                        }
+                        unit.move_target =
+                            Some(Vec3::new(target.x, target.y, transform.translation.z));
+                        target.x += transform.scale.x;
+                        first = false;
+                    }
+                }
+            }
             if input.key_trigger.contains(&VirtualKeyCode::Escape) {
                 SceneManagerAction::Scene(Scene::Menu)
             } else {
