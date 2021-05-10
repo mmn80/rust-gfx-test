@@ -231,47 +231,49 @@ fn calculate_shadow_map_views(
     }
 
     let camera = extract_resources.fetch::<RTSCamera>();
-    let mut query = <(Entity, Read<DirectionalLightComponent>)>::query();
-    for (entity, light) in query.iter(world) {
-        let look_at = camera.look_at;
-        let eye_position = look_at - light.direction * camera.look_at_dist;
-        let near_plane = 0.25;
-        let far_plane = 1500.0;
-        let ortho_projection_size = camera.look_at_dist * 1.5;
+    if camera.look_at_dist < 150. {
+        let mut query = <(Entity, Read<DirectionalLightComponent>)>::query();
+        for (entity, light) in query.iter(world) {
+            let look_at = camera.look_at;
+            let eye_position = look_at - light.direction * camera.look_at_dist;
+            let near_plane = 0.25;
+            let far_plane = 250.0;
+            let ortho_projection_size = camera.look_at_dist * 1.5;
 
-        let view_frustum: ViewFrustumArc = light.view_frustum.clone();
-        let projection = Projection::Orthographic(OrthographicParameters::new(
-            -ortho_projection_size,
-            ortho_projection_size,
-            -ortho_projection_size,
-            ortho_projection_size,
-            near_plane,
-            far_plane,
-            DepthRange::Reverse,
-        ));
+            let view_frustum: ViewFrustumArc = light.view_frustum.clone();
+            let projection = Projection::Orthographic(OrthographicParameters::new(
+                -ortho_projection_size,
+                ortho_projection_size,
+                -ortho_projection_size,
+                ortho_projection_size,
+                near_plane,
+                far_plane,
+                DepthRange::Reverse,
+            ));
 
-        view_frustum.set_projection(&projection).set_transform(
-            eye_position,
-            look_at,
-            glam::Vec3::new(0.0, 0.0, 1.0),
-        );
+            view_frustum.set_projection(&projection).set_transform(
+                eye_position,
+                look_at,
+                glam::Vec3::new(0.0, 0.0, 1.0),
+            );
 
-        let view = render_view_set.create_view(
-            view_frustum,
-            eye_position,
-            glam::Mat4::look_at_rh(eye_position, look_at, glam::Vec3::new(0.0, 0.0, 1.0)),
-            projection.as_rh_mat4(),
-            (2 * SHADOW_MAP_RESOLUTION, 2 * SHADOW_MAP_RESOLUTION),
-            RenderViewDepthRange::from_projection(&projection),
-            shadow_map_phase_mask,
-            shadow_map_feature_mask,
-            "shadow_map_directional".to_string(),
-        );
+            let view = render_view_set.create_view(
+                view_frustum,
+                eye_position,
+                glam::Mat4::look_at_rh(eye_position, look_at, glam::Vec3::new(0.0, 0.0, 1.0)),
+                projection.as_rh_mat4(),
+                (2 * SHADOW_MAP_RESOLUTION, 2 * SHADOW_MAP_RESOLUTION),
+                RenderViewDepthRange::from_projection(&projection),
+                shadow_map_phase_mask,
+                shadow_map_feature_mask,
+                "shadow_map_directional".to_string(),
+            );
 
-        let index = shadow_map_render_views.len();
-        shadow_map_render_views.push(ShadowMapRenderView::Single(view));
-        let old = shadow_map_lookup.insert(LightId::DirectionalLight(*entity), index);
-        assert!(old.is_none());
+            let index = shadow_map_render_views.len();
+            shadow_map_render_views.push(ShadowMapRenderView::Single(view));
+            let old = shadow_map_lookup.insert(LightId::DirectionalLight(*entity), index);
+            assert!(old.is_none());
+        }
     }
 
     #[rustfmt::skip]
