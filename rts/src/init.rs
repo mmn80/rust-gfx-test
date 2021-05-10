@@ -12,8 +12,10 @@ use rafx::assets::distill_impl::AssetResource;
 use rafx::assets::AssetManager;
 use rafx::framework::visibility::VisibilityRegion;
 use rafx::nodes::{ExtractResources, RenderRegistry};
-use rafx::renderer::ViewportsResource;
-use rafx::renderer::{AssetSource, Renderer, RendererBuilder, SwapchainHandler};
+use rafx::renderer::{
+    AssetSource, Renderer, RendererBuilder, RendererConfigResource, SwapchainHandler,
+    ViewportsResource,
+};
 use winit::{event_loop::EventLoop, window::Window};
 
 pub fn window_init(event_loop: &EventLoop<()>) -> Window {
@@ -109,6 +111,7 @@ pub fn rendering_init(
     );
     resources.insert(renderer_builder_result.asset_manager);
     resources.insert(renderer_builder_result.renderer);
+    resources.insert(RendererConfigResource::default());
 
     Ok(())
 }

@@ -18,8 +18,8 @@ use crate::scenes::SceneManager;
 use crate::time::TimeState;
 use rafx::assets::distill_impl::AssetResource;
 use rafx::nodes::ExtractResources;
-use rafx::renderer::ViewportsResource;
 use rafx::renderer::{AssetSource, Renderer};
+use rafx::renderer::{RendererConfigResource, ViewportsResource};
 use rafx::visibility::VisibilityRegion;
 
 pub mod assets;
@@ -144,6 +144,7 @@ pub struct RenderOptions {
     pub show_shadows: bool,
     pub blur_pass_count: usize,
     pub tonemapper_type: TonemapperType,
+    pub enable_visibility_update: bool,
 }
 
 impl RenderOptions {
@@ -158,6 +159,7 @@ impl RenderOptions {
             show_feature_toggles: false,
             blur_pass_count: 0,
             tonemapper_type: TonemapperType::None,
+            enable_visibility_update: true,
         }
     }
 
@@ -172,6 +174,7 @@ impl RenderOptions {
             show_feature_toggles: true,
             blur_pass_count: 5,
             tonemapper_type: TonemapperType::LogDerivative,
+            enable_visibility_update: true,
         }
     }
 }
@@ -229,6 +232,11 @@ impl RenderOptions {
             combo.end(ui);
             self.tonemapper_type = current_tonemapper_type.into();
         }
+
+        ui.checkbox(
+            imgui::im_str!("enable_visibility_update"),
+            &mut self.enable_visibility_update,
+        );
     }
 }
 
@@ -454,6 +462,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                     add_to_extract_resources!(AssetManager);
                     add_to_extract_resources!(TimeState);
                     add_to_extract_resources!(RenderOptions);
+                    add_to_extract_resources!(RendererConfigResource);
                     add_to_extract_resources!(
                         crate::features::mesh::MeshRenderNodeSet,
                         mesh_render_node_set
@@ -581,4 +590,9 @@ fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::Profi
             debug_ui_state.show_profiler = profiler_ui.window(ui);
         }
     });
+
+    let mut render_config_resource = resources.get_mut::<RendererConfigResource>().unwrap();
+    render_config_resource
+        .visibility_config
+        .enable_visibility_update = render_options.enable_visibility_update;
 }
