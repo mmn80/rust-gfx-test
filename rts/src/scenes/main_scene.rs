@@ -148,30 +148,6 @@ impl MainScene {
         );
 
         //
-        // POINT LIGHT
-        //
-        let view_frustums = [
-            visibility_region.register_view_frustum(),
-            visibility_region.register_view_frustum(),
-            visibility_region.register_view_frustum(),
-            visibility_region.register_view_frustum(),
-            visibility_region.register_view_frustum(),
-            visibility_region.register_view_frustum(),
-        ];
-        super::add_point_light(
-            resources,
-            world,
-            //Vec3::new(-3.0, 3.0, 2.0),
-            Vec3::new(5.0, 5.0, 2.0),
-            PointLightComponent {
-                color: [0.0, 1.0, 0.0, 1.0].into(),
-                intensity: 50.0,
-                range: 25.0,
-                view_frustums,
-            },
-        );
-
-        //
         // DIRECTIONAL LIGHT
         //
         let light_from = Vec3::new(-5.0, 5.0, 5.0);
@@ -184,26 +160,6 @@ impl MainScene {
                 direction: light_direction,
                 intensity: 5.0,
                 color: [1.0, 1.0, 1.0, 1.0].into(),
-                view_frustum: visibility_region.register_view_frustum(),
-            },
-        );
-
-        //
-        // SPOT LIGHT
-        //
-        let light_from = Vec3::new(-3.0, -3.0, 5.0);
-        let light_to = Vec3::ZERO;
-        let light_direction = (light_to - light_from).normalize();
-        super::add_spot_light(
-            resources,
-            world,
-            light_from,
-            SpotLightComponent {
-                direction: light_direction,
-                spotlight_half_angle: 40.0 * (std::f32::consts::PI / 180.0),
-                range: 12.0,
-                color: [1.0, 0.0, 0.0, 1.0].into(),
-                intensity: 500.0,
                 view_frustum: visibility_region.register_view_frustum(),
             },
         );
@@ -268,29 +224,6 @@ impl super::GameScene for MainScene {
                 let light_to = Vec3::default();
 
                 light.direction = (light_to - light_from).normalize();
-            }
-        }
-
-        {
-            let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <(Write<TransformComponent>, Read<PointLightComponent>)>::query();
-            for (transform, _light) in query.iter_mut(world) {
-                const LIGHT_XY_DISTANCE: f32 = 6.0;
-                const LIGHT_Z: f32 = 3.5;
-                const LIGHT_ROTATE_SPEED: f32 = 0.5;
-                const LIGHT_LOOP_OFFSET: f32 = 2.0;
-                let loop_time = time_state.total_time().as_secs_f32();
-                let light_from = Vec3::new(
-                    LIGHT_XY_DISTANCE
-                        * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
-                    LIGHT_XY_DISTANCE
-                        * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
-                    LIGHT_Z,
-                    //LIGHT_Z// * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET).abs(),
-                    //0.2
-                    //2.0
-                );
-                transform.translation = light_from;
             }
         }
 
