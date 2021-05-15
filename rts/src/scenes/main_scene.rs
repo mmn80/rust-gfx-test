@@ -352,10 +352,12 @@ impl super::GameScene for MainScene {
 
                 if !self.ui_spawning {
                     if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                        let w = (x1 as f32 - x0 as f32).abs();
-                        let h = (y1 as f32 - y0 as f32).abs();
-                        let x = x0.min(x1) as f32;
-                        let y = y0.min(y1) as f32;
+                        let camera = resources.get::<RTSCamera>().unwrap();
+                        let s = camera.win_scale_factor;
+                        let w = (x1 as f32 - x0 as f32).abs() / s;
+                        let h = (y1 as f32 - y0 as f32).abs() / s;
+                        let x = x0.min(x1) as f32 / s;
+                        let y = y0.min(y1) as f32 / s;
                         if w > 30. && h > 30. {
                             let selection_window = imgui::Window::new(im_str!("Selection"));
                             selection_window
@@ -376,28 +378,22 @@ impl super::GameScene for MainScene {
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();
             let mut text_resource = resources.get_mut::<TextResource>().unwrap();
             let camera = resources.get::<RTSCamera>().unwrap();
+            let scale = camera.win_scale_factor;
+            let pos_y = viewports_resource.main_window_size.height as f32 - 30. * scale;
             text_resource.add_text(
                 format!("camera: {:.2}m", camera.look_at_dist),
-                Vec3::new(
-                    10.0,
-                    viewports_resource.main_window_size.height as f32 - 30.,
-                    0.0,
-                ),
+                Vec3::new(10.0, pos_y, 0.0),
                 &self.font,
-                20.0,
+                20.0 * scale,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
             if self.ui_selected_count > 0 {
                 text_resource.add_text(
                     self.ui_selected_str.clone(),
-                    Vec3::new(
-                        200.0,
-                        viewports_resource.main_window_size.height as f32 - 30.,
-                        0.0,
-                    ),
+                    Vec3::new(200.0 * scale, pos_y, 0.0),
                     &self.font,
-                    20.0,
-                    glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+                    20.0 * scale,
+                    glam::Vec4::new(0.5, 1.0, 0.5, 1.0),
                 );
             }
         }

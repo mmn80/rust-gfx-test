@@ -1,16 +1,15 @@
 use super::SceneManagerAction;
 #[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
-use crate::scenes::Scene;
+use crate::{camera::RTSCamera, scenes::Scene};
 use crate::{input::InputState, phases::UiRenderPhase};
 use legion::{Resources, World};
 use rafx::rafx_visibility::{DepthRange, OrthographicParameters, Projection};
 use rafx::render_features::{
     RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange,
 };
-use rafx::renderer::RenderViewMeta;
+use rafx::renderer::{RenderViewMeta, ViewportsResource};
 use rafx::visibility::{ViewFrustumArc, VisibilityRegion};
-use rafx::{api::RafxSwapchainHelper, renderer::ViewportsResource};
 use winit::event::VirtualKeyCode;
 
 pub(super) struct MenuScene {
@@ -20,6 +19,7 @@ pub(super) struct MenuScene {
 impl MenuScene {
     pub(super) fn new(_world: &mut World, resources: &Resources) -> Self {
         let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
+        let camera = resources.get::<RTSCamera>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
         let main_camera_phase_mask = RenderPhaseMaskBuilder::default()
@@ -35,8 +35,9 @@ impl MenuScene {
 
         let eye = glam::Vec3::new(1400.0, -200.0, 1000.0);
 
-        let half_width = viewports_resource.main_window_size.width as f32 / 2.0;
-        let half_height = viewports_resource.main_window_size.height as f32 / 2.0;
+        let scale = camera.win_scale_factor.round();
+        let half_width = camera.win_width as f32 / (2.0 * scale);
+        let half_height = camera.win_height as f32 / (2.0 * scale);
 
         let look_at = eye.truncate().extend(0.0);
         let up = glam::Vec3::new(0.0, 1.0, 0.0);
@@ -84,16 +85,17 @@ impl super::GameScene for MenuScene {
             use crate::features::imgui::ImguiManager;
             profiling::scope!("imgui");
             let imgui_manager = resources.get::<ImguiManager>().unwrap();
-            let swapchain_helper = resources.get::<RafxSwapchainHelper>().unwrap();
+            let camera = resources.get::<RTSCamera>().unwrap();
             imgui_manager.with_ui(|ui| {
                 profiling::scope!("main game menu");
 
+                let scale = camera.win_scale_factor;
                 let menu_window = imgui::Window::new(imgui::im_str!("Home"));
                 menu_window
                     .position(
                         [
-                            (swapchain_helper.swapchain_def().width as f32) / 2.0,
-                            (swapchain_helper.swapchain_def().height as f32) / 2.0,
+                            (camera.win_width as f32) / (2.0 * scale),
+                            (camera.win_height as f32) / (2.0 * scale),
                         ],
                         imgui::Condition::Always,
                     )
@@ -105,10 +107,10 @@ impl super::GameScene for MenuScene {
                     .scroll_bar(false)
                     .collapsible(false)
                     .build(&ui, || {
-                        if ui.button(imgui::im_str!("Play"), [200.0_f32, 100.0]) {
+                        if ui.button(imgui::im_str!("Play"), [200.0_f32 / scale, 100. / scale]) {
                             action = SceneManagerAction::Scene(Scene::Main);
                         }
-                        if ui.button(imgui::im_str!("Exit"), [200.0_f32, 100.0]) {
+                        if ui.button(imgui::im_str!("Exit"), [200.0_f32 / scale, 100.0 / scale]) {
                             action = SceneManagerAction::Exit;
                         }
                     });

@@ -376,7 +376,7 @@ pub fn init_imgui_manager(window: &winit::window::Window) -> ImguiManager {
     imgui_platform.attach_window(
         imgui_context.io_mut(),
         &window,
-        imgui_winit_support::HiDpiMode::Rounded,
+        imgui_winit_support::HiDpiMode::Default,
     );
 
     ImguiManager::new(imgui_context, imgui_platform)

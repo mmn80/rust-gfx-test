@@ -13,9 +13,9 @@ use winit::{
     event_loop::ControlFlow,
 };
 
-use crate::daemon_args::AssetDaemonArgs;
 use crate::scenes::SceneManager;
 use crate::time::TimeState;
+use crate::{camera::RTSCamera, daemon_args::AssetDaemonArgs};
 use rafx::assets::distill_impl::AssetResource;
 use rafx::render_features::ExtractResources;
 use rafx::renderer::{AssetSource, Renderer};
@@ -358,12 +358,16 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
 
                 {
                     let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
+                    let mut camera = resources.get_mut::<RTSCamera>().unwrap();
                     let window_size = window.inner_size();
                     if window_size.width > 0 && window_size.height > 0 {
                         viewports_resource.main_window_size = RafxExtents2D {
                             width: window_size.width,
                             height: window_size.height,
-                        }
+                        };
+                        camera.win_width = window_size.width;
+                        camera.win_height = window_size.height;
+                        camera.win_scale_factor = window.scale_factor() as f32;
                     }
                 }
 

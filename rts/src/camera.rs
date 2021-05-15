@@ -36,8 +36,9 @@ pub struct RTSCamera {
     far_plane: f32,
     view_matrix: glam::Mat4,
     projection_matrix: glam::Mat4,
-    screen_width: u32,
-    screen_height: u32,
+    pub win_width: u32,
+    pub win_height: u32,
+    pub win_scale_factor: f32,
 }
 
 impl Default for RTSCamera {
@@ -55,8 +56,9 @@ impl Default for RTSCamera {
             far_plane: 10000.,
             view_matrix: glam::Mat4::IDENTITY,
             projection_matrix: glam::Mat4::IDENTITY,
-            screen_width: 0,
-            screen_height: 0,
+            win_width: 0,
+            win_height: 0,
+            win_scale_factor: 1.,
         }
     }
 }
@@ -96,8 +98,8 @@ impl RTSCamera {
     pub fn make_ray(&self, screen_x: u32, screen_y: u32) -> Vec3 {
         // https://antongerdelan.net/opengl/raycasting.html
         let ray_nds = Vec3::new(
-            (2. * screen_x as f32) / self.screen_width as f32 - 1.,
-            1. - (2. * screen_y as f32) / self.screen_height as f32,
+            (2. * screen_x as f32) / self.win_width as f32 - 1.,
+            1. - (2. * screen_y as f32) / self.win_height as f32,
             1.,
         );
         let ray_clip = glam::Vec4::new(ray_nds.x, ray_nds.y, -1.0, 1.0);
@@ -214,12 +216,9 @@ impl RTSCamera {
         viewports_resource: &mut ViewportsResource,
         input: &InputState,
     ) {
-        self.screen_width = viewports_resource.main_window_size.width;
-        self.screen_height = viewports_resource.main_window_size.height;
-
         self.update_transform(time_state.previous_update_dt(), input);
 
-        let aspect_ratio = self.screen_width as f32 / self.screen_height.max(1) as f32;
+        let aspect_ratio = self.win_width as f32 / self.win_height.max(1) as f32;
 
         let eye = self.eye();
         let look_at = self.look_at;
