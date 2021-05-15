@@ -4,28 +4,21 @@ pub struct LineList3D {
 }
 
 impl LineList3D {
-    pub fn new(
-        points: Vec<glam::Vec3>,
-        color: glam::Vec4,
-    ) -> Self {
+    pub fn new(points: Vec<glam::Vec3>, color: glam::Vec4) -> Self {
         LineList3D { points, color }
     }
 }
 
-pub struct DebugDraw3DResource {
+pub struct Debug3DResource {
     line_lists: Vec<LineList3D>,
 }
 
-impl DebugDraw3DResource {
+impl Debug3DResource {
     pub fn new() -> Self {
-        DebugDraw3DResource { line_lists: vec![] }
+        Debug3DResource { line_lists: vec![] }
     }
 
-    pub fn add_line_strip(
-        &mut self,
-        points: Vec<glam::Vec3>,
-        color: glam::Vec4,
-    ) {
+    pub fn add_line_strip(&mut self, points: Vec<glam::Vec3>, color: glam::Vec4) {
         // Nothing will draw if we don't have at least 2 points
         if points.len() > 1 {
             self.line_lists.push(LineList3D::new(points, color));
@@ -33,11 +26,7 @@ impl DebugDraw3DResource {
     }
 
     // Adds a single polygon
-    pub fn add_line_loop(
-        &mut self,
-        mut points: Vec<glam::Vec3>,
-        color: glam::Vec4,
-    ) {
+    pub fn add_line_loop(&mut self, mut points: Vec<glam::Vec3>, color: glam::Vec4) {
         // Nothing will draw if we don't have at least 2 points
         if points.len() > 1 {
             points.push(points[0]);
@@ -45,12 +34,7 @@ impl DebugDraw3DResource {
         }
     }
 
-    pub fn add_line(
-        &mut self,
-        p0: glam::Vec3,
-        p1: glam::Vec3,
-        color: glam::Vec4,
-    ) {
+    pub fn add_line(&mut self, p0: glam::Vec3, p1: glam::Vec3, color: glam::Vec4) {
         let points = vec![p0, p1];
         self.add_line_strip(points, color);
     }

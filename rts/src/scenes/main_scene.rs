@@ -1,17 +1,14 @@
 use super::{Scene, SceneManagerAction};
-use crate::components::{SpotLightComponent, VisibilityComponent};
-use crate::features::mesh::{MeshRenderNode, MeshRenderNodeSet};
+use crate::assets::gltf::MeshAsset;
+use crate::components::VisibilityComponent;
+use crate::features::mesh::{MeshRenderObject, MeshRenderObjectSet};
 use crate::features::text::TextResource;
 use crate::time::TimeState;
 use crate::RenderOptions;
 use crate::{assets::font::FontAsset, input::InputState};
-use crate::{assets::gltf::MeshAsset, features::mesh::MeshRenderNodeHandle};
 use crate::{camera::RTSCamera, components::UnitType};
 use crate::{
-    components::{
-        DirectionalLightComponent, MeshComponent, PointLightComponent, TransformComponent,
-        UnitComponent,
-    },
+    components::{DirectionalLightComponent, MeshComponent, TransformComponent, UnitComponent},
     input::Drag,
 };
 use distill::loader::handle::Handle;
@@ -20,10 +17,12 @@ use imgui::im_str;
 use itertools::Itertools;
 use legion::IntoQuery;
 use legion::{Read, Resources, World, Write};
-use rafx::assets::distill_impl::AssetResource;
 use rafx::assets::AssetManager;
 use rafx::renderer::ViewportsResource;
-use rafx::visibility::{CullModel, EntityId, ViewFrustumArc, VisibilityRegion};
+use rafx::visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion};
+use rafx::{
+    assets::distill_impl::AssetResource, render_feature_extract_job_predule::RenderObjectHandle,
+};
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use winit::event::{MouseButton, VirtualKeyCode};
@@ -31,7 +30,7 @@ use winit::event::{MouseButton, VirtualKeyCode};
 pub(super) struct MainScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
-    meshes: HashMap<UnitType, MeshRenderNodeHandle>,
+    meshes: HashMap<UnitType, RenderObjectHandle>,
     ui_spawning: bool,
     ui_unit_type: UnitType,
     ui_selected_count: u32,
@@ -46,7 +45,7 @@ impl MainScene {
         let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
         *render_options = RenderOptions::default_3d();
 
-        let mut mesh_render_nodes = resources.get_mut::<MeshRenderNodeSet>().unwrap();
+        let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
 
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
@@ -79,7 +78,7 @@ impl MainScene {
         // Add a floor
         //
         {
-            let floor_mesh = mesh_render_nodes.register_mesh(MeshRenderNode {
+            let floor_mesh = mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: floor_mesh_asset.clone(),
             });
 
@@ -92,15 +91,15 @@ impl MainScene {
                     };
 
                     let mesh_component = MeshComponent {
-                        render_node: floor_mesh.clone(),
+                        render_object_handle: floor_mesh.clone(),
                     };
 
                     let entity = world.push((transform_component, mesh_component));
                     let mut entry = world.entry(entity).unwrap();
                     entry.add_component(VisibilityComponent {
-                        handle: {
+                        visibility_object_handle: {
                             let handle = visibility_region.register_static_object(
-                                EntityId::from(entity),
+                                ObjectId::from(entity),
                                 CullModel::VisibleBounds(
                                     asset_manager
                                         .committed_asset(&floor_mesh_asset)
@@ -115,7 +114,7 @@ impl MainScene {
                                 transform_component.rotation,
                                 transform_component.scale,
                             );
-                            handle.add_feature(floor_mesh.as_raw_generic_handle());
+                            handle.add_render_object(&floor_mesh);
                             handle
                         },
                     });
@@ -130,19 +129,19 @@ impl MainScene {
         let mut meshes = HashMap::new();
         meshes.insert(
             UnitType::Container1,
-            mesh_render_nodes.register_mesh(MeshRenderNode {
+            mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: container_1_asset,
             }),
         );
         meshes.insert(
             UnitType::Container2,
-            mesh_render_nodes.register_mesh(MeshRenderNode {
+            mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: container_2_asset,
             }),
         );
         meshes.insert(
             UnitType::BlueIcosphere,
-            mesh_render_nodes.register_mesh(MeshRenderNode {
+            mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: blue_icosphere_asset,
             }),
         );
@@ -271,7 +270,7 @@ impl super::GameScene for MainScene {
                         unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
                     }
                     transform.translation += unit.speed * dt * target_dir;
-                    visibility.handle.set_transform(
+                    visibility.visibility_object_handle.set_transform(
                         transform.translation,
                         transform.rotation,
                         transform.scale,
@@ -452,11 +451,12 @@ impl MainScene {
         const SCALE_MAX: f32 = 2.;
         let asset_manager = resources.get::<AssetManager>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        let mesh_render_nodes = resources.get::<MeshRenderNodeSet>().unwrap();
+        let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
+        let mesh_render_objects = mesh_render_objects.read();
         let mut rng = thread_rng();
         let position = Vec3::new(position.x, position.y, 0.0);
-        let mesh_render_node = self.meshes.get(&unit_type).unwrap().clone();
-        let asset_handle = &mesh_render_nodes.get(&mesh_render_node).unwrap().mesh;
+        let mesh_render_object = self.meshes.get(&unit_type).unwrap().clone();
+        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
         let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
         let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
         let offset = rand_scale_z - 1.;
@@ -477,15 +477,15 @@ impl MainScene {
         let entity = world.push((
             transform_component,
             MeshComponent {
-                render_node: mesh_render_node.clone(),
+                render_object_handle: mesh_render_object.clone(),
             },
             unit_component,
         ));
         let mut entry = world.entry(entity).unwrap();
         entry.add_component(VisibilityComponent {
-            handle: {
+            visibility_object_handle: {
                 let handle = visibility_region.register_dynamic_object(
-                    EntityId::from(entity),
+                    ObjectId::from(entity),
                     CullModel::VisibleBounds(
                         asset_manager
                             .committed_asset(&asset_handle)
@@ -500,7 +500,7 @@ impl MainScene {
                     transform_component.rotation,
                     transform_component.scale,
                 );
-                handle.add_feature(mesh_render_node.as_raw_generic_handle());
+                handle.add_render_object(&mesh_render_object);
                 handle
             },
         });

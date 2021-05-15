@@ -2,7 +2,7 @@ use crate::components::{
     DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     UnitComponent,
 };
-use crate::features::debug3d::DebugDraw3DResource;
+use crate::features::debug3d::Debug3DResource;
 use glam::{Vec3, Vec4};
 use legion::IntoQuery;
 use legion::{Read, Resources, World};
@@ -82,10 +82,18 @@ impl SceneManager {
             SceneManagerAction::None
         }
     }
+
+    pub fn try_cleanup_current_scene(&mut self, world: &mut World, resources: &Resources) {
+        if let Some(scene) = &mut self.scene {
+            scene.cleanup(world, resources);
+        }
+
+        world.clear();
+    }
 }
 
 fn add_units_debug_draw(resources: &Resources, world: &World) {
-    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+    let mut debug_draw = resources.get_mut::<Debug3DResource>().unwrap();
 
     let normal_col = Vec4::new(1., 0., 0., 1.);
     let selected_col = Vec4::new(0., 1., 0., 1.);
@@ -109,7 +117,7 @@ fn add_units_debug_draw(resources: &Resources, world: &World) {
 }
 
 fn add_light_debug_draw(resources: &Resources, world: &World) {
-    let mut debug_draw = resources.get_mut::<DebugDraw3DResource>().unwrap();
+    let mut debug_draw = resources.get_mut::<Debug3DResource>().unwrap();
 
     let mut query = <Read<DirectionalLightComponent>>::query();
     for light in query.iter(world) {

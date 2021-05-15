@@ -4,8 +4,10 @@ use crate::features::imgui::ImGuiRenderFeature;
 use crate::scenes::Scene;
 use crate::{input::InputState, phases::UiRenderPhase};
 use legion::{Resources, World};
-use rafx::nodes::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange};
 use rafx::rafx_visibility::{DepthRange, OrthographicParameters, Projection};
+use rafx::render_features::{
+    RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange,
+};
 use rafx::renderer::RenderViewMeta;
 use rafx::visibility::{ViewFrustumArc, VisibilityRegion};
 use rafx::{api::RafxSwapchainHelper, renderer::ViewportsResource};

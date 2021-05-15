@@ -14,8 +14,8 @@ use parry3d::{
     query::{Ray, RayCast},
 };
 use rafx::{
-    nodes::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange},
     rafx_visibility::{DepthRange, PerspectiveParameters, Projection},
+    render_features::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange},
     renderer::{RenderViewMeta, ViewportsResource},
     visibility::ViewFrustumArc,
 };

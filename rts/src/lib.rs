@@ -17,7 +17,7 @@ use crate::daemon_args::AssetDaemonArgs;
 use crate::scenes::SceneManager;
 use crate::time::TimeState;
 use rafx::assets::distill_impl::AssetResource;
-use rafx::nodes::ExtractResources;
+use rafx::render_features::ExtractResources;
 use rafx::renderer::{AssetSource, Renderer};
 use rafx::renderer::{RendererConfigResource, ViewportsResource};
 use rafx::visibility::VisibilityRegion;
@@ -35,6 +35,7 @@ mod scenes;
 mod time;
 
 mod demo_plugin;
+mod demo_renderer_thread_pool;
 
 pub use demo_plugin::DemoRendererPlugin;
 
@@ -367,6 +368,18 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 }
 
                 if let SceneManagerAction::Scene(scene) = scene_action {
+                    scene_manager.try_cleanup_current_scene(&mut world, &resources);
+
+                    {
+                        // NOTE(dvd): Legion leaks memory because the entity IDs aren't reset when the
+                        // world is cleared and the entity location map will grow without bounds.
+                        world = World::default();
+
+                        // NOTE(dvd): The Renderer maintains some per-frame temporary data to avoid
+                        // allocating each frame. We can clear this between scene transitions.
+                        let mut renderer = resources.get_mut::<Renderer>().unwrap();
+                        renderer.clear_temporary_work();
+                    }
                     scene_manager.try_load_scene(&mut world, &resources, scene);
                 }
 
@@ -440,7 +453,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 //
                 {
                     profiling::scope!("Start Next Frame Render");
-                    let game_renderer = resources.get::<Renderer>().unwrap();
+                    let renderer = resources.get::<Renderer>().unwrap();
 
                     let mut extract_resources = ExtractResources::default();
 
@@ -464,11 +477,11 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                     add_to_extract_resources!(RenderOptions);
                     add_to_extract_resources!(RendererConfigResource);
                     add_to_extract_resources!(
-                        crate::features::mesh::MeshRenderNodeSet,
-                        mesh_render_node_set
+                        crate::features::mesh::MeshRenderObjectSet,
+                        mesh_render_object_set
                     );
                     add_to_extract_resources!(
-                        crate::features::debug3d::DebugDraw3DResource,
+                        crate::features::debug3d::Debug3DResource,
                         debug_draw_3d_resource
                     );
                     add_to_extract_resources!(crate::features::text::TextResource, text_resource);
@@ -480,7 +493,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
 
                     extract_resources.insert(&mut world);
 
-                    game_renderer
+                    renderer
                         .start_rendering_next_frame(&mut extract_resources)
                         .unwrap();
                 }

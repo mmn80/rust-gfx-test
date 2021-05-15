@@ -6,7 +6,7 @@ use rafx::framework::VertexDataSetLayout;
 use rafx::framework::{ImageViewResource, ResourceArc};
 use rafx::framework::{RenderResources, ResourceContext};
 use rafx::graph::*;
-use rafx::nodes::{ExtractResources, RenderView};
+use rafx::render_features::{ExtractResources, RenderView};
 
 mod shadow_map_pass;
 use shadow_map_pass::ShadowMapImageResources;
@@ -30,6 +30,8 @@ mod bloom_blur_pass;
 mod bloom_combine_pass;
 
 mod ui_pass;
+
+mod compute_test;
 
 lazy_static::lazy_static! {
     pub static ref EMPTY_VERTEX_LAYOUT : VertexDataSetLayout = {
