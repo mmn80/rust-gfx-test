@@ -102,95 +102,95 @@ impl UnitsState {
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
         self.add_units_debug_draw(resources, world);
 
-        {
-            let mut selecting = false;
-            let input = resources.get::<InputState>().unwrap();
-            if input.key_pressed.contains(&VirtualKeyCode::N) {
-                self.ui_spawning = true;
+        let input = resources.get::<InputState>().unwrap();
+        let camera = resources.get::<RTSCamera>().unwrap();
+        let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
+
+        let mut selecting = false;
+        if input.key_pressed.contains(&VirtualKeyCode::N) {
+            self.ui_spawning = true;
+        }
+        let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
+            selecting = !self.ui_spawning;
+            let window_size = resources
+                .get::<ViewportsResource>()
+                .unwrap()
+                .main_window_size;
+            (
+                (x0.min(x1) as f32 / window_size.width as f32) * 2. - 1.,
+                (y0.max(y1) as f32 / window_size.height as f32) * -2. + 1.,
+                (x0.max(x1) as f32 / window_size.width as f32) * 2. - 1.,
+                (y0.min(y1) as f32 / window_size.height as f32) * -2. + 1.,
+            )
+        } else {
+            (0., 0., 0., 0.)
+        };
+        if selecting {
+            self.ui_selected_count = 0;
+        }
+
+        let view_proj = camera.view_proj();
+        let mut query = <(
+            Write<TransformComponent>,
+            Read<VisibilityComponent>,
+            Write<UnitComponent>,
+        )>::query();
+        query.par_for_each_mut(world, |(transform, visibility, unit)| {
+            if let Some(target) = unit.move_target {
+                let target_dir = (target - transform.translation).normalize();
+                let orig_dir = Vec3::X;
+                if (target_dir - orig_dir).length() > 0.001 {
+                    transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
+                }
+                if (target_dir - unit.aim).length() > 0.001 {
+                    unit.aim = (unit.aim + (target_dir - unit.aim) * dt).normalize();
+                }
+                const TARGET_SPEED: f32 = 10.; // m/s
+                if unit.speed < TARGET_SPEED {
+                    unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
+                }
+                transform.translation += unit.speed * dt * target_dir;
+                visibility.visibility_object_handle.set_transform(
+                    transform.translation,
+                    transform.rotation,
+                    transform.scale,
+                );
+                if (target - transform.translation).length() < 0.1 {
+                    unit.move_target = None;
+                    unit.speed = 0.;
+                }
             }
-            let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
-                selecting = !self.ui_spawning;
-                let window_size = resources
-                    .get::<ViewportsResource>()
-                    .unwrap()
-                    .main_window_size;
-                (
-                    (x0.min(x1) as f32 / window_size.width as f32) * 2. - 1.,
-                    (y0.max(y1) as f32 / window_size.height as f32) * -2. + 1.,
-                    (x0.max(x1) as f32 / window_size.width as f32) * 2. - 1.,
-                    (y0.min(y1) as f32 / window_size.height as f32) * -2. + 1.,
-                )
-            } else {
-                (0., 0., 0., 0.)
-            };
             if selecting {
-                self.ui_selected_count = 0;
+                let pos_hom: Vec4 = (transform.translation, 1.).into();
+                let pos_view = view_proj * pos_hom;
+                let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
+                unit.selected = pos_screen.x > x0
+                    && pos_screen.x < x1
+                    && pos_screen.y > y0
+                    && pos_screen.y < y1;
             }
-            let view_proj = resources.get::<RTSCamera>().unwrap().view_proj();
-            let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <(
-                Write<TransformComponent>,
-                Read<VisibilityComponent>,
-                Write<UnitComponent>,
-            )>::query();
-            query.par_for_each_mut(world, |(transform, visibility, unit)| {
-                if let Some(target) = unit.move_target {
-                    let dt = time_state.previous_update_dt();
-                    let target_dir = (target - transform.translation).normalize();
-                    let orig_dir = Vec3::X;
-                    if (target_dir - orig_dir).length() > 0.001 {
-                        transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
-                    }
-                    if (target_dir - unit.aim).length() > 0.001 {
-                        unit.aim = (unit.aim + (target_dir - unit.aim) * dt).normalize();
-                    }
-                    const TARGET_SPEED: f32 = 10.; // m/s
-                    if unit.speed < TARGET_SPEED {
-                        unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
-                    }
-                    transform.translation += unit.speed * dt * target_dir;
-                    visibility.visibility_object_handle.set_transform(
-                        transform.translation,
-                        transform.rotation,
-                        transform.scale,
-                    );
-                    if (target - transform.translation).length() < 0.1 {
-                        unit.move_target = None;
-                        unit.speed = 0.;
-                    }
+        });
+
+        if selecting {
+            let mut selected = HashMap::<UnitType, u32>::new();
+            let mut query = <Read<UnitComponent>>::query();
+            for unit in query.iter(world) {
+                if unit.selected {
+                    self.ui_selected_count += 1;
+                    let entry = selected.entry(unit.unit_type);
+                    entry.and_modify(|e| *e += 1).or_insert(1);
                 }
-                if selecting {
-                    let pos_hom: Vec4 = (transform.translation, 1.).into();
-                    let pos_view = view_proj * pos_hom;
-                    let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
-                    unit.selected = pos_screen.x > x0
-                        && pos_screen.x < x1
-                        && pos_screen.y > y0
-                        && pos_screen.y < y1;
-                }
-            });
-            if selecting {
-                let mut selected = HashMap::<UnitType, u32>::new();
-                let mut query = <Read<UnitComponent>>::query();
-                for unit in query.iter(world) {
-                    if unit.selected {
-                        self.ui_selected_count += 1;
-                        let entry = selected.entry(unit.unit_type);
-                        entry.and_modify(|e| *e += 1).or_insert(1);
-                    }
-                }
-                let detailed = selected
-                    .iter()
-                    .map(|(ty, count)| format!("{:?}: {}", ty, count))
-                    .join(", ");
-                self.ui_selected_str =
-                    format!("{} units selected ({})", self.ui_selected_count, detailed);
             }
+            let detailed = selected
+                .iter()
+                .map(|(ty, count)| format!("{:?}: {}", ty, count))
+                .join(", ");
+            self.ui_selected_str =
+                format!("{} units selected ({})", self.ui_selected_count, detailed);
         }
 
         #[cfg(feature = "use-imgui")]
         {
-            let input = resources.get::<InputState>().unwrap();
             use crate::features::imgui::ImguiManager;
             profiling::scope!("imgui");
             let imgui_manager = resources.get::<ImguiManager>().unwrap();
@@ -231,7 +231,6 @@ impl UnitsState {
 
                 if !self.ui_spawning {
                     if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                        let camera = resources.get::<RTSCamera>().unwrap();
                         let s = camera.win_scale_factor;
                         let w = (x1 as f32 - x0 as f32).abs() / s;
                         let h = (y1 as f32 - y0 as f32).abs() / s;
@@ -253,30 +252,24 @@ impl UnitsState {
             });
         }
 
-        {
-            let input = resources.get::<InputState>().unwrap();
-            if self.ui_spawning {
-                if input.mouse_trigger.contains(&MouseButton::Left) {
-                    let camera = resources.get::<RTSCamera>().unwrap();
-                    let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
-                    self.spawn_unit(self.ui_unit_type, cursor, resources, world);
-                    self.ui_spawning = false;
-                }
-            } else if input.mouse_trigger.contains(&MouseButton::Right) {
-                let camera = resources.get::<RTSCamera>().unwrap();
-                let mut first = true;
-                let mut target = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
-                let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
-                for (transform, unit) in query.iter_mut(world) {
-                    if unit.selected {
-                        if !first {
-                            target.x += transform.scale.x;
-                        }
-                        unit.move_target =
-                            Some(Vec3::new(target.x, target.y, transform.translation.z));
+        if self.ui_spawning {
+            if input.mouse_trigger.contains(&MouseButton::Left) {
+                let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+                self.spawn_unit(self.ui_unit_type, cursor, resources, world);
+                self.ui_spawning = false;
+            }
+        } else if input.mouse_trigger.contains(&MouseButton::Right) {
+            let mut first = true;
+            let mut target = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+            let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
+            for (transform, unit) in query.iter_mut(world) {
+                if unit.selected {
+                    if !first {
                         target.x += transform.scale.x;
-                        first = false;
                     }
+                    unit.move_target = Some(Vec3::new(target.x, target.y, transform.translation.z));
+                    target.x += transform.scale.x;
+                    first = false;
                 }
             }
         }
@@ -289,16 +282,11 @@ impl UnitsState {
         resources: &Resources,
         world: &mut World,
     ) {
+        // transform component
         const SCALE_MIN: f32 = 0.5;
         const SCALE_MAX: f32 = 2.;
-        let asset_manager = resources.get::<AssetManager>().unwrap();
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
-        let mesh_render_objects = mesh_render_objects.read();
-        let mut rng = thread_rng();
         let position = Vec3::new(position.x, position.y, 0.0);
-        let mesh_render_object = self.meshes.get(&unit_type).unwrap().clone();
-        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
+        let mut rng = thread_rng();
         let rand_scale_z = rng.gen_range(SCALE_MIN, SCALE_MAX);
         let rand_scale_xy = rng.gen_range(SCALE_MIN, SCALE_MAX);
         let offset = rand_scale_z - 1.;
@@ -307,7 +295,14 @@ impl UnitsState {
             scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
             rotation: Quat::from_rotation_z(rng.gen_range(0., 2. * std::f32::consts::PI)),
         };
-        log::info!("Spawn entity {:?} at: {}", unit_type, position);
+
+        // mesh component
+        let mesh_render_object = self.meshes.get(&unit_type).unwrap().clone();
+        let mesh_component = MeshComponent {
+            render_object_handle: mesh_render_object.clone(),
+        };
+
+        // unit component
         let unit_component = UnitComponent {
             unit_type,
             health: 1.,
@@ -316,13 +311,17 @@ impl UnitsState {
             move_target: None,
             selected: false,
         };
-        let entity = world.push((
-            transform_component,
-            MeshComponent {
-                render_object_handle: mesh_render_object.clone(),
-            },
-            unit_component,
-        ));
+
+        // entity
+        log::info!("Spawn entity {:?} at: {}", unit_type, position);
+        let entity = world.push((transform_component, mesh_component, unit_component));
+
+        // visibility component
+        let asset_manager = resources.get::<AssetManager>().unwrap();
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+        let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
+        let mesh_render_objects = mesh_render_objects.read();
+        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
         let mut entry = world.entry(entity).unwrap();
         entry.add_component(VisibilityComponent {
             visibility_object_handle: {
