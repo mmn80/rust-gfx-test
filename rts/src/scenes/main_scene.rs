@@ -1,28 +1,35 @@
 use super::{Scene, SceneManagerAction};
-use crate::assets::gltf::MeshAsset;
-use crate::camera::RTSCamera;
-use crate::components::VisibilityComponent;
-use crate::components::{DirectionalLightComponent, MeshComponent, TransformComponent};
-use crate::features::mesh::{MeshRenderObject, MeshRenderObjectSet};
-use crate::features::text::TextResource;
-use crate::time::TimeState;
-use crate::unit::UnitsState;
-use crate::RenderOptions;
-use crate::{assets::font::FontAsset, input::InputState};
+use crate::{
+    assets::{font::FontAsset, gltf::MeshAsset},
+    camera::RTSCamera,
+    components::{
+        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
+    },
+    dyn_object::DynObjectsState,
+    features::{
+        mesh::{MeshRenderObject, MeshRenderObjectSet},
+        text::TextResource,
+    },
+    input::InputState,
+    kin_object::KinObjectsState,
+    time::TimeState,
+    RenderOptions,
+};
 use distill::loader::handle::Handle;
 use glam::Vec3;
-use legion::IntoQuery;
-use legion::{Resources, World, Write};
-use rafx::assets::distill_impl::AssetResource;
-use rafx::assets::AssetManager;
-use rafx::renderer::ViewportsResource;
-use rafx::visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion};
+use legion::{IntoQuery, Resources, World, Write};
+use rafx::{
+    assets::{distill_impl::AssetResource, AssetManager},
+    renderer::ViewportsResource,
+    visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion},
+};
 use winit::event::VirtualKeyCode;
 
 pub(super) struct MainScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
-    units: UnitsState,
+    dyn_objects: DynObjectsState,
+    kin_objects: KinObjectsState,
 }
 
 impl MainScene {
@@ -113,12 +120,14 @@ impl MainScene {
         }
 
         let main_view_frustum = visibility_region.register_view_frustum();
-        let units = UnitsState::new(resources);
+        let dyn_objects = DynObjectsState::new(resources);
+        let kin_objects = KinObjectsState::new(resources);
 
         MainScene {
             main_view_frustum,
             font,
-            units,
+            dyn_objects,
+            kin_objects,
         }
     }
 }
@@ -168,7 +177,8 @@ impl super::GameScene for MainScene {
             }
         }
 
-        self.units.update(world, resources);
+        self.dyn_objects.update(world, resources);
+        self.kin_objects.update(world, resources);
 
         {
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();
@@ -183,9 +193,9 @@ impl super::GameScene for MainScene {
                 20.0 * scale,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
-            if self.units.ui_selected_count > 0 {
+            if self.dyn_objects.ui_selected_count > 0 {
                 text_resource.add_text(
-                    self.units.ui_selected_str.clone(),
+                    self.dyn_objects.ui_selected_str.clone(),
                     Vec3::new(200.0 * scale, pos_y, 0.0),
                     &self.font,
                     20.0 * scale,

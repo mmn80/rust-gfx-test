@@ -23,17 +23,20 @@ use rafx::renderer::{RendererConfigResource, ViewportsResource};
 use rafx::visibility::VisibilityRegion;
 
 pub mod assets;
-mod camera;
-mod components;
 pub mod daemon_args;
 mod features;
 mod init;
-mod input;
 mod phases;
 mod render_graph_generator;
-mod scenes;
+
+mod camera;
+mod input;
 mod time;
-mod unit;
+
+mod components;
+mod dyn_object;
+mod kin_object;
+mod scenes;
 
 mod demo_plugin;
 mod demo_renderer_thread_pool;
