@@ -56,20 +56,3 @@ pub struct SpotLightComponent {
     pub intensity: f32,
     pub view_frustum: ViewFrustumArc,
 }
-
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum UnitType {
-    Container1,
-    Container2,
-    BlueIcosphere,
-}
-
-#[derive(Clone)]
-pub struct UnitComponent {
-    pub unit_type: UnitType,
-    pub health: f32,
-    pub aim: Vec3,
-    pub speed: f32,
-    pub move_target: Option<Vec3>,
-    pub selected: bool,
-}

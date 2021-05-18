@@ -33,6 +33,7 @@ mod phases;
 mod render_graph_generator;
 mod scenes;
 mod time;
+mod unit;
 
 mod demo_plugin;
 mod demo_renderer_thread_pool;

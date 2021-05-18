@@ -7,7 +7,6 @@ edition = "2018"
 publish = false
 
 [dependencies]
-toml = "0.5"
 winit = "0.24"
 rayon = "1.4"
 rafx = { path = "../../rafx/rafx", features = ["renderer"] }
@@ -55,6 +54,7 @@ stats_alloc = { version = "0.1.8", optional = true }
 bevy_tasks = "0.5.0"
 
 parry3d = "0.4"
+building-blocks = "0.6"
 
 [features]
 default = [

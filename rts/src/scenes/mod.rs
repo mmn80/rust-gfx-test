@@ -1,9 +1,8 @@
 use crate::components::{
     DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
-    UnitComponent,
 };
 use crate::features::debug3d::Debug3DResource;
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use legion::IntoQuery;
 use legion::{Read, Resources, World};
 use rand::Rng;
@@ -89,30 +88,6 @@ impl SceneManager {
         }
 
         world.clear();
-    }
-}
-
-fn add_units_debug_draw(resources: &Resources, world: &World) {
-    let mut debug_draw = resources.get_mut::<Debug3DResource>().unwrap();
-
-    let normal_col = Vec4::new(1., 0., 0., 1.);
-    let selected_col = Vec4::new(0., 1., 0., 1.);
-
-    let mut query = <(Read<TransformComponent>, Read<UnitComponent>)>::query();
-    for (transform, unit) in query.iter(world) {
-        let color = if unit.selected {
-            selected_col
-        } else {
-            normal_col
-        };
-        let pos = transform.translation;
-        let aim = pos + 5. * unit.aim;
-        debug_draw.add_line(pos, Vec3::new(pos.x, pos.y, pos.z + 5.), color);
-        debug_draw.add_line(pos, aim, color);
-        debug_draw.add_cone(aim, pos + 4.7 * unit.aim, 0.1, color, 6);
-        if let Some(move_target) = unit.move_target {
-            debug_draw.add_line(pos, move_target, color);
-        }
     }
 }
 
