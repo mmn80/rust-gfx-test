@@ -1,15 +1,17 @@
 use super::SceneManagerAction;
 #[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
-use crate::{camera::RTSCamera, scenes::Scene};
-use crate::{input::InputState, phases::UiRenderPhase};
+use crate::{camera::RTSCamera, input::InputState, phases::UiRenderPhase, scenes::Scene};
 use legion::{Resources, World};
-use rafx::rafx_visibility::{DepthRange, OrthographicParameters, Projection};
-use rafx::render_features::{
-    RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange,
+use rafx::{
+    rafx_visibility::{DepthRange, OrthographicParameters, Projection},
+    render_features::{
+        RenderFeatureFlagMaskBuilder, RenderFeatureMaskBuilder, RenderPhaseMaskBuilder,
+        RenderViewDepthRange,
+    },
+    renderer::{RenderViewMeta, ViewportsResource},
+    visibility::{ViewFrustumArc, VisibilityRegion},
 };
-use rafx::renderer::{RenderViewMeta, ViewportsResource};
-use rafx::visibility::{ViewFrustumArc, VisibilityRegion};
 use winit::event::VirtualKeyCode;
 
 pub(super) struct MenuScene {
@@ -22,16 +24,18 @@ impl MenuScene {
         let camera = resources.get::<RTSCamera>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
-        let main_camera_phase_mask = RenderPhaseMaskBuilder::default()
+        let render_phase_mask = RenderPhaseMaskBuilder::default()
             .add_render_phase::<UiRenderPhase>()
             .build();
 
         #[cfg(feature = "use-imgui")]
-        let main_camera_feature_mask = RenderFeatureMaskBuilder::default()
+        let render_feature_mask = RenderFeatureMaskBuilder::default()
             .add_render_feature::<ImGuiRenderFeature>()
             .build();
         #[cfg(not(feature = "use-imgui"))]
-        let main_camera_feature_mask = RenderFeatureMaskBuilder::default().build();
+        let render_feature_mask = RenderFeatureMaskBuilder::default().build();
+
+        let render_feature_flag_mask = RenderFeatureFlagMaskBuilder::default().build();
 
         let eye = glam::Vec3::new(1400.0, -200.0, 1000.0);
 
@@ -68,8 +72,9 @@ impl MenuScene {
             view,
             proj: projection.as_rh_mat4(),
             depth_range: RenderViewDepthRange::from_projection(&projection),
-            render_phase_mask: main_camera_phase_mask,
-            render_feature_mask: main_camera_feature_mask,
+            render_phase_mask,
+            render_feature_mask,
+            render_feature_flag_mask,
             debug_name: "main".to_string(),
         });
 

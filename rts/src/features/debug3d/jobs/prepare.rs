@@ -1,7 +1,7 @@
 use rafx::render_feature_prepare_job_predule::*;
 
 use super::*;
-use crate::phases::OpaqueRenderPhase;
+use crate::phases::WireframeRenderPhase;
 use rafx::api::{RafxBufferDef, RafxDeviceContext, RafxMemoryUsage, RafxResourceType};
 use rafx::framework::ResourceContext;
 
@@ -28,7 +28,10 @@ impl Debug3DPrepareJob {
 }
 
 impl<'prepare> PrepareJobEntryPoints<'prepare> for Debug3DPrepareJob {
-    fn begin_per_frame_prepare(&self, context: &PreparePerFrameContext<'prepare, '_, Self>) {
+    fn begin_per_frame_prepare(
+        &self,
+        context: &PreparePerFrameContext<'prepare, '_, Self>,
+    ) {
         let mut per_frame_submit_data = Debug3DPerFrameSubmitData::default();
 
         //
@@ -83,7 +86,10 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for Debug3DPrepareJob {
             .set(per_frame_submit_data);
     }
 
-    fn end_per_view_prepare(&self, context: &PreparePerViewContext<'prepare, '_, Self>) {
+    fn end_per_view_prepare(
+        &self,
+        context: &PreparePerViewContext<'prepare, '_, Self>,
+    ) {
         let per_frame_data = context.per_frame_data();
         if per_frame_data.debug3d_material_pass.is_none() {
             return;
@@ -116,7 +122,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for Debug3DPrepareJob {
 
         context
             .view_submit_packet()
-            .push_submit_node::<OpaqueRenderPhase>((), 0, 0.);
+            .push_submit_node::<WireframeRenderPhase>((), 0, 0.);
     }
 
     fn feature_debug_constants(&self) -> &'static RenderFeatureDebugConstants {

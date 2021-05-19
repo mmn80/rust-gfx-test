@@ -1,9 +1,13 @@
 #[cfg(feature = "use-imgui")]
 use crate::features::imgui::ImGuiRenderFeature;
-use crate::features::mesh::MeshRenderFeature;
+use crate::features::mesh::{
+    MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
+    MeshUntexturedRenderFeatureFlag, MeshWireframeRenderFeatureFlag,
+};
 use crate::features::text::TextRenderFeature;
 use crate::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
+    WireframeRenderPhase,
 };
 use crate::{features::debug3d::Debug3DRenderFeature, input::InputState};
 use crate::{time::TimeState, RenderOptions};
@@ -15,7 +19,10 @@ use parry3d::{
 };
 use rafx::{
     rafx_visibility::{DepthRange, PerspectiveParameters, Projection},
-    render_features::{RenderFeatureMaskBuilder, RenderPhaseMaskBuilder, RenderViewDepthRange},
+    render_features::{
+        RenderFeatureFlagMaskBuilder, RenderFeatureMaskBuilder, RenderPhaseMaskBuilder,
+        RenderViewDepthRange,
+    },
     renderer::{RenderViewMeta, ViewportsResource},
     visibility::ViewFrustumArc,
 };
@@ -169,12 +176,12 @@ impl RTSCamera {
         projection: &Projection,
         eye: Vec3,
     ) {
-        let phase_mask = RenderPhaseMaskBuilder::default()
+        let phase_mask_builder = RenderPhaseMaskBuilder::default()
             .add_render_phase::<DepthPrepassRenderPhase>()
             .add_render_phase::<OpaqueRenderPhase>()
             .add_render_phase::<TransparentRenderPhase>()
-            .add_render_phase::<UiRenderPhase>()
-            .build();
+            .add_render_phase::<WireframeRenderPhase>()
+            .add_render_phase::<UiRenderPhase>();
 
         #[cfg(feature = "use-imgui")]
         let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
@@ -193,7 +200,27 @@ impl RTSCamera {
                 feature_mask_builder.add_render_feature::<Debug3DRenderFeature>();
         }
 
-        let main_camera_feature_mask = feature_mask_builder.build();
+        let mut feature_flag_mask_builder = RenderFeatureFlagMaskBuilder::default();
+
+        if render_options.show_wireframes {
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<MeshWireframeRenderFeatureFlag>();
+        }
+
+        if !render_options.enable_lighting {
+            feature_flag_mask_builder =
+                feature_flag_mask_builder.add_render_feature_flag::<MeshUnlitRenderFeatureFlag>();
+        }
+
+        if !render_options.enable_textures {
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<MeshUntexturedRenderFeatureFlag>();
+        }
+
+        if !render_options.show_shadows {
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<MeshNoShadowsRenderFeatureFlag>();
+        }
 
         viewports_resource.main_view_meta = Some(RenderViewMeta {
             view_frustum: main_view_frustum.clone(),
@@ -201,8 +228,9 @@ impl RTSCamera {
             view: self.view_matrix,
             proj: self.projection_matrix,
             depth_range: RenderViewDepthRange::from_projection(projection),
-            render_phase_mask: phase_mask,
-            render_feature_mask: main_camera_feature_mask,
+            render_phase_mask: phase_mask_builder.build(),
+            render_feature_mask: feature_mask_builder.build(),
+            render_feature_flag_mask: feature_flag_mask_builder.build(),
             debug_name: "main".to_string(),
         });
     }

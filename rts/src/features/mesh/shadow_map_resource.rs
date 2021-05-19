@@ -9,6 +9,7 @@ use crate::{
 };
 use fnv::FnvHashMap;
 use legion::*;
+use rafx::framework::render_features::RenderFeatureFlagMask;
 use rafx::framework::{ImageViewResource, ResourceArc};
 use rafx::graph::{PreparedRenderGraph, RenderGraphImageUsageId};
 use rafx::rafx_visibility::{
@@ -152,7 +153,10 @@ fn calculate_shadow_map_views(
 
     let render_options = extract_resources.fetch::<RenderOptions>();
 
-    let shadow_map_feature_mask = if render_options.show_shadows {
+    let shadow_map_feature_mask = if render_options.show_surfaces
+        && render_options.show_shadows
+        && render_options.enable_lighting
+    {
         RenderFeatureMaskBuilder::default()
             .add_render_feature::<MeshRenderFeature>()
             .build()
@@ -198,6 +202,7 @@ fn calculate_shadow_map_views(
             RenderViewDepthRange::from_projection(&projection),
             shadow_map_phase_mask,
             shadow_map_feature_mask,
+            RenderFeatureFlagMask::empty(),
             "shadow_map_spotlight".to_string(),
         );
 
@@ -243,6 +248,7 @@ fn calculate_shadow_map_views(
                 RenderViewDepthRange::from_projection(&projection),
                 shadow_map_phase_mask,
                 shadow_map_feature_mask,
+                RenderFeatureFlagMask::empty(),
                 "shadow_map_directional".to_string(),
             );
 
@@ -310,6 +316,7 @@ fn calculate_shadow_map_views(
                 RenderViewDepthRange::from_projection(&projection),
                 phase_mask,
                 feature_mask,
+                RenderFeatureFlagMask::empty(),
                 format!("shadow_map_point_light_face_{}", face_idx),
             )
         }
