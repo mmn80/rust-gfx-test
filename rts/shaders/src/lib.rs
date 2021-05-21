@@ -9,8 +9,6 @@ pub mod debug_vert;
 pub mod depth_vert;
 pub mod egui_frag;
 pub mod egui_vert;
-pub mod imgui_frag;
-pub mod imgui_vert;
 pub mod mesh_textured_frag;
 pub mod mesh_textured_vert;
 pub mod mesh_untextured_frag;
