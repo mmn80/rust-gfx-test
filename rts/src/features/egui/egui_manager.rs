@@ -1,14 +1,11 @@
-use super::EguiContextResource;
-use super::EguiDrawData;
-use egui::{CtxRef, FontDefinitions};
+use super::{EguiContextResource, EguiDrawData};
+use egui::FontDefinitions;
 use egui_winit_platform::{Platform, PlatformDescriptor};
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 // Inner state for EguiManager, which will be protected by a Mutex. Mutex protection required since
 // this object is Send but not Sync
 struct EguiManagerInner {
-    context: egui::CtxRef,
     platform: Platform,
     start_time: std::time::Instant,
 
@@ -26,7 +23,6 @@ pub struct EguiManager {
 // Wraps egui (and winit integration logic)
 impl EguiManager {
     pub fn new(window: &winit::window::Window) -> Self {
-        let ctx = CtxRef::default();
         let mut font_definitions = FontDefinitions::default();
 
         // Can remove the default_fonts feature and use custom fonts instead
@@ -90,17 +86,17 @@ impl EguiManager {
             (egui::FontFamily::Monospace, 12.0),
         );
 
+        let size = window.inner_size();
         let platform = Platform::new(PlatformDescriptor {
-            physical_width: window.inner_size().width,
-            physical_height: window.inner_size().height,
-            scale_factor: window.scale_factor().round(),
+            physical_width: (size.width as f64 * window.scale_factor()) as u32,
+            physical_height: (size.height as f64 * window.scale_factor()) as u32,
+            scale_factor: window.scale_factor(),
             font_definitions,
             style: egui::Style::default(),
         });
 
         EguiManager {
             inner: Arc::new(Mutex::new(EguiManagerInner {
-                context: ctx,
                 platform,
                 start_time: std::time::Instant::now(),
                 font_atlas: None,
@@ -150,18 +146,20 @@ impl EguiManager {
 
         let (_output, clipped_shapes) = inner.platform.end_frame();
 
-        let clipped_meshes = inner.context.tessellate(clipped_shapes);
+        let context = inner.platform.context();
+
+        let clipped_meshes = context.tessellate(clipped_shapes);
 
         //inner.output = Some(output);
         inner.clipped_meshes = Some(clipped_meshes);
 
         let mut new_texture = None;
         if let Some(texture) = &inner.font_atlas {
-            if texture.version != inner.context.texture().version {
-                new_texture = Some(inner.context.texture().clone());
+            if texture.version != context.texture().version {
+                new_texture = Some(context.texture().clone());
             }
         } else {
-            new_texture = Some(inner.context.texture().clone());
+            new_texture = Some(context.texture().clone());
         }
 
         if new_texture.is_some() {
@@ -169,19 +167,9 @@ impl EguiManager {
         }
     }
 
-    // Allows access to the context without caller needing to be aware of locking
-    pub fn with_context<F>(&self, f: F)
-    where
-        F: FnOnce(&mut egui::CtxRef),
-    {
-        let mut guard = self.inner.lock().unwrap();
-        let inner = &mut *guard;
-        (f)(&mut inner.context);
-    }
-
     pub fn context(&self) -> egui::CtxRef {
         let guard = self.inner.lock().unwrap();
-        guard.context.clone()
+        guard.platform.context()
     }
 
     #[profiling::function]

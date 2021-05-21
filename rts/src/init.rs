@@ -73,7 +73,7 @@ pub fn rendering_init(
         .add_render_feature(egui_renderer_plugin);
 
     let mut renderer_builder_result = {
-        let mut extract_resources = ExtractResources::default();
+        let extract_resources = ExtractResources::default();
 
         let render_graph_generator = Box::new(DemoRenderGraphGenerator);
 

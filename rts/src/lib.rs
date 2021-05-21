@@ -378,6 +378,23 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
             Event::RedrawRequested(_window_id) => {
                 profiling::scope!("Main Loop");
 
+                let t0 = std::time::Instant::now();
+
+                {
+                    resources.get_mut::<TimeState>().unwrap().update();
+                }
+
+                {
+                    let time_state = resources.get::<TimeState>().unwrap();
+                    if print_time_event.try_take_event(
+                        time_state.current_instant(),
+                        std::time::Duration::from_secs_f32(1.0),
+                    ) {
+                        log::info!("FPS: {}", time_state.updates_per_second());
+                        //renderer.dump_stats();
+                    }
+                }
+
                 {
                     let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
                     let mut camera = resources.get_mut::<RTSCamera>().unwrap();
@@ -407,23 +424,6 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                         renderer.clear_temporary_work();
                     }
                     scene_manager.try_load_scene(&mut world, &resources, scene);
-                }
-
-                let t0 = std::time::Instant::now();
-
-                {
-                    resources.get_mut::<TimeState>().unwrap().update();
-                }
-
-                {
-                    let time_state = resources.get::<TimeState>().unwrap();
-                    if print_time_event.try_take_event(
-                        time_state.current_instant(),
-                        std::time::Duration::from_secs_f32(1.0),
-                    ) {
-                        log::info!("FPS: {}", time_state.updates_per_second());
-                        //renderer.dump_stats();
-                    }
                 }
 
                 {

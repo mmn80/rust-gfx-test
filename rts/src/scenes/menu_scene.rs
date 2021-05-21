@@ -37,9 +37,8 @@ impl MenuScene {
 
         let eye = glam::Vec3::new(1400.0, -200.0, 1000.0);
 
-        let scale = camera.win_scale_factor.round();
-        let half_width = camera.win_width as f32 / (2.0 * scale);
-        let half_height = camera.win_height as f32 / (2.0 * scale);
+        let half_width = camera.win_width as f32 / 2.0;
+        let half_height = camera.win_height as f32 / 2.0;
 
         let look_at = eye.truncate().extend(0.0);
         let up = glam::Vec3::new(0.0, 1.0, 0.0);
