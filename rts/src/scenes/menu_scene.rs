@@ -1,8 +1,12 @@
 use super::SceneManagerAction;
 use crate::{
-    camera::RTSCamera, features::egui::EguiRenderFeature, input::InputState, phases::UiRenderPhase,
+    camera::RTSCamera,
+    features::egui::{EguiManager, EguiRenderFeature},
+    input::InputState,
+    phases::UiRenderPhase,
     scenes::Scene,
 };
+use egui::{Align2, Button};
 use legion::{Resources, World};
 use rafx::{
     rafx_visibility::{DepthRange, OrthographicParameters, Projection},
@@ -82,45 +86,28 @@ impl MenuScene {
 impl super::GameScene for MenuScene {
     fn update(&mut self, _world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         let mut action = SceneManagerAction::None;
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::ImguiManager;
-            profiling::scope!("imgui");
-            let imgui_manager = resources.get::<ImguiManager>().unwrap();
-            let camera = resources.get::<RTSCamera>().unwrap();
-            imgui_manager.with_ui(|ui| {
-                profiling::scope!("main game menu");
 
-                let scale = camera.win_scale_factor;
-                let menu_window = imgui::Window::new(imgui::im_str!("Home"));
-                menu_window
-                    .position(
-                        [
-                            (camera.win_width as f32) / (2.0 * scale),
-                            (camera.win_height as f32) / (2.0 * scale),
-                        ],
-                        imgui::Condition::Always,
-                    )
-                    .position_pivot([0.5, 0.5])
-                    .title_bar(false)
-                    .always_auto_resize(true)
-                    .resizable(false)
-                    .movable(false)
-                    .scroll_bar(false)
-                    .collapsible(false)
-                    .build(&ui, || {
-                        if ui.button(imgui::im_str!("Play"), [200.0_f32 / scale, 100. / scale]) {
-                            action = SceneManagerAction::Scene(Scene::Main);
-                        }
-                        if ui.button(imgui::im_str!("Exit"), [200.0_f32 / scale, 100.0 / scale]) {
-                            action = SceneManagerAction::Exit;
-                        }
-                    });
+        profiling::scope!("imgui");
+        let context = resources.get::<EguiManager>().unwrap().context();
+
+        profiling::scope!("main game menu");
+        egui::Window::new("Home")
+            .title_bar(false)
+            .collapsible(false)
+            .scroll(false)
+            .anchor(Align2::CENTER_CENTER, [0., 0.])
+            .auto_sized()
+            .show(&context, |ui| {
+                let btn_size = [200.0, 100.0];
+                if ui.add_sized(btn_size, Button::new("Play")).clicked() {
+                    action = SceneManagerAction::Scene(Scene::Main);
+                }
+                if ui.add_sized(btn_size, Button::new("Exit")).clicked() {
+                    action = SceneManagerAction::Exit;
+                }
             });
-        }
 
         let input = resources.get::<InputState>().unwrap();
-
         if input.key_trigger.contains(&VirtualKeyCode::Escape) {
             action = SceneManagerAction::Exit;
         }
