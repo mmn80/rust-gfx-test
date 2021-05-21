@@ -1,20 +1,23 @@
-use crate::assets::font::FontAssetTypeRendererPlugin;
-use crate::assets::gltf::GltfAssetTypeRendererPlugin;
-use crate::camera::RTSCamera;
-use crate::features::debug3d::Debug3DRendererPlugin;
-use crate::features::mesh::MeshRendererPlugin;
-use crate::features::text::TextRendererPlugin;
-use crate::render_graph_generator::DemoRenderGraphGenerator;
-use crate::DemoRendererPlugin;
+use crate::{
+    assets::{font::FontAssetTypeRendererPlugin, gltf::GltfAssetTypeRendererPlugin},
+    camera::RTSCamera,
+    features::{
+        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin, mesh::MeshRendererPlugin,
+        text::TextRendererPlugin,
+    },
+    render_graph_generator::DemoRenderGraphGenerator,
+    DemoRendererPlugin,
+};
 use legion::Resources;
-use rafx::api::{RafxApi, RafxDeviceContext, RafxResult, RafxSwapchainHelper};
-use rafx::assets::distill_impl::AssetResource;
-use rafx::assets::AssetManager;
-use rafx::framework::visibility::VisibilityRegion;
-use rafx::render_features::{ExtractResources, RenderRegistry};
-use rafx::renderer::{
-    AssetSource, Renderer, RendererBuilder, RendererConfigResource, SwapchainHandler,
-    ViewportsResource,
+use rafx::{
+    api::{RafxApi, RafxDeviceContext, RafxResult, RafxSwapchainHelper},
+    assets::{distill_impl::AssetResource, AssetManager},
+    framework::visibility::VisibilityRegion,
+    render_features::{ExtractResources, RenderRegistry},
+    renderer::{
+        AssetSource, Renderer, RendererBuilder, RendererConfigResource, SwapchainHandler,
+        ViewportsResource,
+    },
 };
 use std::sync::Arc;
 use winit::{event_loop::EventLoop, window::Window};
@@ -46,9 +49,11 @@ pub fn rendering_init(
     let mesh_renderer_plugin = Arc::new(MeshRendererPlugin::new(Some(32)));
     let debug3d_renderer_plugin = Arc::new(Debug3DRendererPlugin::default());
     let text_renderer_plugin = Arc::new(TextRendererPlugin::default());
+    let egui_renderer_plugin = Arc::new(EguiRendererPlugin::default());
     mesh_renderer_plugin.legion_init(resources);
     debug3d_renderer_plugin.legion_init(resources);
     text_renderer_plugin.legion_init(resources);
+    egui_renderer_plugin.legion_init(resources, &window);
 
     //
     // Create the api. GPU programming is fundamentally unsafe, so all rafx APIs should be
@@ -64,25 +69,11 @@ pub fn rendering_init(
         .add_asset(Arc::new(DemoRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
         .add_render_feature(debug3d_renderer_plugin)
-        .add_render_feature(text_renderer_plugin);
-
-    #[cfg(feature = "use-imgui")]
-    {
-        use crate::features::imgui::ImGuiRendererPlugin;
-        let imgui_renderer_plugin = Arc::new(ImGuiRendererPlugin::default());
-        imgui_renderer_plugin.legion_init(resources, window);
-        renderer_builder = renderer_builder.add_render_feature(imgui_renderer_plugin);
-    }
+        .add_render_feature(text_renderer_plugin)
+        .add_render_feature(egui_renderer_plugin);
 
     let mut renderer_builder_result = {
         let mut extract_resources = ExtractResources::default();
-
-        #[cfg(feature = "use-imgui")]
-        let mut imgui_manager = resources
-            .get_mut::<crate::features::imgui::ImguiManager>()
-            .unwrap();
-        #[cfg(feature = "use-imgui")]
-        extract_resources.insert(&mut *imgui_manager);
 
         let render_graph_generator = Box::new(DemoRenderGraphGenerator);
 
@@ -143,6 +134,7 @@ pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
         MeshRendererPlugin::legion_destroy(resources);
         Debug3DRendererPlugin::legion_destroy(resources);
         TextRendererPlugin::legion_destroy(resources);
+        EguiRendererPlugin::legion_destroy(resources);
 
         resources.remove::<RenderRegistry>();
 

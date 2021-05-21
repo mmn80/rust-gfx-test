@@ -1,16 +1,21 @@
-#[cfg(feature = "use-imgui")]
-use crate::features::imgui::ImGuiRenderFeature;
-use crate::features::mesh::{
-    MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
-    MeshUntexturedRenderFeatureFlag, MeshWireframeRenderFeatureFlag,
+use crate::{
+    features::{
+        debug3d::Debug3DRenderFeature,
+        egui::EguiRenderFeature,
+        mesh::{
+            MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
+            MeshUntexturedRenderFeatureFlag, MeshWireframeRenderFeatureFlag,
+        },
+        text::TextRenderFeature,
+    },
+    input::InputState,
+    phases::{
+        DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
+        WireframeRenderPhase,
+    },
+    time::TimeState,
+    RenderOptions,
 };
-use crate::features::text::TextRenderFeature;
-use crate::phases::{
-    DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
-    WireframeRenderPhase,
-};
-use crate::{features::debug3d::Debug3DRenderFeature, input::InputState};
-use crate::{time::TimeState, RenderOptions};
 use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
 use parry3d::{
     bounding_volume::AABB,
@@ -183,13 +188,9 @@ impl RTSCamera {
             .add_render_phase::<WireframeRenderPhase>()
             .add_render_phase::<UiRenderPhase>();
 
-        #[cfg(feature = "use-imgui")]
         let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
             .add_render_feature::<MeshRenderFeature>()
-            .add_render_feature::<ImGuiRenderFeature>();
-        #[cfg(not(feature = "use-imgui"))]
-        let mut feature_mask_builder =
-            RenderFeatureMaskBuilder::default().add_render_feature::<MeshRenderFeature>();
+            .add_render_feature::<EguiRenderFeature>();
 
         if render_options.show_text {
             feature_mask_builder = feature_mask_builder.add_render_feature::<TextRenderFeature>();

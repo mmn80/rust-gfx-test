@@ -14,8 +14,6 @@ shaders = { path = "shaders" }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
 type-uuid = "0.1"
-imgui = { version = "0.7", optional = true }
-imgui-winit-support = { version = "0.7", optional = true }
 egui = { version = "0.12", features = ["default_fonts"] }
 egui_winit_platform = "0.7"
 puffin_egui = { version = "0.2.0", optional = true }
@@ -33,8 +31,6 @@ fontdue = "0.4"
 ttf-parser = "0.8.3"
 rectangle-pack = "0.2.0"
 
-serde_json = "1.0"
-
 log = "0.4"
 env_logger = "0.6"
 glam = { version = "0.13.1", features = [ "serde" ] }
@@ -49,9 +45,9 @@ lazy_static = "1"
 structopt = "0.3"
 serde = "1"
 serde_bytes = "0.11"
+serde_json = "1.0"
 bincode = "1.3.1"
 ron = "0.6"
-puffin-imgui = { version = "0.7.0", optional = true }
 profiling = "1.0.1"
 stats_alloc = { version = "0.1.8", optional = true }
 bevy_tasks = "0.5.0"
@@ -61,7 +57,6 @@ building-blocks = "0.6"
 
 [features]
 default = [
-    "use-imgui",
     "profile-with-puffin",
     "rafx-vulkan",
     #"profile-with-stats-alloc", # Cannot be enabled with "profile-with-tracy-memory". Will run renderer / game loop single-threaded.
@@ -70,7 +65,6 @@ default = [
     #"profile-with-tracy-memory", # Cannot be enabled with "profile-with-stats-alloc".
     #"profile-with-superluminal"
 ]
-use-imgui = ["imgui", "imgui-winit-support"]
 rafx-empty = ["rafx/rafx-empty"]
 rafx-vulkan = ["rafx/rafx-vulkan"]
 rafx-metal = ["rafx/rafx-metal"]
@@ -79,9 +73,8 @@ rafx-gles3 = ["rafx/rafx-gles3"]
 static-vulkan = ["rafx/static-vulkan"]
 profile-with-stats-alloc = ["stats_alloc", "rafx/no-render-thread"]
 profile-with-puffin = [
-    "use-imgui",
     "profiling/profile-with-puffin",
-    "puffin-imgui"
+    "puffin_egui"
 ]
 profile-with-optick = [
     "profiling/profile-with-optick",

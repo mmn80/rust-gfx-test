@@ -1,7 +1,8 @@
 use super::SceneManagerAction;
-#[cfg(feature = "use-imgui")]
-use crate::features::imgui::ImGuiRenderFeature;
-use crate::{camera::RTSCamera, input::InputState, phases::UiRenderPhase, scenes::Scene};
+use crate::{
+    camera::RTSCamera, features::egui::EguiRenderFeature, input::InputState, phases::UiRenderPhase,
+    scenes::Scene,
+};
 use legion::{Resources, World};
 use rafx::{
     rafx_visibility::{DepthRange, OrthographicParameters, Projection},
@@ -28,12 +29,9 @@ impl MenuScene {
             .add_render_phase::<UiRenderPhase>()
             .build();
 
-        #[cfg(feature = "use-imgui")]
         let render_feature_mask = RenderFeatureMaskBuilder::default()
-            .add_render_feature::<ImGuiRenderFeature>()
+            .add_render_feature::<EguiRenderFeature>()
             .build();
-        #[cfg(not(feature = "use-imgui"))]
-        let render_feature_mask = RenderFeatureMaskBuilder::default().build();
 
         let render_feature_flag_mask = RenderFeatureFlagMaskBuilder::default().build();
 

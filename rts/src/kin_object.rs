@@ -5,7 +5,6 @@ use crate::{
     input::InputState,
 };
 use glam::{Quat, Vec3};
-use imgui::im_str;
 use legion::{Resources, World};
 use rafx::{
     render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},

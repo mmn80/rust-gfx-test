@@ -25,7 +25,6 @@ pub struct EguiManager {
 
 // Wraps egui (and winit integration logic)
 impl EguiManager {
-    // egui and winit platform are expected to be pre-configured
     pub fn new(window: &winit::window::Window) -> Self {
         let ctx = CtxRef::default();
         let mut font_definitions = FontDefinitions::default();
@@ -136,6 +135,10 @@ impl EguiManager {
     pub fn begin_frame(&self) {
         let mut inner_mutex_guard = self.inner.lock().unwrap();
         let inner = &mut *inner_mutex_guard;
+
+        inner
+            .platform
+            .update_time(inner.start_time.elapsed().as_secs_f64());
 
         inner.platform.begin_frame();
     }

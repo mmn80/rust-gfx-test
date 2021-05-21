@@ -1,26 +1,28 @@
 // There's a decent amount of code that's just for example and isn't called
 #![allow(dead_code)]
 
+use crate::{
+    camera::RTSCamera,
+    daemon_args::AssetDaemonArgs,
+    features::egui::{EguiContextResource, EguiManager},
+    scenes::SceneManager,
+    time::TimeState,
+};
 use input::InputState;
 use legion::*;
+use rafx::{
+    api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},
+    assets::{distill_impl::AssetResource, AssetManager},
+    render_features::ExtractResources,
+    renderer::{AssetSource, Renderer, RendererConfigResource, ViewportsResource},
+    visibility::VisibilityRegion,
+};
 use scenes::SceneManagerAction;
 use structopt::StructOpt;
-
-use rafx::api::{RafxExtents2D, RafxResult, RafxSwapchainHelper};
-use rafx::assets::AssetManager;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::ControlFlow,
 };
-
-use crate::scenes::SceneManager;
-use crate::time::TimeState;
-use crate::{camera::RTSCamera, daemon_args::AssetDaemonArgs};
-use rafx::assets::distill_impl::AssetResource;
-use rafx::render_features::ExtractResources;
-use rafx::renderer::{AssetSource, Renderer};
-use rafx::renderer::{RendererConfigResource, ViewportsResource};
-use rafx::visibility::VisibilityRegion;
 
 pub mod assets;
 pub mod daemon_args;
@@ -96,7 +98,7 @@ impl Drop for StatsAllocMemoryRegion<'_> {
 }
 
 // Should be kept in sync with the constants in tonemapper.glsl
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum TonemapperType {
     None,
@@ -110,6 +112,7 @@ pub enum TonemapperType {
     VisualizeLuma,
     Max,
 }
+
 impl TonemapperType {
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -126,6 +129,7 @@ impl TonemapperType {
         }
     }
 }
+
 impl From<i32> for TonemapperType {
     fn from(v: i32) -> Self {
         assert!(v <= Self::Max as i32);
@@ -138,6 +142,7 @@ impl std::fmt::Display for TonemapperType {
         write!(f, "{}", self.display_name())
     }
 }
+
 #[derive(Clone)]
 pub struct RenderOptions {
     pub enable_msaa: bool,
@@ -197,89 +202,65 @@ impl RenderOptions {
 }
 
 impl RenderOptions {
-    #[cfg(feature = "use-imgui")]
-    pub fn window(&mut self, ui: &imgui::Ui<'_>) {
-        //TODO: tweak this and use imgui-inspect
-        imgui::Window::new(imgui::im_str!("Render Options"))
-            //.position([10.0, 25.0], imgui::Condition::FirstUseEver)
-            //.size([600.0, 250.0], imgui::Condition::FirstUseEver)
-            .build(ui, || self.ui(ui));
-    }
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(&mut self.enable_msaa, "enable_msaa");
+        ui.checkbox(&mut self.enable_hdr, "enable_hdr");
 
-    #[cfg(feature = "use-imgui")]
-    pub fn ui(&mut self, ui: &imgui::Ui<'_>) {
-        ui.checkbox(imgui::im_str!("enable_msaa"), &mut self.enable_msaa);
-
-        ui.new_line();
-        ui.checkbox(imgui::im_str!("enable_hdr"), &mut self.enable_hdr);
         if self.enable_hdr {
-            ui.indent();
+            ui.indent("HDR options", |ui| {
+                let tonemapper_names: Vec<_> = (0..(TonemapperType::Max as i32))
+                    .map(|t| TonemapperType::from(t).display_name())
+                    .collect();
 
-            // iterate over the valid tonemapper values and convert them into their names
-            let tonemapper_names: Vec<imgui::ImString> = (0..(TonemapperType::Max as i32))
-                .map(|t| imgui::ImString::new(TonemapperType::from(t).display_name()))
-                .collect();
+                egui::ComboBox::from_label("tonemapper_type")
+                    .selected_text(tonemapper_names[self.tonemapper_type as usize])
+                    .show_ui(ui, |ui| {
+                        for (i, name) in tonemapper_names.iter().enumerate() {
+                            ui.selectable_value(
+                                &mut self.tonemapper_type,
+                                TonemapperType::from(i as i32),
+                                name,
+                            );
+                        }
+                    });
 
-            let mut current_tonemapper_type = self.tonemapper_type as i32;
-
-            if let Some(combo) = imgui::ComboBox::new(imgui::im_str!("tonemapper_type"))
-                .preview_value(&tonemapper_names[current_tonemapper_type as usize])
-                .begin(ui)
-            {
-                ui.list_box(
-                    imgui::im_str!(""),
-                    &mut current_tonemapper_type,
-                    &tonemapper_names.iter().collect::<Vec<_>>(),
-                    tonemapper_names.len() as i32,
-                );
-                combo.end(ui);
-                self.tonemapper_type = current_tonemapper_type.into();
-            }
-
-            ui.checkbox(imgui::im_str!("enable_bloom"), &mut self.enable_bloom);
-            if self.enable_bloom {
-                ui.indent();
-                let mut blur_pass_count = self.blur_pass_count as i32;
-
-                imgui::Drag::new(imgui::im_str!("blur_pass_count"))
-                    .range(0..=10)
-                    .build(ui, &mut blur_pass_count);
-
-                self.blur_pass_count = blur_pass_count as usize;
-                ui.unindent();
-            }
-            ui.unindent();
+                ui.checkbox(&mut self.enable_bloom, "enable_bloom");
+                if self.enable_bloom {
+                    ui.indent("", |ui| {
+                        ui.add(
+                            egui::Slider::new(&mut self.blur_pass_count, 0..=10)
+                                .clamp_to_range(true)
+                                .text("blur_pass_count"),
+                        );
+                    });
+                }
+            });
         }
-
-        ui.new_line();
-        ui.checkbox(imgui::im_str!("show_wireframes"), &mut self.show_wireframes);
-        ui.checkbox(imgui::im_str!("show_surfaces"), &mut self.show_surfaces);
 
         if self.show_feature_toggles {
-            if self.show_surfaces {
-                ui.indent();
-                ui.checkbox(imgui::im_str!("enable_textures"), &mut self.enable_textures);
-                ui.checkbox(imgui::im_str!("enable_lighting"), &mut self.enable_lighting);
+            ui.checkbox(&mut self.show_wireframes, "show_wireframes");
+            ui.checkbox(&mut self.show_surfaces, "show_surfaces");
 
-                if self.enable_lighting {
-                    ui.indent();
-                    ui.checkbox(imgui::im_str!("show_shadows"), &mut self.show_shadows);
-                    ui.unindent();
-                }
-                ui.unindent();
+            if self.show_surfaces {
+                ui.indent("", |ui| {
+                    ui.checkbox(&mut self.enable_textures, "enable_textures");
+                    ui.checkbox(&mut self.enable_lighting, "enable_lighting");
+
+                    if self.enable_lighting {
+                        ui.indent("", |ui| {
+                            ui.checkbox(&mut self.show_shadows, "show_shadows");
+                        });
+                    }
+                });
             }
 
-            ui.checkbox(
-                imgui::im_str!("show_debug3d_feature"),
-                &mut self.show_debug3d,
-            );
-            ui.checkbox(imgui::im_str!("show_text_feature"), &mut self.show_text);
+            ui.checkbox(&mut self.show_debug3d, "show_debug3d_feature");
+            ui.checkbox(&mut self.show_text, "show_text_feature");
         }
 
-        ui.new_line();
         ui.checkbox(
-            imgui::im_str!("enable_visibility_update"),
             &mut self.enable_visibility_update,
+            "enable_visibility_update",
         );
     }
 }
@@ -337,20 +318,14 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
     let mut world = World::default();
     let mut print_time_event = crate::time::PeriodicEvent::default();
 
-    #[cfg(feature = "profile-with-puffin")]
-    let mut profiler_ui = puffin_imgui::ProfilerUi::default();
-
     let mut scene_action = SceneManagerAction::Scene(scenes::Scene::Menu);
 
     event_loop.run(move |event, _window_target, control_flow| {
-        {
-            #[cfg(feature = "use-imgui")]
-            let imgui_manager = resources
-                .get::<crate::features::imgui::ImguiManager>()
-                .unwrap();
-            #[cfg(feature = "use-imgui")]
-            imgui_manager.handle_event(&window, &event);
-        }
+        let ignore_event = {
+            let egui_manager = resources.get::<EguiManager>().unwrap();
+            egui_manager.handle_event(&event);
+            egui_manager.ignore_event(&event)
+        };
 
         {
             let mut input = resources.get_mut::<InputState>().unwrap();
@@ -364,10 +339,12 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 input
                     .key_trigger
                     .remove(&winit::event::VirtualKeyCode::Return);
-                if window.fullscreen().is_none() {
-                    window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
-                } else {
-                    window.set_fullscreen(None);
+                if !ignore_event {
+                    if window.fullscreen().is_none() {
+                        window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                    } else {
+                        window.set_fullscreen(None);
+                    }
                 }
             }
         }
@@ -386,10 +363,12 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 event: window_event,
                 ..
             } => {
-                resources
-                    .get_mut::<InputState>()
-                    .unwrap()
-                    .update(&window_event);
+                if !ignore_event {
+                    resources
+                        .get_mut::<InputState>()
+                        .unwrap()
+                        .update(&window_event);
+                }
             }
 
             Event::MainEventsCleared => {
@@ -459,11 +438,9 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                     asset_manager.update_asset_loaders().unwrap();
                 }
 
-                #[cfg(feature = "use-imgui")]
                 {
-                    use crate::features::imgui::ImguiManager;
-                    let imgui_manager = resources.get::<ImguiManager>().unwrap();
-                    imgui_manager.begin_frame(&window);
+                    let egui_manager = resources.get::<EguiManager>().unwrap();
+                    egui_manager.begin_frame();
                 }
 
                 {
@@ -474,19 +451,16 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                 }
 
                 //
-                // imgui debug draw,
+                // egui debug draw,
                 //
-                #[cfg(feature = "use-imgui")]
-                imgui_debug_draw(&resources, &mut profiler_ui);
+                egui_debug_draw(&resources);
 
                 //
-                // Close imgui input for this frame and render the results to memory
+                // Close egui input for this frame
                 //
-                #[cfg(feature = "use-imgui")]
                 {
-                    use crate::features::imgui::ImguiManager;
-                    let imgui_manager = resources.get::<ImguiManager>().unwrap();
-                    imgui_manager.render(&window);
+                    let egui_manager = resources.get::<EguiManager>().unwrap();
+                    egui_manager.end_frame();
                 }
 
                 let t1 = std::time::Instant::now();
@@ -532,8 +506,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                         debug_draw_3d_resource
                     );
                     add_to_extract_resources!(crate::features::text::TextResource, text_resource);
-                    #[cfg(feature = "use-imgui")]
-                    add_to_extract_resources!(crate::features::imgui::ImguiManager, imgui_manager);
+                    add_to_extract_resources!(EguiManager, egui_manager);
 
                     let mut camera = resources.get_mut::<camera::RTSCamera>().unwrap();
                     extract_resources.insert(&mut *camera);
@@ -563,33 +536,25 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
     });
 }
 
-fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::ProfilerUi) {
-    use crate::features::imgui::ImguiManager;
-    profiling::scope!("imgui");
-    let imgui_manager = resources.get::<ImguiManager>().unwrap();
+fn egui_debug_draw(resources: &Resources) {
+    let ctx = resources.get::<EguiContextResource>().unwrap().context();
     let time_state = resources.get::<TimeState>().unwrap();
     let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
     let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
     let asset_manager = resources.get::<AssetResource>().unwrap();
-    imgui_manager.with_ui(|ui| {
-        profiling::scope!("main menu bar");
-        ui.main_menu_bar(|| {
-            ui.menu(imgui::im_str!("Windows"), true, || {
-                ui.checkbox(
-                    imgui::im_str!("Render Options"),
-                    &mut debug_ui_state.show_render_options,
-                );
 
-                ui.checkbox(
-                    imgui::im_str!("Asset List"),
-                    &mut debug_ui_state.show_asset_list,
-                );
+    egui::TopPanel::top("top_panel").show(&ctx, |ui| {
+        egui::menu::bar(ui, |ui| {
+            egui::menu::menu(ui, "Windows", |ui| {
+                ui.checkbox(&mut debug_ui_state.show_render_options, "Render Options");
+
+                ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset List");
 
                 #[cfg(feature = "profile-with-puffin")]
-                if ui.checkbox(
-                    imgui::im_str!("Profiler"),
-                    &mut debug_ui_state.show_profiler,
-                ) {
+                if ui
+                    .checkbox(&mut debug_ui_state.show_profiler, "Profiler")
+                    .changed()
+                {
                     log::info!(
                         "Setting puffin profiler enabled: {:?}",
                         debug_ui_state.show_profiler
@@ -597,26 +562,31 @@ fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::Profi
                     profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
                 }
             });
-            ui.text(imgui::im_str!(
-                "FPS: {:.1}",
-                time_state.updates_per_second_smoothed()
-            ));
-            ui.separator();
-            ui.text(imgui::im_str!("Frame: {}", time_state.update_count()));
-        });
 
-        if debug_ui_state.show_render_options {
-            imgui::Window::new(imgui::im_str!("Render Options"))
-                .opened(&mut debug_ui_state.show_render_options)
-                .build(ui, || {
-                    render_options.window(ui);
-                });
-        }
+            ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                ui.label(format!("Frame: {}", time_state.update_count()));
+                ui.separator();
+                ui.label(format!(
+                    "FPS: {:.1}",
+                    time_state.updates_per_second_smoothed()
+                ));
+            });
+        })
+    });
 
-        if debug_ui_state.show_asset_list {
-            imgui::Window::new(imgui::im_str!("Asset List"))
-                .opened(&mut debug_ui_state.show_asset_list)
-                .build(ui, || {
+    if debug_ui_state.show_render_options {
+        egui::Window::new("Render Options")
+            .open(&mut debug_ui_state.show_render_options)
+            .show(&ctx, |ui| {
+                render_options.ui(ui);
+            });
+    }
+
+    if debug_ui_state.show_asset_list {
+        egui::Window::new("Asset List")
+            .open(&mut debug_ui_state.show_asset_list)
+            .show(&ctx, |ui| {
+                egui::ScrollArea::auto_sized().show(ui, |ui| {
                     let loader = asset_manager.loader();
                     let mut asset_info = loader
                         .get_active_loads()
@@ -631,28 +601,23 @@ fn imgui_debug_draw(resources: &Resources, profiler_ui: &mut puffin_imgui::Profi
                     for info in asset_info {
                         if let Some(info) = info {
                             let id = info.asset_id;
-                            ui.text(format!(
+                            ui.label(format!(
                                 "{}:{} .. {}",
                                 info.file_name.unwrap_or_else(|| "???".to_string()),
                                 info.asset_name.unwrap_or_else(|| format!("{}", id)),
                                 info.refs
                             ));
                         } else {
-                            ui.text("NO INFO");
+                            ui.label("NO INFO");
                         }
                     }
                 });
-        }
+            });
+    }
 
-        #[cfg(feature = "profile-with-puffin")]
-        if debug_ui_state.show_profiler {
-            profiling::scope!("puffin profiler");
-            debug_ui_state.show_profiler = profiler_ui.window(ui);
-        }
-    });
-
-    let mut render_config_resource = resources.get_mut::<RendererConfigResource>().unwrap();
-    render_config_resource
-        .visibility_config
-        .enable_visibility_update = render_options.enable_visibility_update;
+    #[cfg(feature = "profile-with-puffin")]
+    if debug_ui_state.show_profiler {
+        profiling::scope!("puffin profiler");
+        puffin_egui::profiler_window(&ctx);
+    }
 }

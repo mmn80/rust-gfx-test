@@ -10,7 +10,6 @@ use crate::{
     time::TimeState,
 };
 use glam::{Quat, Vec2, Vec3, Vec4};
-use imgui::im_str;
 use itertools::Itertools;
 use legion::{IntoQuery, Read, Resources, World, Write};
 use rafx::{
