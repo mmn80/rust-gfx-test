@@ -1,9 +1,10 @@
 use crate::{
     camera::RTSCamera,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::mesh::MeshRenderObjectSet,
+    features::{egui::EguiManager, mesh::MeshRenderObjectSet},
     input::InputState,
 };
+use egui::Button;
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
 use rafx::{
@@ -48,45 +49,30 @@ impl KinObjectsState {
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
         let input = resources.get::<InputState>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
+        let context = resources.get::<EguiManager>().unwrap().context();
 
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::ImguiManager;
-            profiling::scope!("imgui");
-            let imgui_manager = resources.get::<ImguiManager>().unwrap();
-            imgui_manager.with_ui(|ui| {
-                profiling::scope!("main game menu");
-
-                let game_window = imgui::Window::new(im_str!("Kinematics"));
-                game_window
-                    .position([150., 30.], imgui::Condition::FirstUseEver)
-                    .always_auto_resize(true)
-                    .resizable(false)
-                    .build(&ui, || {
-                        let group = ui.begin_group();
-                        if self.ui_spawning {
-                            ui.text_wrapped(im_str!(
-                                "Click a location on the map to spawn kinematic object"
-                            ))
-                        } else {
-                            ui.radio_button(
-                                im_str!("Building"),
-                                &mut self.ui_object_type,
-                                KinObjectType::Building,
-                            );
-                            ui.radio_button(
-                                im_str!("Tree"),
-                                &mut self.ui_object_type,
-                                KinObjectType::Tree,
-                            );
-                            if ui.button(im_str!("Spawn"), [100., 30.]) {
-                                self.ui_spawning = true;
-                            }
-                        }
-                        group.end(ui);
-                    });
+        profiling::scope!("egui");
+        egui::Window::new("Kinematics")
+            .default_pos([200., 40.])
+            .default_width(100.)
+            .resizable(false)
+            .show(&context, |ui| {
+                if self.ui_spawning {
+                    ui.label("Click a location on the map to spawn kinematic object");
+                } else {
+                    ui.radio_value(
+                        &mut self.ui_object_type,
+                        KinObjectType::Building,
+                        "Building",
+                    );
+                    ui.radio_value(&mut self.ui_object_type, KinObjectType::Tree, "Tree");
+                    ui.add_space(10.);
+                    if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
+                        self.ui_spawning = true;
+                    }
+                }
             });
-        }
+
         if self.ui_spawning {
             if input.mouse_trigger.contains(&MouseButton::Left) {
                 let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);

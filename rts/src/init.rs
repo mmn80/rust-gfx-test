@@ -125,12 +125,6 @@ pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
 
         resources.remove::<Renderer>();
 
-        #[cfg(feature = "use-imgui")]
-        {
-            use crate::features::imgui::ImGuiRendererPlugin;
-            ImGuiRendererPlugin::legion_destroy(resources);
-        }
-
         MeshRendererPlugin::legion_destroy(resources);
         Debug3DRendererPlugin::legion_destroy(resources);
         TextRendererPlugin::legion_destroy(resources);

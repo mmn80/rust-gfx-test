@@ -4,11 +4,13 @@ use crate::{
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::{
         debug3d::Debug3DResource,
+        egui::EguiManager,
         mesh::{MeshRenderObject, MeshRenderObjectSet},
     },
     input::{Drag, InputState},
     time::TimeState,
 };
+use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
 use glam::{Quat, Vec2, Vec3, Vec4};
 use itertools::Itertools;
 use legion::{IntoQuery, Read, Resources, World, Write};
@@ -190,69 +192,75 @@ impl DynObjectsState {
             );
         }
 
-        #[cfg(feature = "use-imgui")]
         {
-            use crate::features::imgui::ImguiManager;
-            profiling::scope!("imgui");
-            let imgui_manager = resources.get::<ImguiManager>().unwrap();
-            imgui_manager.with_ui(|ui| {
-                profiling::scope!("main game menu");
+            let context = resources.get::<EguiManager>().unwrap().context();
 
-                let game_window = imgui::Window::new(im_str!("Dynamics"));
-                game_window
-                    .position([10., 30.], imgui::Condition::FirstUseEver)
-                    .always_auto_resize(true)
-                    .resizable(false)
-                    .build(&ui, || {
-                        let group = ui.begin_group();
-                        if self.ui_spawning {
-                            ui.text_wrapped(im_str!(
-                                "Click a location on the map to spawn dynamic object"
-                            ))
-                        } else {
-                            ui.radio_button(
-                                im_str!("Container1"),
-                                &mut self.ui_object_type,
-                                DynObjectType::Container1,
-                            );
-                            ui.radio_button(
-                                im_str!("Container2"),
-                                &mut self.ui_object_type,
-                                DynObjectType::Container2,
-                            );
-                            ui.radio_button(
-                                im_str!("BlueIcosphere"),
-                                &mut self.ui_object_type,
-                                DynObjectType::BlueIcosphere,
-                            );
-                            if ui.button(im_str!("Spawn"), [100., 30.]) {
-                                self.ui_spawning = true;
-                            }
-                        }
-                        group.end(ui);
-                    });
-
-                if !self.ui_spawning {
-                    if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                        let s = camera.win_scale_factor;
-                        let w = (x1 as f32 - x0 as f32).abs() / s;
-                        let h = (y1 as f32 - y0 as f32).abs() / s;
-                        let x = x0.min(x1) as f32 / s;
-                        let y = y0.min(y1) as f32 / s;
-                        if w > 30. && h > 30. {
-                            let selection_window = imgui::Window::new(im_str!("Selection"));
-                            selection_window
-                                .no_inputs()
-                                .no_decoration()
-                                .movable(false)
-                                .position([x, y], imgui::Condition::Always)
-                                .size([w, h], imgui::Condition::Always)
-                                .bg_alpha(0.2)
-                                .build(&ui, || {});
+            profiling::scope!("egui");
+            egui::Window::new("Dynamics")
+                .default_pos([10., 40.])
+                .default_width(100.)
+                .resizable(false)
+                .show(&context, |ui| {
+                    if self.ui_spawning {
+                        ui.label("Click a location on the map to spawn dynamic object");
+                    } else {
+                        ui.radio_value(
+                            &mut self.ui_object_type,
+                            DynObjectType::Container1,
+                            "Container1",
+                        );
+                        ui.radio_value(
+                            &mut self.ui_object_type,
+                            DynObjectType::Container2,
+                            "Container2",
+                        );
+                        ui.radio_value(
+                            &mut self.ui_object_type,
+                            DynObjectType::BlueIcosphere,
+                            "BlueIcosphere",
+                        );
+                        ui.add_space(10.);
+                        if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
+                            self.ui_spawning = true;
                         }
                     }
+                });
+
+            if !self.ui_spawning {
+                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
+                    let s = 1.; //camera.win_scale_factor;
+                    let w = (x1 as f32 - x0 as f32).abs() / s;
+                    let h = (y1 as f32 - y0 as f32).abs() / s;
+                    let x = x0.min(x1) as f32 / s;
+                    let y = y0.min(y1) as f32 / s;
+                    //if w > 30. && h > 30. {
+                    profiling::scope!("egui");
+                    egui::Window::new("Selection")
+                        .title_bar(false)
+                        .frame(Frame {
+                            margin: egui::Vec2::ZERO,
+                            corner_radius: 4.,
+                            shadow: Shadow::default(),
+                            fill: Color32::TRANSPARENT,
+                            stroke: Stroke {
+                                width: 1.,
+                                color: Color32::GREEN,
+                            },
+                        })
+                        .fixed_pos([x, y])
+                        .fixed_size([w, h])
+                        .show(&context, |ui| {
+                            ui.add_sized(
+                                ui.available_size(),
+                                egui::Label::new("")
+                                    .small()
+                                    .background_color(Color32::TRANSPARENT)
+                                    .text_color(Color32::TRANSPARENT),
+                            );
+                        });
+                    //}
                 }
-            });
+            }
         }
 
         if self.ui_spawning {

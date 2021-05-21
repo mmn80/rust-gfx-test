@@ -87,10 +87,9 @@ impl super::GameScene for MenuScene {
     fn update(&mut self, _world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         let mut action = SceneManagerAction::None;
 
-        profiling::scope!("imgui");
         let context = resources.get::<EguiManager>().unwrap().context();
 
-        profiling::scope!("main game menu");
+        profiling::scope!("egui");
         egui::Window::new("Home")
             .title_bar(false)
             .collapsible(false)
