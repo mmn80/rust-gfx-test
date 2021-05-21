@@ -65,32 +65,34 @@ impl EguiManager {
             ],
         );
 
+        let size = window.inner_size();
+        let scale = window.scale_factor() as f32;
+
         font_definitions.family_and_size.insert(
             egui::TextStyle::Small,
-            (egui::FontFamily::Proportional, 12.0),
+            (egui::FontFamily::Proportional, 12.0 * scale),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Body,
-            (egui::FontFamily::Proportional, 14.0),
+            (egui::FontFamily::Proportional, 14.0 * scale),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Button,
-            (egui::FontFamily::Proportional, 16.0),
+            (egui::FontFamily::Proportional, 16.0 * scale),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Heading,
-            (egui::FontFamily::Proportional, 20.0),
+            (egui::FontFamily::Proportional, 20.0 * scale),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Monospace,
-            (egui::FontFamily::Monospace, 12.0),
+            (egui::FontFamily::Monospace, 12.0 * scale),
         );
 
-        let size = window.inner_size();
         let platform = Platform::new(PlatformDescriptor {
-            physical_width: (size.width as f64 * window.scale_factor()) as u32,
-            physical_height: (size.height as f64 * window.scale_factor()) as u32,
-            scale_factor: window.scale_factor(),
+            physical_width: size.width,
+            physical_height: size.height,
+            scale_factor: 1.0, //scale, // when egui fixes non integer dpi bug, remove scale from fonts above
             font_definitions,
             style: egui::Style::default(),
         });
