@@ -6,3 +6,4 @@ config.toml
 .assets_db
 rts/assets/blender
 rts/assets/fonts
+assets.pack
