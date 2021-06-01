@@ -228,7 +228,7 @@ impl DynObjectsState {
 
             if !self.ui_spawning {
                 if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
-                    let s = 1.; //camera.win_scale_factor;
+                    let s = camera.win_scale_factor;
                     let w = (x1 as f32 - x0 as f32).abs() / s;
                     let h = (y1 as f32 - y0 as f32).abs() / s;
                     let x = x0.min(x1) as f32 / s;

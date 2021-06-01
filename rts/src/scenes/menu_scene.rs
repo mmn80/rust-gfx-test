@@ -88,6 +88,7 @@ impl super::GameScene for MenuScene {
         let mut action = SceneManagerAction::None;
 
         let context = resources.get::<EguiManager>().unwrap().context();
+        let scale_factor = context.pixels_per_point();
 
         profiling::scope!("egui");
         egui::Window::new("Home")
@@ -97,7 +98,7 @@ impl super::GameScene for MenuScene {
             .anchor(Align2::CENTER_CENTER, [0., 0.])
             .auto_sized()
             .show(&context, |ui| {
-                let btn_size = [200.0, 100.0];
+                let btn_size = [200.0 / scale_factor, 100.0 / scale_factor];
                 if ui.add_sized(btn_size, Button::new("Play")).clicked() {
                     action = SceneManagerAction::Scene(Scene::Main);
                 }
