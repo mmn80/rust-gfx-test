@@ -17,9 +17,9 @@ use crate::{
     RenderOptions,
 };
 use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
+use nalgebra::{point, vector};
 use parry3d::{
     bounding_volume::AABB,
-    math::{Point, Vector},
     query::{Ray, RayCast},
 };
 use rafx::{
@@ -122,14 +122,11 @@ impl RTSCamera {
 
     pub fn ray_cast_terrain(&self, screen_x: u32, screen_y: u32) -> Vec3 {
         let ray_vec = self.make_ray(screen_x, screen_y);
-        let floor = AABB::new(
-            Point::new(-1000., -1000., -2.),
-            Point::new(1000., 1000., -1.),
-        );
+        let floor = AABB::new(point![-1000., -1000., -2.], point![1000., 1000., -1.]);
         let eye = self.eye();
         let ray = Ray::new(
-            Point::new(eye.x, eye.y, eye.z),
-            Vector::new(ray_vec.x, ray_vec.y, ray_vec.z),
+            point![eye.x, eye.y, eye.z],
+            vector![ray_vec.x, ray_vec.y, ray_vec.z],
         );
         if let Some(toi) = floor.cast_local_ray(&ray, 10000., true) {
             eye + ray_vec * toi
