@@ -45,28 +45,19 @@ mod demo_renderer_thread_pool;
 
 pub use demo_plugin::DemoRendererPlugin;
 
-#[cfg(all(
-    feature = "profile-with-tracy-memory",
-    not(feature = "profile-with-stats-alloc")
-))]
+#[cfg(all(feature = "profile-with-tracy-memory", not(feature = "stats_alloc")))]
 #[global_allocator]
 static GLOBAL: profiling::tracy_client::ProfiledAllocator<std::alloc::System> =
     profiling::tracy_client::ProfiledAllocator::new(std::alloc::System, 100);
 
-#[cfg(all(
-    feature = "profile-with-stats-alloc",
-    not(feature = "profile-with-tracy-memory")
-))]
+#[cfg(all(feature = "stats_alloc", not(feature = "profile-with-tracy-memory")))]
 #[global_allocator]
 pub static STATS_ALLOC: &stats_alloc::StatsAlloc<std::alloc::System> =
     &stats_alloc::INSTRUMENTED_SYSTEM;
 
 struct StatsAllocMemoryRegion<'a> {
     region_name: &'a str,
-    #[cfg(all(
-        feature = "profile-with-stats-alloc",
-        not(feature = "profile-with-tracy-memory")
-    ))]
+    #[cfg(all(feature = "stats_alloc", not(feature = "profile-with-tracy-memory")))]
     region: stats_alloc::Region<'a, std::alloc::System>,
 }
 
@@ -74,19 +65,13 @@ impl<'a> StatsAllocMemoryRegion<'a> {
     pub fn new(region_name: &'a str) -> Self {
         StatsAllocMemoryRegion {
             region_name,
-            #[cfg(all(
-                feature = "profile-with-stats-alloc",
-                not(feature = "profile-with-tracy-memory")
-            ))]
+            #[cfg(all(feature = "stats_alloc", not(feature = "profile-with-tracy-memory")))]
             region: stats_alloc::Region::new(STATS_ALLOC),
         }
     }
 }
 
-#[cfg(all(
-    feature = "profile-with-stats-alloc",
-    not(feature = "profile-with-tracy-memory")
-))]
+#[cfg(all(feature = "stats_alloc", not(feature = "profile-with-tracy-memory")))]
 impl Drop for StatsAllocMemoryRegion<'_> {
     fn drop(&mut self) {
         log::info!(
@@ -378,7 +363,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
             Event::RedrawRequested(_window_id) => {
                 profiling::scope!("Main Loop");
 
-                let t0 = std::time::Instant::now();
+                let t0 = rafx::base::Instant::now();
 
                 {
                     resources.get_mut::<TimeState>().unwrap().update();
@@ -463,7 +448,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                     egui_manager.end_frame();
                 }
 
-                let t1 = std::time::Instant::now();
+                let t1 = rafx::base::Instant::now();
                 log::trace!(
                     "[main] Simulation took {} ms",
                     (t1 - t0).as_secs_f32() * 1000.0
@@ -518,7 +503,7 @@ pub fn run(args: &DemoArgs) -> RafxResult<()> {
                         .unwrap();
                 }
 
-                let t2 = std::time::Instant::now();
+                let t2 = rafx::base::Instant::now();
                 log::trace!(
                     "[main] start rendering took {} ms",
                     (t2 - t1).as_secs_f32() * 1000.0

@@ -5,14 +5,13 @@ use crate::components::{
     DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
 };
 use legion::{Entity, EntityStore, IntoQuery, Read, World};
-use rafx::assets::{AssetManagerRenderResource, MaterialAsset};
-use rafx::base::resource_map::ReadBorrow;
+use rafx::assets::{AssetManagerExtractRef, AssetManagerRenderResource, MaterialAsset};
 use rafx::base::resource_ref_map::ResourceRefBorrow;
 use rafx::distill::loader::handle::Handle;
 
 pub struct MeshExtractJob<'extract> {
     world: ResourceRefBorrow<'extract, World>,
-    asset_manager: ReadBorrow<'extract, AssetManagerRenderResource>,
+    asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: MeshRenderObjectSet,
 }
@@ -29,7 +28,8 @@ impl<'extract> MeshExtractJob<'extract> {
                 world: extract_context.extract_resources.fetch::<World>(),
                 asset_manager: extract_context
                     .render_resources
-                    .fetch::<AssetManagerRenderResource>(),
+                    .fetch::<AssetManagerRenderResource>()
+                    .extract_ref(),
                 depth_material,
                 render_objects,
             },
@@ -39,10 +39,7 @@ impl<'extract> MeshExtractJob<'extract> {
 }
 
 impl<'extract> ExtractJobEntryPoints<'extract> for MeshExtractJob<'extract> {
-    fn begin_per_frame_extract(
-        &self,
-        context: &ExtractPerFrameContext<'extract, '_, Self>,
-    ) {
+    fn begin_per_frame_extract(&self, context: &ExtractPerFrameContext<'extract, '_, Self>) {
         context
             .frame_packet()
             .per_frame_data()
@@ -81,10 +78,7 @@ impl<'extract> ExtractJobEntryPoints<'extract> for MeshExtractJob<'extract> {
         }));
     }
 
-    fn end_per_view_extract(
-        &self,
-        context: &ExtractPerViewContext<'extract, '_, Self>,
-    ) {
+    fn end_per_view_extract(&self, context: &ExtractPerViewContext<'extract, '_, Self>) {
         let mut per_view = MeshPerViewData::default();
         let is_lit = !context
             .view()
@@ -141,7 +135,7 @@ impl<'extract> ExtractJobEntryPoints<'extract> for MeshExtractJob<'extract> {
     }
 
     fn new_render_object_instance_job_context(
-        &'extract self
+        &'extract self,
     ) -> Option<RenderObjectsJobContext<'extract, MeshRenderObject>> {
         Some(RenderObjectsJobContext::new(self.render_objects.read()))
     }

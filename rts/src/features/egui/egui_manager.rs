@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 // this object is Send but not Sync
 struct EguiManagerInner {
     platform: Platform,
-    start_time: std::time::Instant,
+    start_time: rafx::base::Instant,
 
     // This is produced when calling render()
     font_atlas: Option<Arc<egui::Texture>>,
@@ -97,7 +97,7 @@ impl EguiManager {
         EguiManager {
             inner: Arc::new(Mutex::new(EguiManagerInner {
                 platform,
-                start_time: std::time::Instant::now(),
+                start_time: rafx::base::Instant::now(),
                 font_atlas: None,
                 clipped_meshes: None,
             })),

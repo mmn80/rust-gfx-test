@@ -62,6 +62,12 @@ pub fn rendering_init(
     //
     let rafx_api = unsafe { rafx::api::RafxApi::new(window, &Default::default())? };
 
+    let allow_use_render_thread = if cfg!(feature = "stats_alloc") {
+        false
+    } else {
+        true
+    };
+
     let mut renderer_builder = RendererBuilder::default();
     renderer_builder = renderer_builder
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
@@ -70,7 +76,8 @@ pub fn rendering_init(
         .add_render_feature(mesh_renderer_plugin)
         .add_render_feature(debug3d_renderer_plugin)
         .add_render_feature(text_renderer_plugin)
-        .add_render_feature(egui_renderer_plugin);
+        .add_render_feature(egui_renderer_plugin)
+        .allow_use_render_thread(allow_use_render_thread);
 
     let mut renderer_builder_result = {
         let extract_resources = ExtractResources::default();

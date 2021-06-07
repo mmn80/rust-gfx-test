@@ -1,17 +1,18 @@
 use rafx::render_feature_extract_job_predule::*;
 
 use super::*;
-use rafx::assets::{AssetManagerRenderResource, MaterialAsset};
-use rafx::base::resource_map::ReadBorrow;
-use rafx::base::resource_ref_map::ResourceRefBorrowMut;
+use rafx::assets::{AssetManagerExtractRef, AssetManagerRenderResource, MaterialAsset};
 use rafx::distill::loader::handle::Handle;
 use rafx::graph::SwapchainSurfaceInfo;
+use rafx::renderer::SwapchainRenderResource;
+use std::marker::PhantomData;
 
 pub struct EguiExtractJob<'extract> {
-    egui_manager: TrustCell<ResourceRefBorrowMut<'extract, EguiManager>>,
-    swapchain_surface_info: ReadBorrow<'extract, SwapchainSurfaceInfo>,
-    asset_manager: ReadBorrow<'extract, AssetManagerRenderResource>,
+    egui_manager: EguiManager,
+    swapchain_surface_info: SwapchainSurfaceInfo,
+    asset_manager: AssetManagerExtractRef,
     egui_material: Handle<MaterialAsset>,
+    phantom_data: PhantomData<&'extract ()>,
 }
 
 impl<'extract> EguiExtractJob<'extract> {
@@ -22,16 +23,22 @@ impl<'extract> EguiExtractJob<'extract> {
     ) -> Arc<dyn RenderFeatureExtractJob<'extract> + 'extract> {
         Arc::new(ExtractJob::new(
             Self {
-                egui_manager: TrustCell::new(
-                    extract_context.extract_resources.fetch_mut::<EguiManager>(),
-                ),
+                egui_manager: extract_context
+                    .extract_resources
+                    .fetch::<EguiManager>()
+                    .clone(),
                 swapchain_surface_info: extract_context
                     .render_resources
-                    .fetch::<SwapchainSurfaceInfo>(),
+                    .fetch::<SwapchainRenderResource>()
+                    .get()
+                    .swapchain_surface_info
+                    .clone(),
                 asset_manager: extract_context
                     .render_resources
-                    .fetch::<AssetManagerRenderResource>(),
+                    .fetch::<AssetManagerRenderResource>()
+                    .extract_ref(),
                 egui_material,
+                phantom_data: PhantomData,
             },
             frame_packet,
         ))
@@ -40,8 +47,7 @@ impl<'extract> EguiExtractJob<'extract> {
 
 impl<'extract> ExtractJobEntryPoints<'extract> for EguiExtractJob<'extract> {
     fn begin_per_frame_extract(&self, context: &ExtractPerFrameContext<'extract, '_, Self>) {
-        let egui_manager = &mut self.egui_manager.borrow_mut();
-        let egui_draw_data = egui_manager.take_draw_data();
+        let egui_draw_data = self.egui_manager.take_draw_data();
         let view_ubo = {
             let pixels_per_point = match &egui_draw_data {
                 Some(data) => data.pixels_per_point,

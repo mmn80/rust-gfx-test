@@ -40,10 +40,7 @@ impl GltfImportError {
 impl std::error::Error for GltfImportError {}
 
 impl std::fmt::Display for GltfImportError {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.error_message)
     }
 }
@@ -176,7 +173,7 @@ impl Importer for GltfImporter {
     where
         Self: Sized,
     {
-        26
+        27
     }
 
     fn version(&self) -> u32 {
@@ -544,7 +541,7 @@ fn extract_images_to_import(
         let color_space = *image_color_space_assignments
             .get(&image.index())
             .unwrap_or(&ImageAssetColorSpace::Linear);
-        log::info!(
+        log::trace!(
             "Choosing color space {:?} for image index {}",
             color_space,
             image.index()
@@ -590,7 +587,7 @@ fn extract_images_to_import(
 }
 
 fn build_image_color_space_assignments_from_materials(
-    doc: &gltf::Document
+    doc: &gltf::Document,
 ) -> FnvHashMap<usize, ImageAssetColorSpace> {
     let mut image_color_space_assignments = FnvHashMap::default();
 
@@ -677,7 +674,8 @@ fn extract_materials_to_import(
             material.normal_texture().map_or(1.0, |x| x.scale());
         material_asset.material_data.occlusion_texture_strength =
             material.occlusion_texture().map_or(1.0, |x| x.strength());
-        material_asset.material_data.alpha_cutoff = material.alpha_cutoff();
+        // Default is 0.5 per GLTF specification
+        material_asset.material_data.alpha_cutoff = material.alpha_cutoff().unwrap_or(0.5);
 
         material_asset.base_color_texture = pbr_metallic_roughness
             .base_color_texture()
@@ -738,7 +736,7 @@ fn extract_materials_to_import(
 
 //TODO: This feels kind of dumb..
 fn convert_to_u16_indices(
-    read_indices: gltf::mesh::util::ReadIndices
+    read_indices: gltf::mesh::util::ReadIndices,
 ) -> Result<Vec<u16>, std::num::TryFromIntError> {
     let indices_u32: Vec<u32> = read_indices.into_u32().collect();
     let mut indices_u16: Vec<u16> = Vec::with_capacity(indices_u32.len());
@@ -870,6 +868,7 @@ fn extract_meshes_to_import(
         // Vertex Buffer
         //
         let vertex_buffer_asset = BufferAssetData {
+            resource_type: RafxResourceType::VERTEX_BUFFER,
             data: all_vertices.into_data(),
         };
 
@@ -892,6 +891,7 @@ fn extract_meshes_to_import(
         // Index Buffer
         //
         let index_buffer_asset = BufferAssetData {
+            resource_type: RafxResourceType::INDEX_BUFFER,
             data: all_indices.into_data(),
         };
 
