@@ -1,13 +1,13 @@
 use crate::{
-    assets::gltf::MeshAsset,
+    assets::mesh::MeshAsset,
     camera::RTSCamera,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::{
         debug3d::Debug3DResource,
-        egui::EguiManager,
+        egui::EguiContextResource,
         mesh::{MeshRenderObject, MeshRenderObjectSet},
     },
-    input::{Drag, InputState},
+    input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
     time::TimeState,
 };
 use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
@@ -22,7 +22,6 @@ use rafx::{
 };
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
-use winit::event::{MouseButton, VirtualKeyCode};
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum DynObjectType {
@@ -102,25 +101,31 @@ impl DynObjectsState {
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
         self.add_debug_draw(resources, world);
 
-        let input = resources.get::<InputState>().unwrap();
+        let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
         let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
 
         let mut selecting = false;
-        if input.key_pressed.contains(&VirtualKeyCode::N) {
+        if input.is_key_down(KeyboardKey::N) {
             self.ui_spawning = true;
         }
-        let (x0, y0, x1, y1) = if let Drag::End { x0, y0, x1, y1 } = input.drag {
+
+        let (x0, y0, x1, y1) = if let Some(MouseDragState {
+            begin_position: p0,
+            end_position: p1,
+            ..
+        }) = input.mouse_drag_just_finished(MouseButton::LEFT)
+        {
             selecting = !self.ui_spawning;
             let window_size = resources
                 .get::<ViewportsResource>()
                 .unwrap()
                 .main_window_size;
             (
-                (x0.min(x1) as f32 / window_size.width as f32) * 2. - 1.,
-                (y0.max(y1) as f32 / window_size.height as f32) * -2. + 1.,
-                (x0.max(x1) as f32 / window_size.width as f32) * 2. - 1.,
-                (y0.min(y1) as f32 / window_size.height as f32) * -2. + 1.,
+                (p0.x.min(p1.x) / window_size.width as f32) * 2. - 1.,
+                (p0.y.max(p1.y) / window_size.height as f32) * -2. + 1.,
+                (p0.x.max(p1.x) / window_size.width as f32) * 2. - 1.,
+                (p0.y.min(p1.y) / window_size.height as f32) * -2. + 1.,
             )
         } else {
             (0., 0., 0., 0.)
@@ -193,7 +198,7 @@ impl DynObjectsState {
         }
 
         {
-            let context = resources.get::<EguiManager>().unwrap().context();
+            let context = resources.get::<EguiContextResource>().unwrap().context();
 
             profiling::scope!("egui");
             egui::Window::new("Dynamics")
@@ -227,12 +232,17 @@ impl DynObjectsState {
                 });
 
             if !self.ui_spawning {
-                if let Drag::Dragging { x0, y0, x1, y1 } = input.drag {
+                if let Some(MouseDragState {
+                    begin_position: p0,
+                    end_position: p1,
+                    ..
+                }) = input.mouse_drag_in_progress(MouseButton::LEFT)
+                {
                     let s = camera.win_scale_factor;
-                    let w = (x1 as f32 - x0 as f32).abs() / s;
-                    let h = (y1 as f32 - y0 as f32).abs() / s;
-                    let x = x0.min(x1) as f32 / s;
-                    let y = y0.min(y1) as f32 / s;
+                    let w = (p1.x as f32 - p0.x as f32).abs() / s;
+                    let h = (p1.y as f32 - p0.y as f32).abs() / s;
+                    let x = p0.x.min(x1) as f32 / s;
+                    let y = p0.y.min(y1) as f32 / s;
                     //if w > 30. && h > 30. {
                     profiling::scope!("egui");
                     egui::Window::new("Selection")
@@ -264,14 +274,16 @@ impl DynObjectsState {
         }
 
         if self.ui_spawning {
-            if input.mouse_trigger.contains(&MouseButton::Left) {
-                let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
+                let cursor_pos = input.mouse_position();
+                let cursor = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
                 self.spawn(self.ui_object_type, cursor, resources, world);
                 self.ui_spawning = false;
             }
-        } else if input.mouse_trigger.contains(&MouseButton::Right) {
+        } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
             let mut first = true;
-            let mut target = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+            let cursor_pos = input.mouse_position();
+            let mut target = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
             let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
             for (transform, dyn_object) in query.iter_mut(world) {
                 if dyn_object.selected {

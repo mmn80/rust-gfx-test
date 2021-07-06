@@ -15,7 +15,6 @@ distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
 type-uuid = "0.1"
 egui = { version = "0.12", features = ["default_fonts"] }
-egui_winit_platform = "0.8"
 puffin_egui = { version = "0.3", optional = true }
 legion = "0.4.0"
 image = "0.23.12"
@@ -45,13 +44,14 @@ ron = "0.6"
 profiling = "1.0.1"
 stats_alloc = { version = "0.1.8", optional = true }
 bevy_tasks = "0.5.0"
+raw-window-handle = "0.3.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.6"
 
 nalgebra = "0.27"
 parry3d = "0.5"
-building-blocks = "0.6"
+building-blocks = "0.7"
 
 [features]
 default = [

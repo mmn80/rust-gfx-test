@@ -1,4 +1,4 @@
-use super::EguiManager;
+use crate::features::egui::internal::EguiManager;
 
 /// Lightweight access to just the egui context (used to add UI elements)
 pub struct EguiContextResource {

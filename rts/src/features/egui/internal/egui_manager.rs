@@ -1,12 +1,14 @@
-use super::{EguiContextResource, EguiDrawData};
-use egui::FontDefinitions;
-use egui_winit_platform::{Platform, PlatformDescriptor};
-use std::sync::{Arc, Mutex};
+use super::EguiContextResource;
+use super::EguiDrawData;
+use egui::{CtxRef, FontDefinitions};
+use std::sync::Arc;
+use std::sync::Mutex;
 
 // Inner state for EguiManager, which will be protected by a Mutex. Mutex protection required since
 // this object is Send but not Sync
 struct EguiManagerInner {
-    platform: Platform,
+    context: egui::CtxRef,
+    raw_input: egui::RawInput,
     start_time: rafx::base::Instant,
 
     // This is produced when calling render()
@@ -22,7 +24,9 @@ pub struct EguiManager {
 
 // Wraps egui (and winit integration logic)
 impl EguiManager {
-    pub fn new(window: &winit::window::Window) -> Self {
+    // egui and winit platform are expected to be pre-configured
+    pub fn new() -> Self {
+        let ctx = CtxRef::default();
         let mut font_definitions = FontDefinitions::default();
 
         // Can remove the default_fonts feature and use custom fonts instead
@@ -86,17 +90,15 @@ impl EguiManager {
             (egui::FontFamily::Monospace, 12.0),
         );
 
-        let platform = Platform::new(PlatformDescriptor {
-            physical_width: window.inner_size().width,
-            physical_height: window.inner_size().height,
-            scale_factor: window.scale_factor(),
-            font_definitions,
-            style: egui::Style::default(),
-        });
+        ctx.set_fonts(font_definitions);
+        ctx.set_style(egui::Style::default());
+
+        let raw_input = egui::RawInput::default();
 
         EguiManager {
             inner: Arc::new(Mutex::new(EguiManagerInner {
-                platform,
+                context: ctx,
+                raw_input,
                 start_time: rafx::base::Instant::now(),
                 font_atlas: None,
                 clipped_meshes: None,
@@ -110,65 +112,70 @@ impl EguiManager {
         }
     }
 
-    // Call when a window event is received
-    //TODO: Taking a lock per event sucks
-    #[profiling::function]
-    pub fn handle_event<T>(&self, event: &winit::event::Event<T>) {
-        let mut guard = self.inner.lock().unwrap();
-        let inner = &mut *guard;
-        inner.platform.handle_event(&event);
-    }
-
-    pub fn ignore_event<T>(&self, event: &winit::event::Event<T>) -> bool {
-        let mut guard = self.inner.lock().unwrap();
-        let inner = &mut *guard;
-        inner.platform.captures_event(&event)
-    }
-
     // Start a new frame
     #[profiling::function]
-    pub fn begin_frame(&self) {
+    pub fn begin_frame(&self, screen_width: u32, screen_height: u32, pixels_per_point: f32) {
         let mut inner_mutex_guard = self.inner.lock().unwrap();
         let inner = &mut *inner_mutex_guard;
 
-        inner
-            .platform
-            .update_time(inner.start_time.elapsed().as_secs_f64());
+        inner.raw_input.screen_rect = Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::Vec2::new(screen_width as f32, screen_height as f32),
+        ));
+        inner.raw_input.pixels_per_point = Some(pixels_per_point);
+        inner.raw_input.time = Some(inner.start_time.elapsed().as_secs_f64());
 
-        inner.platform.begin_frame();
+        inner.context.begin_frame(inner.raw_input.take());
     }
 
     #[profiling::function]
-    pub fn end_frame(&self) {
-        let mut inner_mutex_guard = self.inner.lock().unwrap();
-        let inner = &mut *inner_mutex_guard;
+    pub fn end_frame(&self) -> egui::Output {
+        let mut inner = self.inner.lock().unwrap();
+        let (output, clipped_shapes) = inner.context.end_frame();
 
-        let (_output, clipped_shapes) = inner.platform.end_frame();
-
-        let context = inner.platform.context();
-
-        let clipped_meshes = context.tessellate(clipped_shapes);
+        let clipped_meshes = inner.context.tessellate(clipped_shapes);
 
         //inner.output = Some(output);
         inner.clipped_meshes = Some(clipped_meshes);
 
         let mut new_texture = None;
         if let Some(texture) = &inner.font_atlas {
-            if texture.version != context.texture().version {
-                new_texture = Some(context.texture().clone());
+            if texture.version != inner.context.texture().version {
+                new_texture = Some(inner.context.texture().clone());
             }
         } else {
-            new_texture = Some(context.texture().clone());
+            new_texture = Some(inner.context.texture().clone());
         }
 
         if new_texture.is_some() {
             inner.font_atlas = new_texture.clone();
         }
+
+        output
+    }
+
+    // Allows access to the context without caller needing to be aware of locking
+    pub fn with_context<F>(&self, f: F)
+    where
+        F: FnOnce(&mut egui::CtxRef),
+    {
+        let mut guard = self.inner.lock().unwrap();
+        let inner = &mut *guard;
+        (f)(&mut inner.context);
     }
 
     pub fn context(&self) -> egui::CtxRef {
         let guard = self.inner.lock().unwrap();
-        guard.platform.context()
+        guard.context.clone()
+    }
+
+    pub fn with_context_and_input<F>(&self, f: F)
+    where
+        F: FnOnce(&mut egui::CtxRef, &mut egui::RawInput),
+    {
+        let mut guard = self.inner.lock().unwrap();
+        let inner = &mut *guard;
+        (f)(&mut inner.context, &mut inner.raw_input);
     }
 
     #[profiling::function]
@@ -180,7 +187,7 @@ impl EguiManager {
         EguiDrawData::try_create_new(
             clipped_meshes?,
             inner.font_atlas.as_ref()?.clone(),
-            inner.platform.context().pixels_per_point(),
+            inner.raw_input.pixels_per_point.unwrap_or(1.0),
         )
     }
 }

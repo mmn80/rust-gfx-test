@@ -1,8 +1,8 @@
 use super::SceneManagerAction;
 use crate::{
     camera::RTSCamera,
-    features::egui::{EguiManager, EguiRenderFeature},
-    input::InputState,
+    features::egui::{EguiContextResource, EguiRenderFeature},
+    input::{InputResource, KeyboardKey},
     phases::UiRenderPhase,
     scenes::Scene,
 };
@@ -17,7 +17,6 @@ use rafx::{
     renderer::{RenderViewMeta, ViewportsResource},
     visibility::{ViewFrustumArc, VisibilityRegion},
 };
-use winit::event::VirtualKeyCode;
 
 pub(super) struct MenuScene {
     main_view_frustum: ViewFrustumArc,
@@ -87,7 +86,7 @@ impl super::GameScene for MenuScene {
     fn update(&mut self, _world: &mut World, resources: &mut Resources) -> SceneManagerAction {
         let mut action = SceneManagerAction::None;
 
-        let context = resources.get::<EguiManager>().unwrap().context();
+        let context = resources.get::<EguiContextResource>().unwrap().context();
         let scale_factor = context.pixels_per_point();
 
         profiling::scope!("egui");
@@ -107,11 +106,11 @@ impl super::GameScene for MenuScene {
                 }
             });
 
-        let input = resources.get::<InputState>().unwrap();
-        if input.key_trigger.contains(&VirtualKeyCode::Escape) {
+        let input = resources.get::<InputResource>().unwrap();
+        if input.is_key_just_up(KeyboardKey::Escape) {
             action = SceneManagerAction::Exit;
         }
-        if input.key_trigger.contains(&VirtualKeyCode::S) {
+        if input.is_key_just_up(KeyboardKey::S) {
             action = SceneManagerAction::Scene(Scene::Main);
         }
 

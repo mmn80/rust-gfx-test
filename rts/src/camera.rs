@@ -8,7 +8,7 @@ use crate::{
         },
         text::TextRenderFeature,
     },
-    input::InputState,
+    input::{InputResource, KeyboardKey},
     phases::{
         DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
         WireframeRenderPhase,
@@ -32,7 +32,6 @@ use rafx::{
     visibility::ViewFrustumArc,
 };
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
-use winit::event::VirtualKeyCode;
 
 #[derive(Clone, Copy)]
 pub struct RTSCamera {
@@ -142,28 +141,31 @@ impl RTSCamera {
         self.eye() + len * ray_vec
     }
 
-    fn update_transform(&mut self, dt: f32, input: &InputState) {
-        if input.key_pressed.contains(&VirtualKeyCode::W) {
+    fn update_transform(&mut self, dt: f32, input: &InputResource) {
+        if input.is_key_down(KeyboardKey::W) {
             self.look_at += dt * self.move_speed * self.forward();
         }
-        if input.key_pressed.contains(&VirtualKeyCode::S) {
+        if input.is_key_down(KeyboardKey::S) {
             self.look_at -= dt * self.move_speed * self.forward();
         }
-        if input.key_pressed.contains(&VirtualKeyCode::A) {
+        if input.is_key_down(KeyboardKey::A) {
             self.look_at += dt * self.move_speed * self.right();
         }
-        if input.key_pressed.contains(&VirtualKeyCode::D) {
+        if input.is_key_down(KeyboardKey::D) {
             self.look_at -= dt * self.move_speed * self.right();
         }
-        if input.key_pressed.contains(&VirtualKeyCode::Q) {
+        if input.is_key_down(KeyboardKey::Q) {
             self.yaw -= dt * self.yaw_speed;
         }
-        if input.key_pressed.contains(&VirtualKeyCode::E) {
+        if input.is_key_down(KeyboardKey::E) {
             self.yaw += dt * self.yaw_speed;
         }
-        if input.last_scroll.abs() > f32::EPSILON {
+        if input.mouse_wheel_delta().y.abs() > f32::EPSILON {
             self.look_at_dist = (self.look_at_dist
-                + self.scroll_speed * input.last_scroll * dt * (self.look_at_dist / 10.0))
+                + self.scroll_speed
+                    * input.mouse_wheel_delta().y
+                    * dt
+                    * (self.look_at_dist / 10.0))
                 .max(1.)
                 .min(1000.);
             self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
@@ -240,7 +242,7 @@ impl RTSCamera {
         render_options: &RenderOptions,
         main_view_frustum: &mut ViewFrustumArc,
         viewports_resource: &mut ViewportsResource,
-        input: &InputState,
+        input: &InputResource,
     ) {
         self.update_transform(time_state.previous_update_dt(), input);
 

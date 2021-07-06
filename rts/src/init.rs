@@ -1,5 +1,5 @@
 use crate::{
-    assets::{font::FontAssetTypeRendererPlugin, gltf::GltfAssetTypeRendererPlugin},
+    assets::{font::FontAssetTypeRendererPlugin, mesh::GltfAssetTypeRendererPlugin},
     camera::RTSCamera,
     features::{
         debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin, mesh::MeshRendererPlugin,
@@ -19,28 +19,15 @@ use rafx::{
         ViewportsResource,
     },
 };
+use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
-use winit::{event_loop::EventLoop, window::Window};
-
-pub fn window_init(event_loop: &EventLoop<()>) -> Window {
-    // Set up the coordinate system to be fixed at 900x600, and use this as the default window size
-    // This means the drawing code can be written as though the window is always 900x600. The
-    // output will be automatically scaled so that it's always visible.
-    let logical_size = winit::dpi::LogicalSize::new(900.0, 600.0);
-
-    // Create a single window
-    winit::window::WindowBuilder::new()
-        .with_title("RTS MMO")
-        .with_inner_size(logical_size)
-        //.with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)))
-        .build(event_loop)
-        .expect("Failed to create window")
-}
 
 pub fn rendering_init(
     resources: &mut Resources,
-    window: &Window,
     asset_source: AssetSource,
+    window: &dyn HasRawWindowHandle,
+    window_width: u32,
+    window_height: u32,
 ) -> RafxResult<()> {
     resources.insert(VisibilityRegion::new());
     resources.insert(ViewportsResource::default());
@@ -50,10 +37,11 @@ pub fn rendering_init(
     let debug3d_renderer_plugin = Arc::new(Debug3DRendererPlugin::default());
     let text_renderer_plugin = Arc::new(TextRendererPlugin::default());
     let egui_renderer_plugin = Arc::new(EguiRendererPlugin::default());
+
     mesh_renderer_plugin.legion_init(resources);
     debug3d_renderer_plugin.legion_init(resources);
     text_renderer_plugin.legion_init(resources);
-    egui_renderer_plugin.legion_init(resources, &window);
+    egui_renderer_plugin.legion_init_winit(resources);
 
     //
     // Create the api. GPU programming is fundamentally unsafe, so all rafx APIs should be
@@ -96,13 +84,12 @@ pub fn rendering_init(
         )
     }?;
 
-    let size = window.inner_size();
     let swapchain_helper = SwapchainHandler::create_swapchain(
         &mut renderer_builder_result.asset_manager,
         &mut renderer_builder_result.renderer,
         window,
-        size.width,
-        size.height,
+        window_width,
+        window_height,
     )?;
 
     resources.insert(rafx_api.device_context());

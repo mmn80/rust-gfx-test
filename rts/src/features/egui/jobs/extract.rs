@@ -21,12 +21,14 @@ impl<'extract> EguiExtractJob<'extract> {
         frame_packet: Box<EguiFramePacket>,
         egui_material: Handle<MaterialAsset>,
     ) -> Arc<dyn RenderFeatureExtractJob<'extract> + 'extract> {
+        let egui_manager = extract_context
+            .extract_resources
+            .fetch_mut::<WinitEguiManager>()
+            .egui_manager();
+
         Arc::new(ExtractJob::new(
             Self {
-                egui_manager: extract_context
-                    .extract_resources
-                    .fetch::<EguiManager>()
-                    .clone(),
+                egui_manager,
                 swapchain_surface_info: extract_context
                     .render_resources
                     .fetch::<SwapchainRenderResource>()
@@ -46,7 +48,10 @@ impl<'extract> EguiExtractJob<'extract> {
 }
 
 impl<'extract> ExtractJobEntryPoints<'extract> for EguiExtractJob<'extract> {
-    fn begin_per_frame_extract(&self, context: &ExtractPerFrameContext<'extract, '_, Self>) {
+    fn begin_per_frame_extract(
+        &self,
+        context: &ExtractPerFrameContext<'extract, '_, Self>,
+    ) {
         let egui_draw_data = self.egui_manager.take_draw_data();
         let view_ubo = {
             let pixels_per_point = match &egui_draw_data {

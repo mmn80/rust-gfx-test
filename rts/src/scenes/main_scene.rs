@@ -1,6 +1,6 @@
 use super::{Scene, SceneManagerAction};
 use crate::{
-    assets::{font::FontAsset, gltf::MeshAsset},
+    assets::{font::FontAsset, mesh::MeshAsset},
     camera::RTSCamera,
     components::{
         DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
@@ -10,7 +10,7 @@ use crate::{
         mesh::{MeshRenderObject, MeshRenderObjectSet},
         text::TextResource,
     },
-    input::InputState,
+    input::{InputResource, KeyboardKey},
     kin_object::KinObjectsState,
     time::TimeState,
     RenderOptions,
@@ -23,7 +23,6 @@ use rafx::{
     renderer::ViewportsResource,
     visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion},
 };
-use winit::event::VirtualKeyCode;
 
 pub(super) struct MainScene {
     main_view_frustum: ViewFrustumArc,
@@ -137,7 +136,7 @@ impl super::GameScene for MainScene {
         //super::add_light_debug_draw(&resources, &world);
 
         {
-            let input = resources.get::<InputState>().unwrap();
+            let input = resources.get::<InputResource>().unwrap();
             let time_state = resources.get::<TimeState>().unwrap();
             let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
             let render_options = resources.get::<RenderOptions>().unwrap();
@@ -205,8 +204,8 @@ impl super::GameScene for MainScene {
         }
 
         {
-            let input = resources.get::<InputState>().unwrap();
-            if input.key_trigger.contains(&VirtualKeyCode::Escape) {
+            let input = resources.get::<InputResource>().unwrap();
+            if input.is_key_just_up(KeyboardKey::Escape) {
                 SceneManagerAction::Scene(Scene::Menu)
             } else {
                 SceneManagerAction::None

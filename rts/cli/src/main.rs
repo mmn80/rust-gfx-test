@@ -1,8 +1,8 @@
-use rts::assets::font::FontImporter;
-use rts::assets::gltf::GltfImporter;
-use rts::daemon_args::AssetDaemonArgs;
 use distill::daemon::AssetDaemon;
 use distill_cli::Command;
+use rts::assets::font::FontImporter;
+use rts::assets::mesh::GltfImporter;
+use rts::daemon_args::AssetDaemonArgs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 

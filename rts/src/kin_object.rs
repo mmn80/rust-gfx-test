@@ -1,8 +1,8 @@
 use crate::{
     camera::RTSCamera,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{egui::EguiManager, mesh::MeshRenderObjectSet},
-    input::InputState,
+    features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
+    input::{InputResource, MouseButton},
 };
 use egui::Button;
 use glam::{Quat, Vec3};
@@ -13,7 +13,6 @@ use rafx::{
     visibility::CullModel,
 };
 use std::collections::HashMap;
-use winit::event::MouseButton;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum KinObjectType {
@@ -47,9 +46,9 @@ impl KinObjectsState {
     }
 
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
-        let input = resources.get::<InputState>().unwrap();
+        let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
-        let context = resources.get::<EguiManager>().unwrap().context();
+        let context = resources.get::<EguiContextResource>().unwrap().context();
 
         profiling::scope!("egui");
         egui::Window::new("Kinematics")
@@ -74,8 +73,9 @@ impl KinObjectsState {
             });
 
         if self.ui_spawning {
-            if input.mouse_trigger.contains(&MouseButton::Left) {
-                let cursor = camera.ray_cast_terrain(input.cursor_pos.0, input.cursor_pos.1);
+            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
+                let cursor_pos = input.mouse_position();
+                let cursor = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
                 self.spawn(self.ui_object_type, cursor, resources, world);
                 self.ui_spawning = false;
             }

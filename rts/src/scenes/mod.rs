@@ -49,6 +49,7 @@ pub trait GameScene {
 pub struct SceneManager {
     scene: Option<Box<dyn GameScene>>,
     current_scene: Scene,
+    pub scene_action: SceneManagerAction,
 }
 
 impl Default for SceneManager {
@@ -56,6 +57,7 @@ impl Default for SceneManager {
         SceneManager {
             scene: None,
             current_scene: Scene::Menu,
+            scene_action: SceneManagerAction::Scene(Scene::Menu),
         }
     }
 }

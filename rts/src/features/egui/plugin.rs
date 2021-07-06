@@ -1,9 +1,9 @@
+use rafx::render_feature_renderer_prelude::*;
+
 use super::*;
 use crate::phases::UiRenderPhase;
 use distill::loader::handle::Handle;
 use rafx::assets::MaterialAsset;
-use rafx::render_feature_renderer_prelude::*;
-use winit::window::Window;
 
 pub struct EguiStaticResources {
     pub egui_material: Handle<MaterialAsset>,
@@ -13,14 +13,14 @@ pub struct EguiStaticResources {
 pub struct EguiRendererPlugin;
 
 impl EguiRendererPlugin {
-    pub fn legion_init(&self, resources: &mut legion::Resources, window: &Window) {
-        let egui_manager = EguiManager::new(window);
-        resources.insert(egui_manager.context_resource());
-        resources.insert(egui_manager);
+    pub fn legion_init_winit(&self, resources: &mut legion::Resources) {
+        let winit_egui_manager = WinitEguiManager::new();
+        resources.insert(winit_egui_manager.egui_manager().context_resource());
+        resources.insert(winit_egui_manager);
     }
 
     pub fn legion_destroy(resources: &mut legion::Resources) {
-        resources.remove::<EguiManager>();
+        resources.remove::<WinitEguiManager>();
         resources.remove::<EguiContextResource>();
     }
 }

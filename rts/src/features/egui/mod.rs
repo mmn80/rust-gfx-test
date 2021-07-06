@@ -11,8 +11,8 @@ rafx::declare_render_feature!(EguiRenderFeature, EGUI_FEATURE_INDEX);
 mod plugin;
 pub use plugin::*;
 
-mod egui_manager;
-pub use egui_manager::*;
+mod winit_egui_manager;
+pub use winit_egui_manager::*;
 
 mod egui_context_resource;
 pub use egui_context_resource::*;
