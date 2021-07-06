@@ -238,11 +238,10 @@ impl DynObjectsState {
                     ..
                 }) = input.mouse_drag_in_progress(MouseButton::LEFT)
                 {
-                    let s = camera.win_scale_factor;
-                    let w = (p1.x as f32 - p0.x as f32).abs() / s;
-                    let h = (p1.y as f32 - p0.y as f32).abs() / s;
-                    let x = p0.x.min(x1) as f32 / s;
-                    let y = p0.y.min(y1) as f32 / s;
+                    let w = (p1.x as f32 - p0.x as f32).abs();
+                    let h = (p1.y as f32 - p0.y as f32).abs();
+                    let x = p0.x.min(p1.x) as f32;
+                    let y = p0.y.min(p1.y) as f32;
                     //if w > 30. && h > 30. {
                     profiling::scope!("egui");
                     egui::Window::new("Selection")

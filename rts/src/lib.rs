@@ -20,7 +20,11 @@ use rafx::{
 use scenes::SceneManagerAction;
 use structopt::StructOpt;
 use time::PeriodicEvent;
-use winit::{event::Event, event_loop::ControlFlow};
+use winit::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoop},
+    window::{Fullscreen, Window},
+};
 
 pub mod assets;
 pub mod daemon_args;
@@ -291,7 +295,7 @@ struct DemoApp {
 }
 
 impl DemoApp {
-    fn init(args: &DemoArgs, window: &winit::window::Window) -> RafxResult<Self> {
+    fn init(args: &DemoArgs, window: &Window) -> RafxResult<Self> {
         #[cfg(feature = "profile-with-tracy")]
         profiling::tracy_client::set_thread_name("Main Thread");
         #[cfg(feature = "profile-with-optick")]
@@ -327,10 +331,7 @@ impl DemoApp {
         })
     }
 
-    pub fn update(
-        &mut self,
-        window: &winit::window::Window,
-    ) -> RafxResult<winit::event_loop::ControlFlow> {
+    pub fn update(&mut self, window: &Window) -> RafxResult<ControlFlow> {
         profiling::scope!("Main Loop");
 
         let mut control_flow = ControlFlow::Poll;
@@ -588,19 +589,11 @@ impl DemoApp {
             .enable_visibility_update = render_options.enable_visibility_update;
     }
 
-    fn process_input(
-        &mut self,
-        event: &winit::event::Event<()>,
-        window: &winit::window::Window,
-    ) -> bool {
+    fn process_input(&mut self, event: &Event<()>, window: &Window) -> bool {
         Self::do_process_input(&self.resources, event, window)
     }
 
-    fn do_process_input(
-        resources: &Resources,
-        event: &winit::event::Event<()>,
-        window: &winit::window::Window,
-    ) -> bool {
+    fn do_process_input(resources: &Resources, event: &Event<()>, window: &Window) -> bool {
         use winit::event::*;
 
         let egui_manager = resources
@@ -666,11 +659,10 @@ impl DemoApp {
                 if input_resource.is_key_just_up(input::KeyboardKey::Return)
                     && input_resource.is_key_down(input::KeyboardKey::LAlt)
                 {
-                    // input_resource
-                    //     .key_trigger
-                    //     .remove(&winit::event::VirtualKeyCode::Return);
+                    input_resource.end_frame();
+
                     if window.fullscreen().is_none() {
-                        window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                        window.set_fullscreen(Some(Fullscreen::Borderless(None)));
                     } else {
                         window.set_fullscreen(None);
                     }
@@ -688,11 +680,7 @@ impl Drop for DemoApp {
     }
 }
 
-pub fn update_loop(
-    args: &DemoArgs,
-    window: winit::window::Window,
-    event_loop: winit::event_loop::EventLoop<()>,
-) -> RafxResult<()> {
+pub fn update_loop(args: &DemoArgs, window: Window, event_loop: EventLoop<()>) -> RafxResult<()> {
     log::debug!("calling init");
     let mut app = DemoApp::init(args, &window).unwrap();
 

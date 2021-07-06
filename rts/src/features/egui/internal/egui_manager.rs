@@ -69,25 +69,26 @@ impl EguiManager {
             ],
         );
 
+        let scale: f32 = 1.5;
         font_definitions.family_and_size.insert(
             egui::TextStyle::Small,
-            (egui::FontFamily::Proportional, 12.0),
+            (egui::FontFamily::Proportional, (scale * 12.0).floor()),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Body,
-            (egui::FontFamily::Proportional, 14.0),
+            (egui::FontFamily::Proportional, (scale * 14.0).floor()),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Button,
-            (egui::FontFamily::Proportional, 16.0),
+            (egui::FontFamily::Proportional, (scale * 16.0).floor()),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Heading,
-            (egui::FontFamily::Proportional, 20.0),
+            (egui::FontFamily::Proportional, (scale * 20.0).floor()),
         );
         font_definitions.family_and_size.insert(
             egui::TextStyle::Monospace,
-            (egui::FontFamily::Monospace, 12.0),
+            (egui::FontFamily::Monospace, (scale * 12.0).floor()),
         );
 
         ctx.set_fonts(font_definitions);
