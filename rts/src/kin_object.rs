@@ -1,7 +1,10 @@
 use crate::{
     camera::RTSCamera,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
+    features::{
+        egui::EguiContextResource,
+        mesh::{MeshRenderObject, MeshRenderObjectSet},
+    },
     input::{InputResource, MouseButton},
 };
 use egui::Button;
@@ -35,9 +38,9 @@ pub struct KinObjectsState {
 
 impl KinObjectsState {
     pub fn new(resources: &Resources) -> Self {
-        let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-        let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
-        let mut meshes = HashMap::new();
+        let mut _asset_manager = resources.get_mut::<AssetManager>().unwrap();
+        let mut _mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
+        let meshes = HashMap::new();
         KinObjectsState {
             meshes,
             ui_spawning: false,
@@ -119,29 +122,32 @@ impl KinObjectsState {
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
         let mesh_render_objects = mesh_render_objects.read();
-        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
-        let mut entry = world.entry(entity).unwrap();
-        entry.add_component(VisibilityComponent {
-            visibility_object_handle: {
-                let handle = visibility_region.register_dynamic_object(
-                    ObjectId::from(entity),
-                    CullModel::VisibleBounds(
-                        asset_manager
-                            .committed_asset(&asset_handle)
-                            .unwrap()
-                            .inner
-                            .asset_data
-                            .visible_bounds,
-                    ),
-                );
-                handle.set_transform(
-                    transform_component.translation,
-                    transform_component.rotation,
-                    transform_component.scale,
-                );
-                handle.add_render_object(&mesh_render_object);
-                handle
-            },
-        });
+        if let MeshRenderObject::AssetHandle(asset_handle) =
+            &mesh_render_objects.get(&mesh_render_object)
+        {
+            let mut entry = world.entry(entity).unwrap();
+            entry.add_component(VisibilityComponent {
+                visibility_object_handle: {
+                    let handle = visibility_region.register_dynamic_object(
+                        ObjectId::from(entity),
+                        CullModel::VisibleBounds(
+                            asset_manager
+                                .committed_asset(&asset_handle)
+                                .unwrap()
+                                .inner
+                                .asset_data
+                                .visible_bounds,
+                        ),
+                    );
+                    handle.set_transform(
+                        transform_component.translation,
+                        transform_component.rotation,
+                        transform_component.scale,
+                    );
+                    handle.add_render_object(&mesh_render_object);
+                    handle
+                },
+            });
+        }
     }
 }

@@ -72,21 +72,18 @@ impl DynObjectsState {
         let mut meshes = HashMap::new();
         meshes.insert(
             DynObjectType::Container1,
-            mesh_render_objects.register_render_object(MeshRenderObject {
-                mesh: container_1_asset,
-            }),
+            mesh_render_objects
+                .register_render_object(MeshRenderObject::AssetHandle(container_1_asset)),
         );
         meshes.insert(
             DynObjectType::Container2,
-            mesh_render_objects.register_render_object(MeshRenderObject {
-                mesh: container_2_asset,
-            }),
+            mesh_render_objects
+                .register_render_object(MeshRenderObject::AssetHandle(container_2_asset)),
         );
         meshes.insert(
             DynObjectType::BlueIcosphere,
-            mesh_render_objects.register_render_object(MeshRenderObject {
-                mesh: blue_icosphere_asset,
-            }),
+            mesh_render_objects
+                .register_render_object(MeshRenderObject::AssetHandle(blue_icosphere_asset)),
         );
 
         DynObjectsState {
@@ -344,30 +341,33 @@ impl DynObjectsState {
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
         let mesh_render_objects = mesh_render_objects.read();
-        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
-        let mut entry = world.entry(entity).unwrap();
-        entry.add_component(VisibilityComponent {
-            visibility_object_handle: {
-                let handle = visibility_region.register_dynamic_object(
-                    ObjectId::from(entity),
-                    CullModel::VisibleBounds(
-                        asset_manager
-                            .committed_asset(&asset_handle)
-                            .unwrap()
-                            .inner
-                            .asset_data
-                            .visible_bounds,
-                    ),
-                );
-                handle.set_transform(
-                    transform_component.translation,
-                    transform_component.rotation,
-                    transform_component.scale,
-                );
-                handle.add_render_object(&mesh_render_object);
-                handle
-            },
-        });
+        if let MeshRenderObject::AssetHandle(asset_handle) =
+            &mesh_render_objects.get(&mesh_render_object)
+        {
+            let mut entry = world.entry(entity).unwrap();
+            entry.add_component(VisibilityComponent {
+                visibility_object_handle: {
+                    let handle = visibility_region.register_dynamic_object(
+                        ObjectId::from(entity),
+                        CullModel::VisibleBounds(
+                            asset_manager
+                                .committed_asset(&asset_handle)
+                                .unwrap()
+                                .inner
+                                .asset_data
+                                .visible_bounds,
+                        ),
+                    );
+                    handle.set_transform(
+                        transform_component.translation,
+                        transform_component.rotation,
+                        transform_component.scale,
+                    );
+                    handle.add_render_object(&mesh_render_object);
+                    handle
+                },
+            });
+        }
     }
 
     pub fn add_debug_draw(&self, resources: &Resources, world: &World) {

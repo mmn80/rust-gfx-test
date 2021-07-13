@@ -14,6 +14,7 @@ pub struct MeshExtractJob<'extract> {
     asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: MeshRenderObjectSet,
+    dyn_mesh_cache: DynMeshCache,
 }
 
 impl<'extract> MeshExtractJob<'extract> {
@@ -22,6 +23,7 @@ impl<'extract> MeshExtractJob<'extract> {
         frame_packet: Box<MeshFramePacket>,
         depth_material: Handle<MaterialAsset>,
         render_objects: MeshRenderObjectSet,
+        dyn_mesh_cache: DynMeshCache,
     ) -> Arc<dyn RenderFeatureExtractJob<'extract> + 'extract> {
         Arc::new(ExtractJob::new(
             Self {
@@ -32,6 +34,7 @@ impl<'extract> MeshExtractJob<'extract> {
                     .extract_ref(),
                 depth_material,
                 render_objects,
+                dyn_mesh_cache,
             },
             frame_packet,
         ))
@@ -62,15 +65,14 @@ impl<'extract> ExtractJobEntryPoints<'extract> for MeshExtractJob<'extract> {
             .render_objects
             .get_id(context.render_object_id());
 
-        let mesh_asset = self
-            .asset_manager
-            .committed_asset(&render_object_static_data.mesh);
+        let extracted_mesh =
+            render_object_static_data.extract_mesh(&self.dyn_mesh_cache, &self.asset_manager);
 
-        context.set_render_object_instance_data(mesh_asset.and_then(|mesh_asset| {
+        context.set_render_object_instance_data(extracted_mesh.and_then(|extracted_mesh| {
             let entry = self.world.entry_ref(context.object_id().into()).unwrap();
             let transform_component = entry.get_component::<TransformComponent>().unwrap();
             Some(MeshRenderObjectInstanceData {
-                mesh_asset: mesh_asset.clone(),
+                mesh: extracted_mesh,
                 translation: transform_component.translation,
                 rotation: transform_component.rotation,
                 scale: transform_component.scale,

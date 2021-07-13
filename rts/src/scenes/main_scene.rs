@@ -54,9 +54,8 @@ impl MainScene {
             const FLOOR_NUM: i32 = 10;
 
             let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
-            let floor_mesh = mesh_render_objects.register_render_object(MeshRenderObject {
-                mesh: floor_mesh_asset.clone(),
-            });
+            let floor_mesh = mesh_render_objects
+                .register_render_object(MeshRenderObject::AssetHandle(floor_mesh_asset.clone()));
 
             for x in -FLOOR_NUM..FLOOR_NUM {
                 for y in -FLOOR_NUM..FLOOR_NUM {

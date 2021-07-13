@@ -21,8 +21,13 @@ pub struct MeshPerFrameData {
     pub depth_material_pass: Option<ResourceArc<MaterialPassResource>>,
 }
 
+pub enum ExtractedMesh {
+    MeshAsset(MeshAsset),
+    DynMesh(DynMesh),
+}
+
 pub struct MeshRenderObjectInstanceData {
-    pub mesh_asset: MeshAsset,
+    pub mesh: ExtractedMesh,
     pub translation: Vec3,
     pub rotation: Quat,
     pub scale: Vec3,

@@ -105,10 +105,7 @@ impl<'prepare> MeshPrepareJob<'prepare> {
 }
 
 impl<'prepare> PrepareJobEntryPoints<'prepare> for MeshPrepareJob<'prepare> {
-    fn begin_per_frame_prepare(
-        &self,
-        context: &PreparePerFrameContext<'prepare, '_, Self>,
-    ) {
+    fn begin_per_frame_prepare(&self, context: &PreparePerFrameContext<'prepare, '_, Self>) {
         let mut per_frame_submit_data = Box::new(MeshPerFrameSubmitData {
             num_shadow_map_2d: 0,
             shadow_map_2d_data: Default::default(),
@@ -250,115 +247,211 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for MeshPrepareJob<'prepare> {
                 .render_object_instance_submit_data()
                 .model_matrix_offset;
 
-            for (mesh_part_index, mesh_part) in extracted_data
-                .mesh_asset
-                .inner
-                .mesh_parts
-                .iter()
-                .enumerate()
-            {
-                if mesh_part.is_none() {
-                    continue;
+            match &extracted_data.mesh {
+                ExtractedMesh::MeshAsset(mesh_asset) => {
+                    for (mesh_part_index, mesh_part) in
+                        mesh_asset.inner.mesh_parts.iter().enumerate()
+                    {
+                        if mesh_part.is_none() {
+                            continue;
+                        }
+
+                        let mesh_part = mesh_part.as_ref().unwrap();
+
+                        let depth_material_pass = self.depth_material_pass.as_ref().unwrap();
+
+                        if view.phase_is_relevant::<DepthPrepassRenderPhase>() {
+                            context.push_submit_node::<DepthPrepassRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource: depth_material_pass.clone(),
+                                    per_material_descriptor_set: None,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
+
+                        if view.phase_is_relevant::<ShadowMapRenderPhase>() {
+                            context.push_submit_node::<ShadowMapRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource: depth_material_pass.clone(),
+                                    per_material_descriptor_set: None,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
+
+                        if view.phase_is_relevant::<OpaqueRenderPhase>() {
+                            let material_pass_resource = mesh_part
+                                .get_material_pass_resource(
+                                    view,
+                                    OpaqueRenderPhase::render_phase_index(),
+                                )
+                                .clone();
+
+                            let per_material_descriptor_set = Some(
+                                mesh_part
+                                    .get_material_descriptor_set(
+                                        view,
+                                        OpaqueRenderPhase::render_phase_index(),
+                                    )
+                                    .clone(),
+                            );
+
+                            context.push_submit_node::<OpaqueRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource,
+                                    per_material_descriptor_set,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
+
+                        if view.phase_is_relevant::<WireframeRenderPhase>()
+                            && view.feature_flag_is_relevant::<MeshWireframeRenderFeatureFlag>()
+                        {
+                            let material_pass_resource = mesh_part
+                                .get_material_pass_resource(
+                                    view,
+                                    WireframeRenderPhase::render_phase_index(),
+                                )
+                                .clone();
+
+                            let per_material_descriptor_set = Some(
+                                mesh_part
+                                    .get_material_descriptor_set(
+                                        view,
+                                        OpaqueRenderPhase::render_phase_index(),
+                                    )
+                                    .clone(),
+                            );
+
+                            context.push_submit_node::<WireframeRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource,
+                                    per_material_descriptor_set,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
+                    }
                 }
+                ExtractedMesh::DynMesh(dyn_mesh) => {
+                    for (mesh_part_index, mesh_part) in dyn_mesh.inner.mesh_parts.iter().enumerate()
+                    {
+                        let depth_material_pass = self.depth_material_pass.as_ref().unwrap();
 
-                let mesh_part = mesh_part.as_ref().unwrap();
+                        if view.phase_is_relevant::<DepthPrepassRenderPhase>() {
+                            context.push_submit_node::<DepthPrepassRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource: depth_material_pass.clone(),
+                                    per_material_descriptor_set: None,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
 
-                let depth_material_pass = self.depth_material_pass.as_ref().unwrap();
+                        if view.phase_is_relevant::<ShadowMapRenderPhase>() {
+                            context.push_submit_node::<ShadowMapRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource: depth_material_pass.clone(),
+                                    per_material_descriptor_set: None,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
 
-                if view.phase_is_relevant::<DepthPrepassRenderPhase>() {
-                    context.push_submit_node::<DepthPrepassRenderPhase>(
-                        MeshDrawCall {
-                            render_object_instance_id,
-                            material_pass_resource: depth_material_pass.clone(),
-                            per_material_descriptor_set: None,
-                            mesh_part_index,
-                            model_matrix_offset,
-                        },
-                        0,
-                        distance,
-                    );
-                }
+                        if view.phase_is_relevant::<OpaqueRenderPhase>() {
+                            let material_pass_resource = mesh_part
+                                .get_material_pass_resource(
+                                    view,
+                                    OpaqueRenderPhase::render_phase_index(),
+                                )
+                                .clone();
 
-                if view.phase_is_relevant::<ShadowMapRenderPhase>() {
-                    context.push_submit_node::<ShadowMapRenderPhase>(
-                        MeshDrawCall {
-                            render_object_instance_id,
-                            material_pass_resource: depth_material_pass.clone(),
-                            per_material_descriptor_set: None,
-                            mesh_part_index,
-                            model_matrix_offset,
-                        },
-                        0,
-                        distance,
-                    );
-                }
+                            let per_material_descriptor_set = Some(
+                                mesh_part
+                                    .get_material_descriptor_set(
+                                        view,
+                                        OpaqueRenderPhase::render_phase_index(),
+                                    )
+                                    .clone(),
+                            );
 
-                if view.phase_is_relevant::<OpaqueRenderPhase>() {
-                    let material_pass_resource = mesh_part
-                        .get_material_pass_resource(view, OpaqueRenderPhase::render_phase_index())
-                        .clone();
+                            context.push_submit_node::<OpaqueRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource,
+                                    per_material_descriptor_set,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
 
-                    let per_material_descriptor_set = Some(
-                        mesh_part
-                            .get_material_descriptor_set(
-                                view,
-                                OpaqueRenderPhase::render_phase_index(),
-                            )
-                            .clone(),
-                    );
+                        if view.phase_is_relevant::<WireframeRenderPhase>()
+                            && view.feature_flag_is_relevant::<MeshWireframeRenderFeatureFlag>()
+                        {
+                            let material_pass_resource = mesh_part
+                                .get_material_pass_resource(
+                                    view,
+                                    WireframeRenderPhase::render_phase_index(),
+                                )
+                                .clone();
 
-                    context.push_submit_node::<OpaqueRenderPhase>(
-                        MeshDrawCall {
-                            render_object_instance_id,
-                            material_pass_resource,
-                            per_material_descriptor_set,
-                            mesh_part_index,
-                            model_matrix_offset,
-                        },
-                        0,
-                        distance,
-                    );
-                }
+                            let per_material_descriptor_set = Some(
+                                mesh_part
+                                    .get_material_descriptor_set(
+                                        view,
+                                        OpaqueRenderPhase::render_phase_index(),
+                                    )
+                                    .clone(),
+                            );
 
-                if view.phase_is_relevant::<WireframeRenderPhase>()
-                    && view.feature_flag_is_relevant::<MeshWireframeRenderFeatureFlag>()
-                {
-                    let material_pass_resource = mesh_part
-                        .get_material_pass_resource(
-                            view,
-                            WireframeRenderPhase::render_phase_index(),
-                        )
-                        .clone();
-
-                    let per_material_descriptor_set = Some(
-                        mesh_part
-                            .get_material_descriptor_set(
-                                view,
-                                OpaqueRenderPhase::render_phase_index(),
-                            )
-                            .clone(),
-                    );
-
-                    context.push_submit_node::<WireframeRenderPhase>(
-                        MeshDrawCall {
-                            render_object_instance_id,
-                            material_pass_resource,
-                            per_material_descriptor_set,
-                            mesh_part_index,
-                            model_matrix_offset,
-                        },
-                        0,
-                        distance,
-                    );
+                            context.push_submit_node::<WireframeRenderPhase>(
+                                MeshDrawCall {
+                                    render_object_instance_id,
+                                    material_pass_resource,
+                                    per_material_descriptor_set,
+                                    mesh_part_index,
+                                    model_matrix_offset,
+                                },
+                                0,
+                                distance,
+                            );
+                        }
+                    }
                 }
             }
         }
     }
 
-    fn end_per_view_prepare(
-        &self,
-        context: &PreparePerViewContext<'prepare, '_, Self>,
-    ) {
+    fn end_per_view_prepare(&self, context: &PreparePerViewContext<'prepare, '_, Self>) {
         let mut descriptor_set_allocator = self.resource_context.create_descriptor_set_allocator();
         let shadow_map_data = &self.shadow_map_data;
 
@@ -531,21 +624,42 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for MeshPrepareJob<'prepare> {
                 for id in 0..context.render_object_instances().len() {
                     // TODO(dvd): This could be replaced by an `iter` or `as_slice` method on the data.
                     if let Some(extracted_data) = context.render_object_instances_data().get(id) {
-                        let mesh_parts = &extracted_data.mesh_asset.inner.mesh_parts;
-                        for mesh_part in mesh_parts {
-                            if let Some(mesh_part) = mesh_part {
-                                opaque_per_view_descriptor_set_layout = Some(
-                                    mesh_part
-                                        .get_material_pass_resource(
-                                            view,
-                                            OpaqueRenderPhase::render_phase_index(),
-                                        )
-                                        .get_raw()
-                                        .descriptor_set_layouts
-                                        [PER_VIEW_DESCRIPTOR_SET_INDEX as usize]
-                                        .clone(),
-                                );
-                                break;
+                        match &extracted_data.mesh {
+                            ExtractedMesh::MeshAsset(mesh_asset) => {
+                                let mesh_parts = &mesh_asset.inner.mesh_parts;
+                                for mesh_part in mesh_parts {
+                                    if let Some(mesh_part) = mesh_part {
+                                        opaque_per_view_descriptor_set_layout = Some(
+                                            mesh_part
+                                                .get_material_pass_resource(
+                                                    view,
+                                                    OpaqueRenderPhase::render_phase_index(),
+                                                )
+                                                .get_raw()
+                                                .descriptor_set_layouts
+                                                [PER_VIEW_DESCRIPTOR_SET_INDEX as usize]
+                                                .clone(),
+                                        );
+                                        break;
+                                    }
+                                }
+                            }
+                            ExtractedMesh::DynMesh(dyn_mesh) => {
+                                let mesh_parts = &dyn_mesh.inner.mesh_parts;
+                                for mesh_part in mesh_parts {
+                                    opaque_per_view_descriptor_set_layout = Some(
+                                        mesh_part
+                                            .get_material_pass_resource(
+                                                view,
+                                                OpaqueRenderPhase::render_phase_index(),
+                                            )
+                                            .get_raw()
+                                            .descriptor_set_layouts
+                                            [PER_VIEW_DESCRIPTOR_SET_INDEX as usize]
+                                            .clone(),
+                                    );
+                                    break;
+                                }
                             }
                         }
                     }
@@ -608,10 +722,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for MeshPrepareJob<'prepare> {
             });
     }
 
-    fn end_per_frame_prepare(
-        &self,
-        context: &PreparePerFrameContext<'prepare, '_, Self>,
-    ) {
+    fn end_per_frame_prepare(&self, context: &PreparePerFrameContext<'prepare, '_, Self>) {
         let mut model_matrix_buffer = context
             .per_frame_submit_data()
             .model_matrix_buffer
@@ -663,7 +774,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for MeshPrepareJob<'prepare> {
     }
 
     fn new_render_object_instance_per_view_job_context(
-        &'prepare self
+        &'prepare self,
     ) -> Option<DefaultJobContext> {
         Some(DefaultJobContext::new())
     }
