@@ -301,7 +301,7 @@ impl DemoApp {
         #[cfg(feature = "profile-with-optick")]
         profiling::optick::register_thread("Main Thread");
 
-        let scene_manager = SceneManager::default();
+        let mut scene_manager = SceneManager::default();
 
         let mut resources = Resources::default();
         resources.insert(TimeState::new());
@@ -460,7 +460,6 @@ impl DemoApp {
                 crate::features::mesh::MeshRenderObjectSet,
                 mesh_render_object_set
             );
-            add_to_extract_resources!(crate::features::mesh::DynMeshCache, dyn_mesh_cache);
             add_to_extract_resources!(
                 crate::features::debug3d::Debug3DResource,
                 debug_draw_3d_resource

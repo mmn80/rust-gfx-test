@@ -15,7 +15,6 @@ pub struct MeshStaticResources {
 pub struct MeshRendererPlugin {
     render_objects: MeshRenderObjectSet,
     max_num_mesh_parts: Option<usize>,
-    dyn_mesh_cache: DynMeshCache,
 }
 
 impl MeshRendererPlugin {
@@ -23,17 +22,17 @@ impl MeshRendererPlugin {
         Self {
             max_num_mesh_parts,
             render_objects: MeshRenderObjectSet::default(),
-            dyn_mesh_cache: DynMeshCache::new(),
         }
     }
 
-    pub fn legion_init(&self, resources: &mut legion::Resources) {
+    pub fn legion_init(
+        &self,
+        resources: &mut legion::Resources,
+    ) {
         resources.insert(self.render_objects.clone());
-        resources.insert(self.dyn_mesh_cache.clone());
     }
 
     pub fn legion_destroy(resources: &mut legion::Resources) {
-        resources.remove::<DynMeshCache>();
         resources.remove::<MeshRenderObjectSet>();
     }
 }
@@ -47,7 +46,10 @@ impl RenderFeaturePlugin for MeshRendererPlugin {
         super::render_feature_index()
     }
 
-    fn is_view_relevant(&self, view: &RenderView) -> bool {
+    fn is_view_relevant(
+        &self,
+        view: &RenderView,
+    ) -> bool {
         view.phase_is_relevant::<DepthPrepassRenderPhase>()
             || view.phase_is_relevant::<ShadowMapRenderPhase>()
             || view.phase_is_relevant::<OpaqueRenderPhase>()
@@ -130,7 +132,6 @@ impl RenderFeaturePlugin for MeshRendererPlugin {
             frame_packet.into_concrete(),
             depth_material,
             self.render_objects.clone(),
-            self.dyn_mesh_cache.clone(),
         )
     }
 

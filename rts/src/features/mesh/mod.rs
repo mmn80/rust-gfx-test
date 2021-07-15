@@ -26,9 +26,6 @@ pub use plugin::*;
 
 pub use jobs::MeshVertex;
 
-mod dyn_mesh;
-pub use dyn_mesh::*;
-
 mod render_object;
 pub use render_object::*;
 

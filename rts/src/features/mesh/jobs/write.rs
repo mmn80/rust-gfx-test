@@ -130,6 +130,11 @@ impl<'write> RenderFeatureWriteJob<'write> for MeshWriteJob<'write> {
         let per_material_descriptor_set = &submit_node_data.per_material_descriptor_set;
         let mesh_part_index = submit_node_data.mesh_part_index;
 
+        let mesh_asset = &render_object_instance.mesh_asset;
+        let mesh_part = mesh_asset.inner.mesh_parts[mesh_part_index]
+            .as_ref()
+            .unwrap();
+
         // Bind the correct pipeline.
 
         let pipeline = write_context
@@ -164,78 +169,39 @@ impl<'write> RenderFeatureWriteJob<'write> for MeshWriteJob<'write> {
             per_material_descriptor_set.bind(command_buffer)?;
         }
 
-        match &render_object_instance.mesh {
-            ExtractedMesh::MeshAsset(mesh_asset) => {
-                let mesh_part = mesh_asset.inner.mesh_parts[mesh_part_index]
-                    .as_ref()
-                    .unwrap();
+        command_buffer.cmd_bind_vertex_buffers(
+            0,
+            &[
+                // NOTE(dvd): Bind the mesh vertex data.
+                RafxVertexBufferBinding {
+                    buffer: &mesh_asset.inner.vertex_buffer.get_raw().buffer,
+                    byte_offset: mesh_part.vertex_buffer_offset_in_bytes as u64,
+                },
+                // NOTE(dvd): Bind the mesh model matrices. We pass these through instanced vertex
+                // attributes instead of descriptor sets so that we don't spend CPU time managing
+                // the descriptor sets. Another option would be push constants, but they aren't as
+                // well supported on rafx backends. A third option would be some type of dynamic
+                // uniform buffer, but we'd still need to pass in an index to the shader for each instance.
+                RafxVertexBufferBinding {
+                    buffer: &model_matrix_buffer.as_ref().unwrap().get_raw().buffer,
+                    byte_offset: (std::mem::size_of::<MeshModelMatrix>()
+                        * submit_node_data.model_matrix_offset)
+                        as u64,
+                },
+            ],
+        )?;
 
-                command_buffer.cmd_bind_vertex_buffers(
-                    0,
-                    &[
-                        // NOTE(dvd): Bind the mesh vertex data.
-                        RafxVertexBufferBinding {
-                            buffer: &mesh_asset.inner.vertex_buffer.get_raw().buffer,
-                            byte_offset: mesh_part.vertex_buffer_offset_in_bytes as u64,
-                        },
-                        // NOTE(dvd): Bind the mesh model matrices. We pass these through instanced vertex
-                        // attributes instead of descriptor sets so that we don't spend CPU time managing
-                        // the descriptor sets. Another option would be push constants, but they aren't as
-                        // well supported on rafx backends. A third option would be some type of dynamic
-                        // uniform buffer, but we'd still need to pass in an index to the shader for each instance.
-                        RafxVertexBufferBinding {
-                            buffer: &model_matrix_buffer.as_ref().unwrap().get_raw().buffer,
-                            byte_offset: (std::mem::size_of::<MeshModelMatrix>()
-                                * submit_node_data.model_matrix_offset)
-                                as u64,
-                        },
-                    ],
-                )?;
+        command_buffer.cmd_bind_index_buffer(&RafxIndexBufferBinding {
+            buffer: &mesh_asset.inner.index_buffer.get_raw().buffer,
+            byte_offset: mesh_part.index_buffer_offset_in_bytes as u64,
+            index_type: mesh_part.index_type,
+        })?;
 
-                command_buffer.cmd_bind_index_buffer(&RafxIndexBufferBinding {
-                    buffer: &mesh_asset.inner.index_buffer.get_raw().buffer,
-                    byte_offset: mesh_part.index_buffer_offset_in_bytes as u64,
-                    index_type: mesh_part.index_type,
-                })?;
-
-                command_buffer.cmd_draw_indexed(
-                    mesh_part.index_buffer_size_in_bytes / 2, //sizeof(u16)
-                    0,
-                    0,
-                )?;
-            }
-            ExtractedMesh::DynMesh(dyn_mesh) => {
-                let mesh_part = &dyn_mesh.inner.mesh_parts[mesh_part_index];
-
-                command_buffer.cmd_bind_vertex_buffers(
-                    0,
-                    &[
-                        RafxVertexBufferBinding {
-                            buffer: &dyn_mesh.inner.vertex_buffer.get_raw().buffer,
-                            byte_offset: mesh_part.vertex_buffer_offset_in_bytes as u64,
-                        },
-                        RafxVertexBufferBinding {
-                            buffer: &model_matrix_buffer.as_ref().unwrap().get_raw().buffer,
-                            byte_offset: (std::mem::size_of::<MeshModelMatrix>()
-                                * submit_node_data.model_matrix_offset)
-                                as u64,
-                        },
-                    ],
-                )?;
-
-                command_buffer.cmd_bind_index_buffer(&RafxIndexBufferBinding {
-                    buffer: &dyn_mesh.inner.index_buffer.get_raw().buffer,
-                    byte_offset: mesh_part.index_buffer_offset_in_bytes as u64,
-                    index_type: mesh_part.index_type,
-                })?;
-
-                command_buffer.cmd_draw_indexed(
-                    mesh_part.index_buffer_size_in_bytes / 2, //sizeof(u16)
-                    0,
-                    0,
-                )?;
-            }
-        }
+        command_buffer.cmd_draw_indexed(
+            mesh_part.index_buffer_size_in_bytes / 2, //sizeof(u16)
+            0,
+            0,
+        )?;
 
         Ok(())
     }
