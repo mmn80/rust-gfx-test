@@ -301,7 +301,7 @@ impl DemoApp {
         #[cfg(feature = "profile-with-optick")]
         profiling::optick::register_thread("Main Thread");
 
-        let mut scene_manager = SceneManager::default();
+        let scene_manager = SceneManager::default();
 
         let mut resources = Resources::default();
         resources.insert(TimeState::new());

@@ -34,10 +34,10 @@ pub struct KinObjectsState {
 }
 
 impl KinObjectsState {
-    pub fn new(resources: &Resources) -> Self {
-        let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-        let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
-        let mut meshes = HashMap::new();
+    pub fn new(_resources: &Resources) -> Self {
+        //let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+        //let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
+        let meshes = HashMap::new();
         KinObjectsState {
             meshes,
             ui_spawning: false,
