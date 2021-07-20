@@ -2,8 +2,8 @@ use crate::{
     assets::{font::FontAssetTypeRendererPlugin, mesh::GltfAssetTypeRendererPlugin},
     camera::RTSCamera,
     features::{
-        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin, mesh::MeshRendererPlugin,
-        text::TextRendererPlugin,
+        debug3d::Debug3DRendererPlugin, dyn_mesh::DynMeshRendererPlugin, egui::EguiRendererPlugin,
+        mesh::MeshRendererPlugin, text::TextRendererPlugin,
     },
     render_graph_generator::DemoRenderGraphGenerator,
     DemoRendererPlugin,
@@ -34,11 +34,13 @@ pub fn rendering_init(
     resources.insert(RTSCamera::default());
 
     let mesh_renderer_plugin = Arc::new(MeshRendererPlugin::new(Some(32)));
+    let dyn_mesh_renderer_plugin = Arc::new(DynMeshRendererPlugin::new(Some(32)));
     let debug3d_renderer_plugin = Arc::new(Debug3DRendererPlugin::default());
     let text_renderer_plugin = Arc::new(TextRendererPlugin::default());
     let egui_renderer_plugin = Arc::new(EguiRendererPlugin::default());
 
     mesh_renderer_plugin.legion_init(resources);
+    dyn_mesh_renderer_plugin.legion_init(resources);
     debug3d_renderer_plugin.legion_init(resources);
     text_renderer_plugin.legion_init(resources);
     egui_renderer_plugin.legion_init_winit(resources);
@@ -62,6 +64,7 @@ pub fn rendering_init(
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
         .add_asset(Arc::new(DemoRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
+        .add_render_feature(dyn_mesh_renderer_plugin)
         .add_render_feature(debug3d_renderer_plugin)
         .add_render_feature(text_renderer_plugin)
         .add_render_feature(egui_renderer_plugin)
@@ -123,6 +126,7 @@ pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
         resources.remove::<Renderer>();
 
         MeshRendererPlugin::legion_destroy(resources);
+        DynMeshRendererPlugin::legion_destroy(resources);
         Debug3DRendererPlugin::legion_destroy(resources);
         TextRendererPlugin::legion_destroy(resources);
         EguiRendererPlugin::legion_destroy(resources);

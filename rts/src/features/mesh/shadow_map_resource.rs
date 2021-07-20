@@ -1,11 +1,12 @@
 use super::MeshRenderFeature;
-use crate::phases::ShadowMapRenderPhase;
-use crate::RenderOptions;
 use crate::{
     camera::RTSCamera,
     components::{
         DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     },
+    features::dyn_mesh::DynMeshRenderFeature,
+    phases::ShadowMapRenderPhase,
+    RenderOptions,
 };
 use fnv::FnvHashMap;
 use legion::*;
@@ -37,15 +38,15 @@ pub enum ShadowMapRenderView {
 #[derive(Default)]
 pub struct ShadowMapResource {
     // These are populated by recalculate_shadow_map_views()
-    pub(super) shadow_map_lookup: FnvHashMap<LightId, usize>,
-    pub(super) shadow_map_render_views: Vec<ShadowMapRenderView>,
+    pub shadow_map_lookup: FnvHashMap<LightId, usize>,
+    pub shadow_map_render_views: Vec<ShadowMapRenderView>,
 
     // Populated by set_shadow_map_image_resources, during construction of the render graph
-    pub(super) image_usage_ids: Vec<RenderGraphImageUsageId>,
+    pub image_usage_ids: Vec<RenderGraphImageUsageId>,
 
     // Populated by set_shadow_map_image_views, after the render graph is constructed and image
     // resources are allocated
-    pub(super) shadow_map_image_views: Vec<ResourceArc<ImageViewResource>>,
+    pub shadow_map_image_views: Vec<ResourceArc<ImageViewResource>>,
 }
 
 impl ShadowMapResource {
@@ -159,6 +160,7 @@ fn calculate_shadow_map_views(
     {
         RenderFeatureMaskBuilder::default()
             .add_render_feature::<MeshRenderFeature>()
+            .add_render_feature::<DynMeshRenderFeature>()
             .build()
     } else {
         RenderFeatureMask::empty()

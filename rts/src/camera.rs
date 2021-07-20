@@ -1,6 +1,7 @@
 use crate::{
     features::{
         debug3d::Debug3DRenderFeature,
+        dyn_mesh::DynMeshRenderFeature,
         egui::EguiRenderFeature,
         mesh::{
             MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
@@ -189,6 +190,7 @@ impl RTSCamera {
 
         let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
             .add_render_feature::<MeshRenderFeature>()
+            .add_render_feature::<DynMeshRenderFeature>()
             .add_render_feature::<EguiRenderFeature>();
 
         if render_options.show_text {
