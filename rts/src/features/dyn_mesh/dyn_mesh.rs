@@ -81,11 +81,49 @@ pub struct DynMesh {
     pub inner: Arc<DynMeshInner>,
 }
 
-#[derive(Clone)]
-pub struct DynMeshHandle(u32);
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct DynMeshHandle {
+    handle: u32,
+}
 
-impl DynMeshHandle {
-    pub fn get_dyn_mesh(&self) -> Option<DynMesh> {
-        todo!();
+pub struct DynMeshStorage {
+    meshes: Vec<Option<DynMesh>>,
+}
+
+#[derive(Clone)]
+pub struct DynMeshResource {
+    storage: Arc<Mutex<DynMeshStorage>>,
+}
+
+impl DynMeshResource {
+    pub fn new() -> Self {
+        Self {
+            storage: Arc::new(Mutex::new(DynMeshStorage { meshes: Vec::new() })),
+        }
+    }
+
+    pub fn register_dyn_mesh(&mut self) -> DynMeshHandle {
+        let handle = {
+            let mut storage = self.storage.lock();
+            storage.meshes.push(None);
+            storage.meshes.len() as u32
+        };
+
+        DynMeshHandle { handle }
+    }
+
+    pub fn update_dyn_mesh(&mut self, handle: DynMeshHandle, mesh: DynMesh) {
+        let mut storage = self.storage.lock();
+        let _ = std::mem::replace(&mut storage.meshes[handle.handle as usize], Some(mesh));
+    }
+
+    pub fn get_dyn_mesh(&self, handle: DynMeshHandle) -> Option<DynMesh> {
+        let storage = self.storage.lock();
+        storage.meshes[handle.handle as usize].clone()
+    }
+
+    pub fn free_dyn_mesh(&mut self, handle: DynMeshHandle) {
+        let mut storage = self.storage.lock();
+        storage.meshes.remove(handle.handle as usize);
     }
 }

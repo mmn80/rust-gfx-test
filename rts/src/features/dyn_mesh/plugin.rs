@@ -13,6 +13,7 @@ pub struct DynMeshStaticResources {
 }
 
 pub struct DynMeshRendererPlugin {
+    meshes: DynMeshResource,
     render_objects: DynMeshRenderObjectSet,
     max_num_mesh_parts: Option<usize>,
 }
@@ -20,17 +21,20 @@ pub struct DynMeshRendererPlugin {
 impl DynMeshRendererPlugin {
     pub fn new(max_num_mesh_parts: Option<usize>) -> Self {
         Self {
+            meshes: DynMeshResource::new(),
             max_num_mesh_parts,
             render_objects: DynMeshRenderObjectSet::default(),
         }
     }
 
     pub fn legion_init(&self, resources: &mut legion::Resources) {
+        resources.insert(self.meshes.clone());
         resources.insert(self.render_objects.clone());
     }
 
     pub fn legion_destroy(resources: &mut legion::Resources) {
         resources.remove::<DynMeshRenderObjectSet>();
+        resources.remove::<DynMeshResource>();
     }
 }
 
@@ -124,6 +128,7 @@ impl RenderFeaturePlugin for DynMeshRendererPlugin {
             frame_packet.into_concrete(),
             depth_material,
             self.render_objects.clone(),
+            self.meshes.clone(),
         )
     }
 
