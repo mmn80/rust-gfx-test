@@ -1,7 +1,11 @@
 use distill::daemon::AssetDaemon;
 use distill_cli::Command;
+use rts::assets::anim::BlenderAnimImporter;
 use rts::assets::font::FontImporter;
-use rts::assets::mesh::GltfImporter;
+use rts::assets::mesh::{
+    BlenderMaterialImporter, BlenderMeshImporter, BlenderModelImporter, BlenderPrefabImporter,
+    GltfImporter,
+};
 use rts::daemon_args::AssetDaemonArgs;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -42,6 +46,11 @@ fn create_daemon(args: &CliArgs) -> AssetDaemon {
         .with_importer("ttf", FontImporter)
         .with_importer("gltf", GltfImporter)
         .with_importer("glb", GltfImporter)
+        .with_importer("blender_material", BlenderMaterialImporter)
+        .with_importer("blender_model", BlenderModelImporter)
+        .with_importer("blender_mesh", BlenderMeshImporter)
+        .with_importer("blender_prefab", BlenderPrefabImporter)
+        .with_importer("blender_anim", BlenderAnimImporter)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

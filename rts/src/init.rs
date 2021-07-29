@@ -1,5 +1,8 @@
 use crate::{
-    assets::{font::FontAssetTypeRendererPlugin, mesh::GltfAssetTypeRendererPlugin},
+    assets::{
+        anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin,
+        mesh::GltfAssetTypeRendererPlugin,
+    },
     camera::RTSCamera,
     features::{
         debug3d::Debug3DRendererPlugin, dyn_mesh::DynMeshRendererPlugin, egui::EguiRendererPlugin,
@@ -62,6 +65,7 @@ pub fn rendering_init(
     renderer_builder = renderer_builder
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
+        .add_asset(Arc::new(AnimAssetTypeRendererPlugin))
         .add_asset(Arc::new(DemoRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
         .add_render_feature(dyn_mesh_renderer_plugin)

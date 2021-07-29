@@ -5,5 +5,7 @@ config.toml
 /assets-unused
 .assets_db
 rts/assets/blender
+rts/assets/armature
 rts/assets/fonts
+rts/art
 assets.pack
