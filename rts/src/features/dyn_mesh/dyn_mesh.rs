@@ -5,6 +5,7 @@ use crate::{
 use rafx::{
     api::RafxIndexType,
     assets::MaterialInstanceAsset,
+    base::slab::{DropSlab, GenericDropSlabKey},
     framework::{BufferResource, DescriptorSetArc, MaterialPassResource, ResourceArc},
     render_feature_extract_job_predule::*,
 };
@@ -81,49 +82,98 @@ pub struct DynMesh {
     pub inner: Arc<DynMeshInner>,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+type DynMeshSetKey = GenericDropSlabKey;
+
+#[derive(Copy, Eq, PartialEq, Hash, Clone, Debug)]
 pub struct DynMeshHandle {
-    handle: u32,
+    handle: DynMeshSetKey,
 }
 
 pub struct DynMeshStorage {
-    meshes: Vec<Option<DynMesh>>,
+    inner: DropSlab<DynMesh>,
+}
+
+impl DynMeshStorage {
+    pub fn new() -> Self {
+        Self {
+            inner: Default::default(),
+        }
+    }
+
+    pub fn register_dyn_mesh(&mut self, dyn_mesh: DynMesh) -> DynMeshHandle {
+        self.inner.process_drops();
+
+        let drop_slab_key = self.inner.allocate(dyn_mesh);
+        DynMeshHandle {
+            handle: drop_slab_key.generic_drop_slab_key(),
+        }
+    }
+
+    pub fn get(&self, dyn_mesh_handle: &DynMeshHandle) -> &DynMesh {
+        self.inner
+            .get(&dyn_mesh_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| {
+                panic!(
+                    "DynMeshStorage did not contain handle {:?}.",
+                    dyn_mesh_handle
+                )
+            })
+    }
+
+    pub fn get_mut(&mut self, dyn_mesh_handle: &DynMeshHandle) -> &mut DynMesh {
+        self.inner
+            .get_mut(&dyn_mesh_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| {
+                panic!(
+                    "DynMeshStorage did not contain handle {:?}.",
+                    dyn_mesh_handle
+                )
+            })
+    }
 }
 
 #[derive(Clone)]
 pub struct DynMeshResource {
-    storage: Arc<Mutex<DynMeshStorage>>,
+    storage: Arc<RwLock<DynMeshStorage>>,
 }
 
 impl DynMeshResource {
     pub fn new() -> Self {
         Self {
-            storage: Arc::new(Mutex::new(DynMeshStorage { meshes: Vec::new() })),
+            storage: Arc::new(RwLock::new(DynMeshStorage::new())),
         }
     }
 
-    pub fn register_dyn_mesh(&mut self) -> DynMeshHandle {
-        let handle = {
-            let mut storage = self.storage.lock();
-            storage.meshes.push(None);
-            storage.meshes.len() as u32
+    pub fn read(&self) -> RwLockReadGuard<DynMeshStorage> {
+        let registry = &self.storage;
+        registry.try_read().unwrap_or_else(move || {
+            log::warn!("DynMeshStorage is being written by another thread.");
+
+            registry.read()
+        })
+    }
+
+    fn write(&mut self) -> RwLockWriteGuard<DynMeshStorage> {
+        let registry = &self.storage;
+        registry.try_write().unwrap_or_else(move || {
+            log::warn!("DynMeshStorage is being read or written by another thread.");
+
+            registry.write()
+        })
+    }
+
+    pub fn register_dyn_mesh(&mut self, dyn_mesh: DynMesh) -> DynMeshHandle {
+        let dyn_mesh_handle = {
+            let mut storage = self.write();
+            storage.register_dyn_mesh(dyn_mesh)
         };
 
-        DynMeshHandle { handle }
+        dyn_mesh_handle
     }
 
-    pub fn update_dyn_mesh(&mut self, handle: DynMeshHandle, mesh: DynMesh) {
-        let mut storage = self.storage.lock();
-        let _ = std::mem::replace(&mut storage.meshes[handle.handle as usize], Some(mesh));
-    }
-
-    pub fn get_dyn_mesh(&self, handle: DynMeshHandle) -> Option<DynMesh> {
-        let storage = self.storage.lock();
-        storage.meshes[handle.handle as usize].clone()
-    }
-
-    pub fn free_dyn_mesh(&mut self, handle: DynMeshHandle) {
-        let mut storage = self.storage.lock();
-        storage.meshes.remove(handle.handle as usize);
+    pub fn update_dyn_mesh(&mut self, dyn_mesh_handle: &DynMeshHandle, dyn_mesh: DynMesh) {
+        let mut storage = self.write();
+        let old_dyn_mesh = storage.get_mut(dyn_mesh_handle);
+        std::mem::replace(old_dyn_mesh, dyn_mesh);
     }
 }
