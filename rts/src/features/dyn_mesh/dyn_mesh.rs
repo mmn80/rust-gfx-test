@@ -82,11 +82,9 @@ pub struct DynMesh {
     pub inner: Arc<DynMeshInner>,
 }
 
-type DynMeshSetKey = GenericDropSlabKey;
-
 #[derive(Copy, Eq, PartialEq, Hash, Clone, Debug)]
 pub struct DynMeshHandle {
-    handle: DynMeshSetKey,
+    handle: GenericDropSlabKey,
 }
 
 pub struct DynMeshStorage {
