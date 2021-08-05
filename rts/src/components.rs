@@ -1,8 +1,9 @@
-use glam::f32::Vec3;
-use glam::Quat;
-use rafx::framework::visibility::VisibilityObjectArc;
-use rafx::render_features::RenderObjectHandle;
-use rafx::visibility::ViewFrustumArc;
+use crate::terrain::TerrainHandle;
+use glam::{f32::Vec3, Quat};
+use rafx::{
+    framework::visibility::VisibilityObjectArc, render_features::RenderObjectHandle,
+    visibility::ViewFrustumArc,
+};
 
 #[derive(Clone)]
 pub struct MeshComponent {
@@ -12,6 +13,11 @@ pub struct MeshComponent {
 #[derive(Clone)]
 pub struct VisibilityComponent {
     pub visibility_object_handle: VisibilityObjectArc,
+}
+
+#[derive(Clone)]
+pub struct TerrainComponent {
+    pub handle: TerrainHandle,
 }
 
 #[derive(Clone, Copy)]

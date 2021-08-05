@@ -41,6 +41,7 @@ mod components;
 mod dyn_object;
 mod kin_object;
 mod scenes;
+mod terrain;
 
 mod demo_plugin;
 mod demo_renderer_thread_pool;
@@ -459,6 +460,10 @@ impl DemoApp {
             add_to_extract_resources!(
                 crate::features::mesh::MeshRenderObjectSet,
                 mesh_render_object_set
+            );
+            add_to_extract_resources!(
+                crate::features::dyn_mesh::DynMeshRenderObjectSet,
+                dyn_mesh_render_object_set
             );
             add_to_extract_resources!(
                 crate::features::debug3d::Debug3DResource,
