@@ -2,34 +2,30 @@ use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
     core::prelude::*,
     mesh::{
-        greedy_quads, padded_greedy_quads_chunk_extent, GreedyQuadsBuffer, PosNormTexMesh,
-        RIGHT_HANDED_Y_UP_CONFIG,
+        greedy_quads, padded_greedy_quads_chunk_extent, GreedyQuadsBuffer, IsOpaque, MergeVoxel,
+        PosNormTexMesh, RIGHT_HANDED_Y_UP_CONFIG,
     },
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use rafx::{
     base::slab::{DropSlab, GenericDropSlabKey},
-    render_feature_extract_job_predule::{RenderObjectHandle, RwLock},
+    render_feature_extract_job_predule::*,
     visibility::VisibilityObjectArc,
 };
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 pub struct ChunkState {
     pub source_version: u32,
     pub rendered_version: u32,
 }
 
-#[derive(Clone)]
 pub struct TerrainRenderChunk {
     pub render_object_handle: Option<RenderObjectHandle>,
     pub visibility_object_handle: Option<VisibilityObjectArc>,
     pub source_version: u32,
     pub rendered_version: u32,
-    pub render_task: Option<Task<bool>>,
+    pub render_task: Option<Task<()>>,
 }
 
 impl TerrainRenderChunk {
@@ -44,14 +40,36 @@ impl TerrainRenderChunk {
     }
 }
 
-#[derive(Sync, Send)]
 pub struct RenderChunkTaskResults {
     pub key: ChunkKey3,
     pub mesh: PosNormTexMesh,
 }
 
+#[derive(Clone, Copy, Default)]
+struct CubeVoxel(u16);
+
+impl MergeVoxel for CubeVoxel {
+    type VoxelValue = u16;
+
+    fn voxel_merge_value(&self) -> Self::VoxelValue {
+        self.0
+    }
+}
+
+impl IsOpaque for CubeVoxel {
+    fn is_opaque(&self) -> bool {
+        self.0 > 0
+    }
+}
+
+impl IsEmpty for CubeVoxel {
+    fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+}
+
 pub struct TerrainInner {
-    pub voxels: ChunkHashMap3<u16, ChunkMapBuilder3x1<u16>>,
+    pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
     render_tx: Sender<RenderChunkTaskResults>,
@@ -64,14 +82,19 @@ impl TerrainInner {
             .render_chunks
             .entry(chunk)
             .or_insert(TerrainRenderChunk::new());
-        entry.source_version += 1;
+        if entry.source_version == entry.rendered_version {
+            entry.source_version += 1;
+            false
+        } else {
+            true
+        }
     }
 
     pub fn reset_chunks(&mut self) {
         self.render_chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);
-        self.voxels.visit_occupied_chunks(0, full_extent, |chunk| {
-            self.set_chunk_dirty(chunk.extent().into());
+        self.voxels.visit_occupied_chunks(0, &full_extent, |chunk| {
+            self.set_chunk_dirty(ChunkKey3::new(0, chunk.extent().minimum));
         });
     }
 
@@ -82,9 +105,9 @@ impl TerrainInner {
             chunk.render_task = {
                 let render_tx = self.render_tx.clone();
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
-                    self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
+                    &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
-                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, 0);
+                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, CubeVoxel(0));
                 copy_extent(
                     &padded_chunk_extent,
                     &self.voxels.lod_view(0),
@@ -110,8 +133,8 @@ impl TerrainInner {
                         }
                     }
                     let results = RenderChunkTaskResults {
-                        key,
-                        mesh: Some(mesh),
+                        key: key.clone(),
+                        mesh: mesh,
                     };
                     render_tx.send(results);
                 });
@@ -120,12 +143,12 @@ impl TerrainInner {
             }
         }
         for result in self.render_rx.try_iter() {
-            if let Some(chunk) = self.render_chunks.get_mut(result.key) {
+            if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
                 chunk.render_task = None;
                 chunk.rendered_version += 1;
 
                 log::info!(
-                    "Greedy mesh {} generated: {} positions, {} indices",
+                    "Greedy mesh {:?} generated: {} positions, {} indices",
                     result.key,
                     result.mesh.positions.len(),
                     result.mesh.indices.len()
@@ -140,7 +163,7 @@ pub struct Terrain {
     pub inner: Arc<TerrainInner>,
 }
 
-#[derive(Copy, Eq, PartialEq, Hash, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TerrainHandle {
     handle: GenericDropSlabKey,
 }
@@ -218,15 +241,15 @@ impl TerrainResource {
         })
     }
 
-    pub fn new_terrain(&mut self, fill_extent: Extent3i, fill_value: u16) -> TerrainHandle {
+    pub fn new_terrain(&mut self, fill_extent: Extent3i, fill_value: CubeVoxel) -> TerrainHandle {
         let terrain = {
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
-                let ambient_value = 0;
+                let ambient_value = CubeVoxel::default();
                 let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
                 let mut voxels = builder.build_with_hash_map_storage();
                 let mut lod0 = voxels.lod_view_mut(0);
-                lod0.fill_extent(fill_extent, fill_value);
+                lod0.fill_extent(&fill_extent, fill_value);
                 voxels
             };
 

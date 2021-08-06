@@ -65,9 +65,9 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
             .render_objects
             .get_id(context.render_object_id());
 
-        let dyn_mesh = self.meshes.read().get(render_object_static_data.mesh);
+        let dyn_mesh = self.meshes.read().get(&render_object_static_data.mesh);
 
-        context.set_render_object_instance_data(dyn_mesh.and_then(|dyn_mesh| {
+        context.set_render_object_instance_data({
             let entry = self.world.entry_ref(context.object_id().into()).unwrap();
             let transform_component = entry.get_component::<TransformComponent>().unwrap();
             Some(DynMeshRenderObjectInstanceData {
@@ -76,7 +76,7 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
                 rotation: transform_component.rotation,
                 scale: transform_component.scale,
             })
-        }));
+        });
     }
 
     fn end_per_view_extract(&self, context: &ExtractPerViewContext<'extract, '_, Self>) {
