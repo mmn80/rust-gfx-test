@@ -172,6 +172,6 @@ impl DynMeshResource {
     pub fn update_dyn_mesh(&mut self, dyn_mesh_handle: &DynMeshHandle, dyn_mesh: DynMesh) {
         let mut storage = self.write();
         let old_dyn_mesh = storage.get_mut(dyn_mesh_handle);
-        std::mem::replace(old_dyn_mesh, dyn_mesh);
+        let _old = std::mem::replace(old_dyn_mesh, dyn_mesh);
     }
 }

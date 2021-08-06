@@ -46,7 +46,7 @@ pub struct RenderChunkTaskResults {
 }
 
 #[derive(Clone, Copy, Default)]
-struct CubeVoxel(u16);
+pub struct CubeVoxel(u16);
 
 impl MergeVoxel for CubeVoxel {
     type VoxelValue = u16;
@@ -93,17 +93,23 @@ impl TerrainInner {
     pub fn reset_chunks(&mut self) {
         self.render_chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);
+        let mut occupied = vec![];
         self.voxels.visit_occupied_chunks(0, &full_extent, |chunk| {
-            self.set_chunk_dirty(ChunkKey3::new(0, chunk.extent().minimum));
+            occupied.push(chunk.extent().minimum);
         });
+        for chunk_min in occupied {
+            self.set_chunk_dirty(ChunkKey3::new(0, chunk_min));
+        }
     }
 
     pub fn update_render_chunks(&mut self) {
-        for (key, chunk) in self.render_chunks.iter_mut().filter(|(_key, chunk)| {
-            chunk.render_task.is_none() && chunk.rendered_version < chunk.source_version
-        }) {
-            chunk.render_task = {
-                let render_tx = self.render_tx.clone();
+        let to_render: Vec<_> = self
+            .render_chunks
+            .iter()
+            .filter(|(_key, chunk)| {
+                chunk.render_task.is_none() && chunk.rendered_version < chunk.source_version
+            })
+            .map(|(key, _chunk)| {
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                     &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
@@ -113,33 +119,37 @@ impl TerrainInner {
                     &self.voxels.lod_view(0),
                     &mut padded_chunk,
                 );
-                let padded_chunk_ref = &padded_chunk;
-                let task = self.task_pool.spawn(async move {
-                    let mut buffer = GreedyQuadsBuffer::new(
-                        padded_chunk_extent,
-                        RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
-                    );
-                    greedy_quads(padded_chunk_ref, &padded_chunk_extent, &mut buffer);
-                    let mut mesh = PosNormTexMesh::default();
-                    for group in buffer.quad_groups.iter() {
-                        for quad in group.quads.iter() {
-                            group.face.add_quad_to_pos_norm_tex_mesh(
-                                RIGHT_HANDED_Y_UP_CONFIG.u_flip_face,
-                                false,
-                                &quad,
-                                1.0,
-                                &mut mesh,
-                            );
-                        }
+                (key.clone(), padded_chunk_extent, padded_chunk)
+            })
+            .collect();
+        for (key, padded_chunk_extent, padded_chunk) in to_render {
+            let render_tx = self.render_tx.clone();
+            let task = self.task_pool.spawn(async move {
+                let mut buffer = GreedyQuadsBuffer::new(
+                    padded_chunk_extent,
+                    RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
+                );
+                greedy_quads(&padded_chunk, &padded_chunk_extent, &mut buffer);
+                let mut mesh = PosNormTexMesh::default();
+                for group in buffer.quad_groups.iter() {
+                    for quad in group.quads.iter() {
+                        group.face.add_quad_to_pos_norm_tex_mesh(
+                            RIGHT_HANDED_Y_UP_CONFIG.u_flip_face,
+                            false,
+                            &quad,
+                            1.0,
+                            &mut mesh,
+                        );
                     }
-                    let results = RenderChunkTaskResults {
-                        key: key.clone(),
-                        mesh: mesh,
-                    };
-                    render_tx.send(results);
-                });
-                task.detach();
-                Some(task)
+                }
+                let results = RenderChunkTaskResults {
+                    key: key.clone(),
+                    mesh: mesh,
+                };
+                let _result = render_tx.send(results);
+            });
+            if let Some(chunk) = self.render_chunks.get_mut(&key) {
+                chunk.render_task = Some(task);
             }
         }
         for result in self.render_rx.try_iter() {

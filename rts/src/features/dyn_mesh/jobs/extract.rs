@@ -65,7 +65,8 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
             .render_objects
             .get_id(context.render_object_id());
 
-        let dyn_mesh = self.meshes.read().get(&render_object_static_data.mesh);
+        let guard = self.meshes.read();
+        let dyn_mesh = guard.get(&render_object_static_data.mesh);
 
         context.set_render_object_instance_data({
             let entry = self.world.entry_ref(context.object_id().into()).unwrap();
