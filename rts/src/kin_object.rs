@@ -3,7 +3,9 @@ use crate::{
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
     input::{InputResource, MouseButton},
+    terrain::{TerrainHandle, TerrainResource},
 };
+use building_blocks::core::prelude::*;
 use egui::Button;
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
@@ -28,17 +30,24 @@ pub struct KinObjectComponent {
 }
 
 pub struct KinObjectsState {
+    terrain: TerrainHandle,
     meshes: HashMap<KinObjectType, RenderObjectHandle>,
     ui_spawning: bool,
     ui_object_type: KinObjectType,
 }
 
 impl KinObjectsState {
-    pub fn new(_resources: &Resources) -> Self {
+    pub fn new(resources: &Resources) -> Self {
         //let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         //let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let terrain = terrain_resource.new_terrain(
+            Extent3i::from_min_and_shape(Point3i::ZERO, Point3i::fill(256)),
+            1.into(),
+        );
         let meshes = HashMap::new();
         KinObjectsState {
+            terrain,
             meshes,
             ui_spawning: false,
             ui_object_type: KinObjectType::Building,
@@ -80,6 +89,11 @@ impl KinObjectsState {
                 self.ui_spawning = false;
             }
         }
+
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let mut storage = terrain_resource.write();
+        let terrain = storage.get_mut(&self.terrain);
+        terrain.update_render_chunks();
     }
 
     pub fn spawn(

@@ -48,6 +48,12 @@ pub struct RenderChunkTaskResults {
 #[derive(Clone, Copy, Default)]
 pub struct CubeVoxel(u16);
 
+impl From<u16> for CubeVoxel {
+    fn from(id: u16) -> Self {
+        CubeVoxel(id)
+    }
+}
+
 impl MergeVoxel for CubeVoxel {
     type VoxelValue = u16;
 
@@ -68,7 +74,7 @@ impl IsEmpty for CubeVoxel {
     }
 }
 
-pub struct TerrainInner {
+pub struct Terrain {
     pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
@@ -76,7 +82,7 @@ pub struct TerrainInner {
     render_rx: Receiver<RenderChunkTaskResults>,
 }
 
-impl TerrainInner {
+impl Terrain {
     pub fn set_chunk_dirty(&mut self, chunk: ChunkKey3) -> bool {
         let entry = self
             .render_chunks
@@ -122,6 +128,9 @@ impl TerrainInner {
                 (key.clone(), padded_chunk_extent, padded_chunk)
             })
             .collect();
+        if to_render.len() > 0 {
+            log::info!("Starting {} greedy mesh jobs", to_render.len());
+        }
         for (key, padded_chunk_extent, padded_chunk) in to_render {
             let render_tx = self.render_tx.clone();
             let task = self.task_pool.spawn(async move {
@@ -144,7 +153,7 @@ impl TerrainInner {
                 }
                 let results = RenderChunkTaskResults {
                     key: key.clone(),
-                    mesh: mesh,
+                    mesh,
                 };
                 let _result = render_tx.send(results);
             });
@@ -152,25 +161,30 @@ impl TerrainInner {
                 chunk.render_task = Some(task);
             }
         }
+        let mut chunks = vec![];
         for result in self.render_rx.try_iter() {
             if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
                 chunk.render_task = None;
                 chunk.rendered_version += 1;
 
-                log::info!(
-                    "Greedy mesh {:?} generated: {} positions, {} indices",
-                    result.key,
+                chunks.push((
+                    result.key.minimum,
                     result.mesh.positions.len(),
-                    result.mesh.indices.len()
-                );
+                    result.mesh.indices.len(),
+                ));
             };
         }
+        if chunks.len() > 0 {
+            let tot_pos: usize = chunks.iter().map(|p| p.1).sum();
+            let tot_ind: usize = chunks.iter().map(|p| p.2).sum();
+            log::info!(
+                "{} terrain meshes generated: {} positions, {} indices",
+                chunks.len(),
+                tot_pos,
+                tot_ind,
+            );
+        }
     }
-}
-
-#[derive(Clone)]
-pub struct Terrain {
-    pub inner: Arc<TerrainInner>,
 }
 
 #[derive(Clone, Debug)]
@@ -242,7 +256,7 @@ impl TerrainResource {
         })
     }
 
-    fn write(&mut self) -> RwLockWriteGuard<TerrainStorage> {
+    pub fn write(&mut self) -> RwLockWriteGuard<TerrainStorage> {
         let registry = &self.storage;
         registry.try_write().unwrap_or_else(move || {
             log::warn!("TerrainStorage is being read or written by another thread.");
@@ -252,7 +266,7 @@ impl TerrainResource {
     }
 
     pub fn new_terrain(&mut self, fill_extent: Extent3i, fill_value: CubeVoxel) -> TerrainHandle {
-        let terrain = {
+        let mut terrain = {
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
                 let ambient_value = CubeVoxel::default();
@@ -265,15 +279,16 @@ impl TerrainResource {
 
             let (render_tx, render_rx) = unbounded();
             Terrain {
-                inner: Arc::new(TerrainInner {
-                    voxels,
-                    task_pool: TaskPoolBuilder::new().build(),
-                    render_chunks: HashMap::new(),
-                    render_tx,
-                    render_rx,
-                }),
+                voxels,
+                task_pool: TaskPoolBuilder::new().build(),
+                render_chunks: HashMap::new(),
+                render_tx,
+                render_rx,
             }
         };
+
+        terrain.reset_chunks();
+
         let terrain_handle = {
             let mut storage = self.write();
             storage.register_terrain(terrain)
