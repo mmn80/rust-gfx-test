@@ -64,7 +64,7 @@ impl MergeVoxel for CubeVoxel {
 
 impl IsOpaque for CubeVoxel {
     fn is_opaque(&self) -> bool {
-        self.0 > 0
+        true
     }
 }
 
@@ -296,4 +296,9 @@ impl TerrainResource {
 
         terrain_handle
     }
+}
+
+#[derive(Clone)]
+pub struct TerrainComponent {
+    pub handle: TerrainHandle,
 }

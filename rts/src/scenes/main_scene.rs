@@ -1,15 +1,7 @@
 use super::{Scene, SceneManagerAction};
 use crate::{
-    assets::{font::FontAsset, mesh::MeshAsset},
     camera::RTSCamera,
-    components::{
-        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
-    },
     dyn_object::DynObjectsState,
-    features::{
-        mesh::{MeshRenderObject, MeshRenderObjectSet},
-        text::TextResource,
-    },
     input::{InputResource, KeyboardKey},
     kin_object::KinObjectsState,
     time::TimeState,
@@ -22,6 +14,16 @@ use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
     visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion},
+};
+use rafx_plugins::{
+    assets::{font::FontAsset, mesh::MeshAsset},
+    components::{
+        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
+    },
+    features::{
+        mesh::{MeshRenderObject, MeshRenderObjectSet},
+        text::TextResource,
+    },
 };
 
 pub(super) struct MainScene {

@@ -1,26 +1,28 @@
-use rafx::render_feature_prepare_job_predule::*;
-
 use super::*;
-use crate::components::{
-    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
-};
-use crate::features::mesh::{LightId, ShadowMapRenderView, ShadowMapResource};
-use crate::phases::{
-    DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
-};
-use rafx::base::resource_map::ReadBorrow;
-use rafx::framework::{MaterialPassResource, ResourceArc, ResourceContext};
-
 use glam::Mat4;
 use rafx::api::{RafxBufferDef, RafxDeviceContext, RafxMemoryUsage, RafxResourceType};
+use rafx::base::resource_map::ReadBorrow;
+use rafx::framework::{MaterialPassResource, ResourceArc, ResourceContext};
+use rafx::render_feature_prepare_job_predule::*;
 use rafx::renderer::InvalidResources;
-use shaders::depth_vert::PerViewDataUniform as ShadowPerViewShaderParam;
-use shaders::mesh_textured_frag::PerViewDataUniform as DynMeshPerViewFragmentShaderParam;
+use rafx_plugins::{
+    components::{
+        DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+    },
+    features::mesh::{LightId, ShadowMapRenderView, ShadowMapResource},
+    phases::{
+        DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
+    },
+};
+use rafx_plugins_shaders::{
+    depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
+    mesh_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
+};
 
 const PER_VIEW_DESCRIPTOR_SET_INDEX: u32 =
-    shaders::mesh_textured_frag::PER_VIEW_DATA_DESCRIPTOR_SET_INDEX as u32;
+    rafx_plugins_shaders::mesh_textured_frag::PER_VIEW_DATA_DESCRIPTOR_SET_INDEX as u32;
 const PER_MATERIAL_DESCRIPTOR_SET_INDEX: u32 =
-    shaders::mesh_textured_frag::PER_MATERIAL_DATA_DESCRIPTOR_SET_INDEX as u32;
+    rafx_plugins_shaders::mesh_textured_frag::PER_MATERIAL_DATA_DESCRIPTOR_SET_INDEX as u32;
 
 struct PreparedDirectionalLight<'a> {
     light: &'a DirectionalLightComponent,
@@ -149,7 +151,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                         }
 
                         per_frame_submit_data.shadow_map_2d_data[num_shadow_map_2d] =
-                            shaders::mesh_textured_frag::ShadowMap2DDataStd140 {
+                            rafx_plugins_shaders::mesh_textured_frag::ShadowMap2DDataStd140 {
                                 shadow_map_view_proj: shadow_view.view_proj().to_cols_array_2d(),
                                 shadow_map_light_dir: shadow_view.view_dir().into(),
                                 ..Default::default()
@@ -176,7 +178,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                             .unwrap();
 
                         per_frame_submit_data.shadow_map_cube_data[num_shadow_map_cube] =
-                            shaders::mesh_textured_frag::ShadowMapCubeDataStd140 {
+                            rafx_plugins_shaders::mesh_textured_frag::ShadowMapCubeDataStd140 {
                                 cube_map_projection_near_z: near,
                                 cube_map_projection_far_z: far,
                                 ..Default::default()
@@ -362,7 +364,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
 
         let opaque_descriptor_set = if view.phase_is_relevant::<OpaqueRenderPhase>() {
             let per_view_frag_data = {
-                let mut per_view_frag_data = DynMeshPerViewFragmentShaderParam::default();
+                let mut per_view_frag_data = MeshPerViewFragmentShaderParam::default();
 
                 per_view_frag_data.view = view.view_matrix().to_cols_array_2d();
                 per_view_frag_data.view_proj = view.view_proj().to_cols_array_2d();
@@ -554,7 +556,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     descriptor_set_allocator
                         .create_descriptor_set(
                             &per_view_descriptor_set_layout,
-                            shaders::mesh_textured_frag::DescriptorSet0Args {
+                            rafx_plugins_shaders::mesh_textured_frag::DescriptorSet0Args {
                                 shadow_map_images,
                                 shadow_map_images_cube,
                                 per_view_data: &per_view_frag_data,
@@ -583,7 +585,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
             descriptor_set_allocator
                 .create_descriptor_set(
                     per_instance_descriptor_set_layout,
-                    shaders::depth_vert::DescriptorSet0Args {
+                    rafx_plugins_shaders::depth_vert::DescriptorSet0Args {
                         per_view_data: &per_view_data,
                     },
                 )

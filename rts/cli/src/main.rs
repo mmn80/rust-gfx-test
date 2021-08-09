@@ -1,8 +1,8 @@
 use distill::daemon::AssetDaemon;
 use distill_cli::Command;
-use rts::assets::anim::BlenderAnimImporter;
-use rts::assets::font::FontImporter;
-use rts::assets::mesh::{
+use rafx_plugins::assets::anim::BlenderAnimImporter;
+use rafx_plugins::assets::font::FontImporter;
+use rafx_plugins::assets::mesh::{
     BlenderMaterialImporter, BlenderMeshImporter, BlenderModelImporter, BlenderPrefabImporter,
     GltfImporter,
 };

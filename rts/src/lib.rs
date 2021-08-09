@@ -2,11 +2,7 @@
 #![allow(dead_code)]
 
 use crate::{
-    camera::RTSCamera,
-    daemon_args::AssetDaemonArgs,
-    features::egui::{EguiContextResource, WinitEguiManager},
-    input::InputResource,
-    scenes::SceneManager,
+    camera::RTSCamera, daemon_args::AssetDaemonArgs, input::InputResource, scenes::SceneManager,
     time::TimeState,
 };
 use legion::*;
@@ -17,6 +13,14 @@ use rafx::{
     renderer::{AssetSource, Renderer, RendererConfigResource, ViewportsResource},
     visibility::VisibilityRegion,
 };
+use rafx_plugins::{
+    features::{
+        egui::{EguiContextResource, WinitEguiManager},
+        mesh::MeshRenderOptions,
+    },
+    phases,
+    pipelines::basic::{BasicPipelineRenderOptions, TonemapperType},
+};
 use scenes::SceneManagerAction;
 use structopt::StructOpt;
 use time::PeriodicEvent;
@@ -26,27 +30,17 @@ use winit::{
     window::{Fullscreen, Window},
 };
 
-pub mod assets;
+mod camera;
 pub mod daemon_args;
+mod demo_renderer_thread_pool;
+mod dyn_object;
 mod features;
 mod init;
-mod phases;
-mod render_graph_generator;
-
-mod camera;
 mod input;
-mod time;
-
-mod components;
-mod dyn_object;
 mod kin_object;
 mod scenes;
 mod terrain;
-
-mod demo_plugin;
-mod demo_renderer_thread_pool;
-
-pub use demo_plugin::DemoRendererPlugin;
+mod time;
 
 #[cfg(all(feature = "profile-with-tracy-memory", not(feature = "stats_alloc")))]
 #[global_allocator]
@@ -82,52 +76,6 @@ impl Drop for StatsAllocMemoryRegion<'_> {
             self.region_name,
             self.region.change_and_reset()
         );
-    }
-}
-
-// Should be kept in sync with the constants in tonemapper.glsl
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(C)]
-pub enum TonemapperType {
-    None,
-    StephenHillACES,
-    SimplifiedLumaACES,
-    Hejl2015,
-    Hable,
-    FilmicALU,
-    LogDerivative,
-    VisualizeRGBMax,
-    VisualizeLuma,
-    Max,
-}
-
-impl TonemapperType {
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            TonemapperType::None => "None",
-            TonemapperType::StephenHillACES => "Stephen Hill ACES",
-            TonemapperType::SimplifiedLumaACES => "SimplifiedLumaACES",
-            TonemapperType::Hejl2015 => "Hejl 2015",
-            TonemapperType::Hable => "Hable",
-            TonemapperType::FilmicALU => "Filmic ALU (Hable)",
-            TonemapperType::LogDerivative => "LogDerivative",
-            TonemapperType::VisualizeRGBMax => "Visualize RGB Max",
-            TonemapperType::VisualizeLuma => "Visualize RGB Luma",
-            TonemapperType::Max => "MAX_TONEMAPPER_VALUE",
-        }
-    }
-}
-
-impl From<i32> for TonemapperType {
-    fn from(v: i32) -> Self {
-        assert!(v <= Self::Max as i32);
-        unsafe { std::mem::transmute(v) }
-    }
-}
-
-impl std::fmt::Display for TonemapperType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display_name())
     }
 }
 
@@ -196,7 +144,7 @@ impl RenderOptions {
 
         if self.enable_hdr {
             ui.indent("HDR options", |ui| {
-                let tonemapper_names: Vec<_> = (0..(TonemapperType::Max as i32))
+                let tonemapper_names: Vec<_> = (0..(TonemapperType::MAX as i32))
                     .map(|t| TonemapperType::from(t).display_name())
                     .collect();
 
@@ -307,6 +255,8 @@ impl DemoApp {
         let mut resources = Resources::default();
         resources.insert(TimeState::new());
         resources.insert(RenderOptions::default_2d());
+        resources.insert(MeshRenderOptions::default());
+        resources.insert(BasicPipelineRenderOptions::default());
         resources.insert(DebugUiState::default());
         resources.insert(InputResource::new());
 
@@ -415,6 +365,35 @@ impl DemoApp {
 
         self.egui_debug_draw();
 
+        {
+            let render_options = self.resources.get::<RenderOptions>().unwrap();
+
+            let mut basic_pipeline_render_options = self
+                .resources
+                .get_mut::<BasicPipelineRenderOptions>()
+                .unwrap();
+            basic_pipeline_render_options.enable_msaa = render_options.enable_msaa;
+            basic_pipeline_render_options.enable_hdr = render_options.enable_hdr;
+            basic_pipeline_render_options.enable_bloom = render_options.enable_bloom;
+            basic_pipeline_render_options.enable_textures = render_options.enable_textures;
+            basic_pipeline_render_options.show_surfaces = render_options.show_surfaces;
+            basic_pipeline_render_options.show_wireframes = render_options.show_wireframes;
+            basic_pipeline_render_options.show_debug3d = render_options.show_debug3d;
+            basic_pipeline_render_options.show_text = render_options.show_text;
+            basic_pipeline_render_options.show_skybox = false;
+            basic_pipeline_render_options.show_feature_toggles =
+                render_options.show_feature_toggles;
+            basic_pipeline_render_options.blur_pass_count = render_options.blur_pass_count;
+            basic_pipeline_render_options.tonemapper_type = render_options.tonemapper_type;
+            basic_pipeline_render_options.enable_visibility_update =
+                render_options.enable_visibility_update;
+
+            let mut mesh_render_options = self.resources.get_mut::<MeshRenderOptions>().unwrap();
+            mesh_render_options.show_surfaces = render_options.show_surfaces;
+            mesh_render_options.show_shadows = render_options.show_shadows;
+            mesh_render_options.enable_lighting = render_options.enable_lighting;
+        }
+
         //
         // Close egui input for this frame
         //
@@ -456,9 +435,11 @@ impl DemoApp {
             add_to_extract_resources!(AssetManager);
             add_to_extract_resources!(TimeState);
             add_to_extract_resources!(RenderOptions);
+            add_to_extract_resources!(BasicPipelineRenderOptions);
+            add_to_extract_resources!(MeshRenderOptions);
             add_to_extract_resources!(RendererConfigResource);
             add_to_extract_resources!(
-                crate::features::mesh::MeshRenderObjectSet,
+                rafx_plugins::features::mesh::MeshRenderObjectSet,
                 mesh_render_object_set
             );
             add_to_extract_resources!(
@@ -466,11 +447,11 @@ impl DemoApp {
                 dyn_mesh_render_object_set
             );
             add_to_extract_resources!(
-                crate::features::debug3d::Debug3DResource,
+                rafx_plugins::features::debug3d::Debug3DResource,
                 debug_draw_3d_resource
             );
-            add_to_extract_resources!(crate::features::text::TextResource, text_resource);
-            add_to_extract_resources!(WinitEguiManager, egui_manager);
+            add_to_extract_resources!(rafx_plugins::features::text::TextResource, text_resource);
+            add_to_extract_resources!(WinitEguiManager, winit_egui_manager);
 
             let mut camera = self.resources.get_mut::<camera::RTSCamera>().unwrap();
             extract_resources.insert(&mut *camera);
@@ -602,7 +583,7 @@ impl DemoApp {
         use winit::event::*;
 
         let egui_manager = resources
-            .get::<crate::features::egui::WinitEguiManager>()
+            .get::<rafx_plugins::features::egui::WinitEguiManager>()
             .unwrap();
 
         let ignore_event = {

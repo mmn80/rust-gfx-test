@@ -1,12 +1,5 @@
 use crate::{
-    assets::mesh::MeshAsset,
     camera::RTSCamera,
-    components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{
-        debug3d::Debug3DResource,
-        egui::EguiContextResource,
-        mesh::{MeshRenderObject, MeshRenderObjectSet},
-    },
     input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
     time::TimeState,
 };
@@ -19,6 +12,15 @@ use rafx::{
     render_feature_renderer_prelude::{AssetManager, AssetResource},
     renderer::ViewportsResource,
     visibility::CullModel,
+};
+use rafx_plugins::{
+    assets::mesh::MeshAsset,
+    components::{MeshComponent, TransformComponent, VisibilityComponent},
+    features::{
+        debug3d::Debug3DResource,
+        egui::EguiContextResource,
+        mesh::{MeshRenderObject, MeshRenderObjectSet},
+    },
 };
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;

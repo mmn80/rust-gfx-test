@@ -1,19 +1,6 @@
 use crate::{
-    features::{
-        debug3d::Debug3DRenderFeature,
-        dyn_mesh::DynMeshRenderFeature,
-        egui::EguiRenderFeature,
-        mesh::{
-            MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
-            MeshUntexturedRenderFeatureFlag, MeshWireframeRenderFeatureFlag,
-        },
-        text::TextRenderFeature,
-    },
+    features::dyn_mesh::DynMeshRenderFeature,
     input::{InputResource, KeyboardKey},
-    phases::{
-        DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
-        WireframeRenderPhase,
-    },
     time::TimeState,
     RenderOptions,
 };
@@ -31,6 +18,21 @@ use rafx::{
     },
     renderer::{RenderViewMeta, ViewportsResource},
     visibility::ViewFrustumArc,
+};
+use rafx_plugins::{
+    features::{
+        debug3d::Debug3DRenderFeature,
+        egui::EguiRenderFeature,
+        mesh::{
+            MeshNoShadowsRenderFeatureFlag, MeshRenderFeature, MeshUnlitRenderFeatureFlag,
+            MeshUntexturedRenderFeatureFlag, MeshWireframeRenderFeatureFlag,
+        },
+        text::TextRenderFeature,
+    },
+    phases::{
+        DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
+        WireframeRenderPhase,
+    },
 };
 use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
 

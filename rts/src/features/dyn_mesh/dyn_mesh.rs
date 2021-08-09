@@ -1,13 +1,13 @@
-use crate::{
-    features::mesh::MeshUntexturedRenderFeatureFlag,
-    phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
-};
 use rafx::{
     api::RafxIndexType,
     assets::MaterialInstanceAsset,
     base::slab::{DropSlab, GenericDropSlabKey},
     framework::{BufferResource, DescriptorSetArc, MaterialPassResource, ResourceArc},
     render_feature_extract_job_predule::*,
+};
+use rafx_plugins::{
+    features::mesh::MeshUntexturedRenderFeatureFlag,
+    phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
 };
 use std::sync::Arc;
 

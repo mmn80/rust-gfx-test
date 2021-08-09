@@ -1,7 +1,5 @@
 use crate::{
     camera::RTSCamera,
-    components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
     input::{InputResource, MouseButton},
     terrain::{TerrainHandle, TerrainResource},
 };
@@ -13,6 +11,10 @@ use rafx::{
     render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},
     render_feature_renderer_prelude::AssetManager,
     visibility::CullModel,
+};
+use rafx_plugins::{
+    components::{MeshComponent, TransformComponent, VisibilityComponent},
+    features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
 };
 use std::collections::HashMap;
 

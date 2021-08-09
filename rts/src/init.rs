@@ -1,16 +1,5 @@
 use crate::{
-    assets::{
-        anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin,
-        mesh::GltfAssetTypeRendererPlugin,
-    },
-    camera::RTSCamera,
-    features::{
-        debug3d::Debug3DRendererPlugin, dyn_mesh::DynMeshRendererPlugin, egui::EguiRendererPlugin,
-        mesh::MeshRendererPlugin, text::TextRendererPlugin,
-    },
-    render_graph_generator::DemoRenderGraphGenerator,
-    terrain::TerrainResource,
-    DemoRendererPlugin,
+    camera::RTSCamera, features::dyn_mesh::DynMeshRendererPlugin, terrain::TerrainResource,
 };
 use legion::Resources;
 use rafx::{
@@ -23,6 +12,18 @@ use rafx::{
         ViewportsResource,
     },
 };
+use rafx_plugins::{
+    assets::{
+        anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin,
+        mesh::GltfAssetTypeRendererPlugin,
+    },
+    features::{
+        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin, mesh::MeshRendererPlugin,
+        text::TextRendererPlugin,
+    },
+    pipelines::basic::{BasicPipelineRendererPlugin, BasicRenderGraphGenerator},
+};
+
 use raw_window_handle::HasRawWindowHandle;
 use std::sync::Arc;
 
@@ -67,7 +68,7 @@ pub fn rendering_init(
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))
-        .add_asset(Arc::new(DemoRendererPlugin))
+        .add_asset(Arc::new(BasicPipelineRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
         .add_render_feature(dyn_mesh_renderer_plugin)
         .add_render_feature(debug3d_renderer_plugin)
@@ -78,7 +79,7 @@ pub fn rendering_init(
     let mut renderer_builder_result = {
         let extract_resources = ExtractResources::default();
 
-        let render_graph_generator = Box::new(DemoRenderGraphGenerator);
+        let render_graph_generator = Box::new(BasicRenderGraphGenerator);
 
         renderer_builder.build(
             extract_resources,

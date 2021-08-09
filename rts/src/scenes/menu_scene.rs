@@ -1,9 +1,7 @@
 use super::SceneManagerAction;
 use crate::{
     camera::RTSCamera,
-    features::egui::{EguiContextResource, EguiRenderFeature},
     input::{InputResource, KeyboardKey},
-    phases::UiRenderPhase,
     scenes::Scene,
 };
 use egui::{Align2, Button};
@@ -16,6 +14,10 @@ use rafx::{
     },
     renderer::{RenderViewMeta, ViewportsResource},
     visibility::{ViewFrustumArc, VisibilityRegion},
+};
+use rafx_plugins::{
+    features::egui::{EguiContextResource, EguiRenderFeature},
+    phases::UiRenderPhase,
 };
 
 pub(super) struct MenuScene {

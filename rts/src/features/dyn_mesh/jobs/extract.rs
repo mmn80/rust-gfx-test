@@ -1,13 +1,13 @@
 use rafx::render_feature_extract_job_predule::*;
 
 use super::*;
-use crate::components::{
-    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
-};
 use legion::{Entity, EntityStore, IntoQuery, Read, World};
 use rafx::assets::{AssetManagerExtractRef, AssetManagerRenderResource, MaterialAsset};
 use rafx::base::resource_ref_map::ResourceRefBorrow;
 use rafx::distill::loader::handle::Handle;
+use rafx_plugins::components::{
+    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+};
 
 pub struct DynMeshExtractJob<'extract> {
     world: ResourceRefBorrow<'extract, World>,

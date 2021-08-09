@@ -2,7 +2,7 @@
 
 members = [
     "rts",
-    "rts/shaders",
+    "rts/demo-shaders",
     "rts/cli",
 ]
 
