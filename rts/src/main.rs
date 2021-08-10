@@ -60,3 +60,10 @@ fn main() {
 
     rts::update_loop(&args, window, event_loop).unwrap();
 }
+
+// cli command:
+//   cargo run --package cli -- 'assets ../../../../rafx/rafx-plugins/assets' pack assets.pack
+// run with pack command:
+//   cargo run --bin rts --release -- --packfile assets.pack
+// add backtrace command prefix for powershell:
+//   $env:RUST_BACKTRACE=1;
