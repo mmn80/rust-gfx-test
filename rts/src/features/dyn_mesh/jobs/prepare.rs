@@ -132,15 +132,15 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
         // This maps the index in the combined list to indices in the 2d/cube maps
 
         assert_eq!(
-            shadow_map_data.shadow_map_render_views.len(),
-            shadow_map_data.shadow_map_image_views.len()
+            shadow_map_data.shadow_map_render_views().len(),
+            shadow_map_data.shadow_map_image_views().len()
         );
 
         {
             profiling::scope!("gather shadow data");
 
             for (index, shadow_map_render_view) in
-                shadow_map_data.shadow_map_render_views.iter().enumerate()
+                shadow_map_data.shadow_map_render_views().iter().enumerate()
             {
                 match shadow_map_render_view {
                     ShadowMapRenderView::Single(shadow_view) => {
@@ -158,7 +158,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                             };
 
                         per_frame_submit_data.shadow_map_2d_image_views[num_shadow_map_2d] =
-                            Some(shadow_map_data.shadow_map_image_views[index].clone());
+                            Some(shadow_map_data.shadow_map_image_views()[index].clone());
                         per_frame_submit_data.shadow_map_image_index_remap[index] =
                             Some(num_shadow_map_2d);
 
@@ -185,7 +185,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                             };
 
                         per_frame_submit_data.shadow_map_cube_image_views[num_shadow_map_cube] =
-                            Some(shadow_map_data.shadow_map_image_views[index].clone());
+                            Some(shadow_map_data.shadow_map_image_views()[index].clone());
                         per_frame_submit_data.shadow_map_image_index_remap[index] =
                             Some(num_shadow_map_cube);
                         per_frame_submit_data.num_shadow_map_cube += 1;
@@ -387,7 +387,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let directional_light = directional_light.as_ref().unwrap();
                     let light = directional_light;
                     let shadow_map_index = shadow_map_data
-                        .shadow_map_lookup
+                        .shadow_map_lookup()
                         .get(&LightId::DirectionalLight(directional_light.object_id))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();
@@ -427,7 +427,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let point_light = point_light.as_ref().unwrap();
                     let light = point_light;
                     let shadow_map_index = shadow_map_data
-                        .shadow_map_lookup
+                        .shadow_map_lookup()
                         .get(&LightId::PointLight(point_light.object_id))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();
@@ -463,7 +463,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let spot_light = spot_light.as_ref().unwrap();
                     let light = spot_light;
                     let shadow_map_index = shadow_map_data
-                        .shadow_map_lookup
+                        .shadow_map_lookup()
                         .get(&LightId::SpotLight(spot_light.object_id))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();

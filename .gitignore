@@ -7,5 +7,6 @@ config.toml
 rts/assets/blender
 rts/assets/armature
 rts/assets/fonts
+rts/assets/textures/texture.jpg
 rts/art
 assets.pack
