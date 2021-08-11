@@ -62,7 +62,7 @@ fn main() {
 }
 
 // cli command:
-//   cargo run --package cli -- 'assets ../../../../rafx/rafx-plugins/assets' pack assets.pack
+//   cargo run --package cli -- assets ../../rafx/rafx-plugins/assets pack assets.pack
 // run with pack command:
 //   cargo run --bin rts --release -- --packfile assets.pack
 // add backtrace command prefix for powershell:
