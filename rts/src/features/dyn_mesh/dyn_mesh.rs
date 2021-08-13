@@ -1,15 +1,40 @@
+use super::buffer_upload::BufferUploader;
+pub use super::buffer_upload::BufferUploaderConfig;
+use distill::loader::handle::Handle;
 use rafx::{
-    api::RafxIndexType,
+    api::{RafxDeviceContext, RafxIndexType, RafxQueue},
     assets::MaterialInstanceAsset,
     base::slab::{DropSlab, GenericDropSlabKey},
     framework::{BufferResource, DescriptorSetArc, MaterialPassResource, ResourceArc},
+    rafx_visibility::VisibleBounds,
     render_feature_extract_job_predule::*,
 };
 use rafx_plugins::{
-    features::mesh::MeshUntexturedRenderFeatureFlag,
+    features::mesh::{MeshUntexturedRenderFeatureFlag, MeshVertex},
     phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
 };
 use std::sync::Arc;
+
+pub struct DynMeshDataPart {
+    pub material_instance: Handle<MaterialInstanceAsset>,
+    pub vertex_buffer_offset_in_bytes: u32,
+    pub vertex_buffer_size_in_bytes: u32,
+    pub index_buffer_offset_in_bytes: u32,
+    pub index_buffer_size_in_bytes: u32,
+    pub index_type: RafxIndexType,
+}
+
+pub struct DynMeshDataInner {
+    pub mesh_parts: Vec<Option<DynMeshDataPart>>,
+    pub vertex_buffer: Vec<MeshVertex>,
+    pub index_buffer: Vec<u16>,
+    pub visible_bounds: VisibleBounds,
+}
+
+#[derive(Clone)]
+pub struct DynMeshData {
+    pub inner: Arc<DynMeshDataInner>,
+}
 
 pub struct DynMeshPart {
     pub material_instance: MaterialInstanceAsset,
@@ -75,11 +100,19 @@ pub struct DynMeshInner {
     pub mesh_parts: Vec<Option<DynMeshPart>>,
     pub vertex_buffer: ResourceArc<BufferResource>,
     pub index_buffer: ResourceArc<BufferResource>,
+    pub visible_bounds: VisibleBounds,
 }
 
 #[derive(Clone)]
 pub struct DynMesh {
     pub inner: Arc<DynMeshInner>,
+}
+
+#[derive(Clone)]
+pub enum DynMeshState {
+    Registered(DynMeshData),
+    Uploading(DynMeshData),
+    Uploaded(DynMesh),
 }
 
 #[derive(Clone, Debug)]
@@ -88,27 +121,50 @@ pub struct DynMeshHandle {
 }
 
 pub struct DynMeshStorage {
-    inner: DropSlab<DynMesh>,
+    storage: DropSlab<DynMeshState>,
+    upload: Option<BufferUploader>,
 }
 
 impl DynMeshStorage {
     pub fn new() -> Self {
         Self {
-            inner: Default::default(),
+            storage: Default::default(),
+            upload: None,
         }
     }
 
-    pub fn register_dyn_mesh(&mut self, dyn_mesh: DynMesh) -> DynMeshHandle {
-        self.inner.process_drops();
+    pub fn init_buffer_uploader(
+        &mut self,
+        device_context: &RafxDeviceContext,
+        upload_queue_config: BufferUploaderConfig,
+        graphics_queue: RafxQueue,
+        transfer_queue: RafxQueue,
+    ) {
+        if self.upload.is_none() {
+            self.upload = Some(BufferUploader::new(
+                device_context,
+                upload_queue_config,
+                graphics_queue,
+                transfer_queue,
+            ))
+        } else {
+            log::error!("BufferUploadManager already initialized");
+        }
+    }
 
-        let drop_slab_key = self.inner.allocate(dyn_mesh);
+    pub fn register_dyn_mesh(&mut self, dyn_mesh_data: DynMeshData) -> DynMeshHandle {
+        self.storage.process_drops();
+
+        let dyn_mesh = DynMeshState::Registered(dyn_mesh_data);
+
+        let drop_slab_key = self.storage.allocate(dyn_mesh);
         DynMeshHandle {
             handle: drop_slab_key.generic_drop_slab_key(),
         }
     }
 
-    pub fn get(&self, dyn_mesh_handle: &DynMeshHandle) -> &DynMesh {
-        self.inner
+    pub fn get(&self, dyn_mesh_handle: &DynMeshHandle) -> &DynMeshState {
+        self.storage
             .get(&dyn_mesh_handle.handle.drop_slab_key())
             .unwrap_or_else(|| {
                 panic!(
@@ -118,8 +174,8 @@ impl DynMeshStorage {
             })
     }
 
-    pub fn get_mut(&mut self, dyn_mesh_handle: &DynMeshHandle) -> &mut DynMesh {
-        self.inner
+    pub fn get_mut(&mut self, dyn_mesh_handle: &DynMeshHandle) -> &mut DynMeshState {
+        self.storage
             .get_mut(&dyn_mesh_handle.handle.drop_slab_key())
             .unwrap_or_else(|| {
                 panic!(
@@ -160,16 +216,40 @@ impl DynMeshResource {
         })
     }
 
-    pub fn register_dyn_mesh(&mut self, dyn_mesh: DynMesh) -> DynMeshHandle {
+    pub fn init_buffer_uploader(
+        &mut self,
+        device_context: &RafxDeviceContext,
+        upload_queue_config: BufferUploaderConfig,
+        graphics_queue: RafxQueue,
+        transfer_queue: RafxQueue,
+    ) {
+        let mut storage = self.write();
+        storage.init_buffer_uploader(
+            device_context,
+            upload_queue_config,
+            graphics_queue,
+            transfer_queue,
+        );
+    }
+
+    pub fn update_buffer_uploads(&mut self) {
+        let mut storage = self.write();
+        if let Some(ref mut upload) = storage.upload {
+            let _res = upload.update();
+        }
+    }
+
+    pub fn register_dyn_mesh(&mut self, dyn_mesh_data: DynMeshData) -> DynMeshHandle {
         let dyn_mesh_handle = {
             let mut storage = self.write();
-            storage.register_dyn_mesh(dyn_mesh)
+            storage.register_dyn_mesh(dyn_mesh_data)
         };
 
         dyn_mesh_handle
     }
 
-    pub fn update_dyn_mesh(&mut self, dyn_mesh_handle: &DynMeshHandle, dyn_mesh: DynMesh) {
+    pub fn update_dyn_mesh(&mut self, dyn_mesh_handle: &DynMeshHandle, dyn_mesh_data: DynMeshData) {
+        let dyn_mesh = DynMeshState::Registered(dyn_mesh_data);
         let mut storage = self.write();
         let old_dyn_mesh = storage.get_mut(dyn_mesh_handle);
         let _old = std::mem::replace(old_dyn_mesh, dyn_mesh);

@@ -248,20 +248,20 @@ impl TerrainResource {
     }
 
     pub fn read(&self) -> RwLockReadGuard<TerrainStorage> {
-        let registry = &self.storage;
-        registry.try_read().unwrap_or_else(move || {
+        let storage = &self.storage;
+        storage.try_read().unwrap_or_else(move || {
             log::warn!("TerrainStorage is being written by another thread.");
 
-            registry.read()
+            storage.read()
         })
     }
 
     pub fn write(&mut self) -> RwLockWriteGuard<TerrainStorage> {
-        let registry = &self.storage;
-        registry.try_write().unwrap_or_else(move || {
+        let storage = &self.storage;
+        storage.try_write().unwrap_or_else(move || {
             log::warn!("TerrainStorage is being read or written by another thread.");
 
-            registry.write()
+            storage.write()
         })
     }
 

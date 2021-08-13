@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 
 use crate::{
-    camera::RTSCamera, daemon_args::AssetDaemonArgs, input::InputResource, scenes::SceneManager,
-    time::TimeState,
+    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshResource,
+    input::InputResource, scenes::SceneManager, time::TimeState,
 };
 use legion::*;
 use rafx::{
@@ -347,6 +347,12 @@ impl DemoApp {
             profiling::scope!("update asset loaders");
             let mut asset_manager = self.resources.get_mut::<AssetManager>().unwrap();
             asset_manager.update_asset_loaders().unwrap();
+        }
+
+        {
+            profiling::scope!("update dyn mesh");
+            let mut dyn_mesh_resource = self.resources.get_mut::<DynMeshResource>().unwrap();
+            dyn_mesh_resource.update_buffer_uploads();
         }
 
         {
