@@ -352,7 +352,7 @@ impl DemoApp {
         {
             profiling::scope!("update dyn mesh");
             let mut dyn_mesh_resource = self.resources.get_mut::<DynMeshResource>().unwrap();
-            dyn_mesh_resource.update_buffer_uploads();
+            dyn_mesh_resource.update();
         }
 
         {

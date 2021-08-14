@@ -9,12 +9,11 @@ use rafx::{
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub enum BufferUploadResult {
-    UploadError(),
-    UploadComplete(RafxBuffer),
-    UploadDrop(),
+    UploadError(BufferUploadId),
+    UploadComplete(BufferUploadId, RafxBuffer),
+    UploadDrop(BufferUploadId),
 }
 
-// only used for debugging
 #[derive(Clone, Debug)]
 pub struct BufferUploadId {
     id: u64,
@@ -469,15 +468,16 @@ impl BufferUploader {
             match result {
                 UploadOpResult::UploadComplete(upload_id, result_tx, buffer) => {
                     log::trace!("Uploading buffer {:?} complete", upload_id);
-                    let _res = result_tx.send(BufferUploadResult::UploadComplete(buffer));
+                    let _res =
+                        result_tx.send(BufferUploadResult::UploadComplete(upload_id, buffer));
                 }
                 UploadOpResult::UploadError(upload_id, result_tx) => {
                     log::trace!("Uploading buffer {:?} failed", upload_id);
-                    let _res = result_tx.send(BufferUploadResult::UploadError());
+                    let _res = result_tx.send(BufferUploadResult::UploadError(upload_id));
                 }
                 UploadOpResult::UploadDrop(upload_id, result_tx) => {
                     log::trace!("Uploading buffer {:?} cancelled", upload_id);
-                    let _res = result_tx.send(BufferUploadResult::UploadDrop());
+                    let _res = result_tx.send(BufferUploadResult::UploadDrop(upload_id));
                 }
             }
         }
