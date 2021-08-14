@@ -14,7 +14,7 @@ pub enum BufferUploadResult {
     UploadDrop(BufferUploadId),
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct BufferUploadId {
     id: u64,
 }

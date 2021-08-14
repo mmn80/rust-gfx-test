@@ -2,6 +2,7 @@ pub use super::buffer_upload::BufferUploaderConfig;
 use super::buffer_upload::{BufferUploadId, BufferUploadResult, BufferUploader};
 use crossbeam_channel::{Receiver, Sender};
 use distill::loader::handle::Handle;
+use fnv::FnvHashMap;
 use rafx::{
     api::{RafxBuffer, RafxDeviceContext, RafxIndexType, RafxQueue, RafxResourceType},
     assets::MaterialInstanceAsset,
@@ -111,7 +112,7 @@ pub struct DynMesh {
 }
 
 struct DynMeshUpload {
-    pub data: DynMeshData,
+    pub mesh_data: DynMeshData,
     pub vertex_upload_id: BufferUploadId,
     pub vertex_rx: Receiver<BufferUploadResult>,
     pub vertex_buffer: Option<RafxBuffer>,
@@ -123,18 +124,21 @@ struct DynMeshUpload {
 enum DynMeshState {
     Uploading(DynMeshUpload),
     Completed(DynMesh),
+    UploadError,
 }
 
 #[derive(Clone, Debug)]
 pub struct DynMeshHandle {
-    handle: GenericDropSlabKey,
+    key: GenericDropSlabKey,
 }
 
 struct DynMeshStorage {
     storage: DropSlab<DynMeshState>,
     uploader: Option<BufferUploader>,
+    vertex_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
     vertex_tx: Sender<BufferUploadResult>,
     vertex_rx: Receiver<BufferUploadResult>,
+    index_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
     index_tx: Sender<BufferUploadResult>,
     index_rx: Receiver<BufferUploadResult>,
 }
@@ -146,8 +150,10 @@ impl DynMeshStorage {
         Self {
             storage: Default::default(),
             uploader: None,
+            vertex_uploads: Default::default(),
             vertex_tx,
             vertex_rx,
+            index_uploads: Default::default(),
             index_tx,
             index_rx,
         }
@@ -172,21 +178,21 @@ impl DynMeshStorage {
         }
     }
 
-    pub fn start_upload(&mut self, dyn_mesh_data: DynMeshData) -> RafxResult<DynMeshState> {
+    pub fn start_upload(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshState> {
         let uploader = self.uploader.unwrap();
         let vertex_upload_id = uploader.upload_buffer(
             RafxResourceType::VERTEX_BUFFER,
-            dyn_mesh_data.inner.vertex_buffer.into(),
+            mesh_data.inner.vertex_buffer.into(),
             self.vertex_tx.clone(),
         )?;
         let index_upload_id = uploader.upload_buffer(
             RafxResourceType::INDEX_BUFFER,
-            dyn_mesh_data.inner.index_buffer.into(),
+            mesh_data.inner.index_buffer.into(),
             self.index_tx.clone(),
         )?;
 
         Ok(DynMeshState::Uploading(DynMeshUpload {
-            data: dyn_mesh_data,
+            mesh_data,
             vertex_upload_id,
             vertex_rx: self.vertex_rx.clone(),
             vertex_buffer: None,
@@ -196,37 +202,83 @@ impl DynMeshStorage {
         }))
     }
 
-    pub fn add_dyn_mesh(&mut self, dyn_mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
-        let dyn_mesh = self.start_upload(dyn_mesh_data)?;
+    pub fn process_upload_results(&mut self) {
+        for upload_result in self.vertex_rx.try_iter() {
+            let (upload_id, buffer) = match upload_result {
+                BufferUploadResult::UploadError(upload_id) => (&upload_id, None),
+                BufferUploadResult::UploadDrop(upload_id) => (&upload_id, None),
+                BufferUploadResult::UploadComplete(upload_id, buffer) => (&upload_id, Some(buffer)),
+            };
+            let handle = self.vertex_uploads.get(&upload_id).unwrap();
+            let mesh_state = self.get_mut(handle);
+            if let (Some(buffer), DynMeshState::Uploading(upload)) = (buffer, mesh_state) {
+                upload.vertex_buffer = Some(buffer);
+            } else {
+                log::error!(
+                    "Vertex buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
+                    upload_id,
+                    handle
+                );
+                let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
+            }
+            self.vertex_uploads.remove(upload_id);
+            self.check_finished_upload(mesh_state);
+        }
+        for upload_result in self.index_rx.try_iter() {
+            let (upload_id, buffer) = match upload_result {
+                BufferUploadResult::UploadError(upload_id) => (&upload_id, None),
+                BufferUploadResult::UploadDrop(upload_id) => (&upload_id, None),
+                BufferUploadResult::UploadComplete(upload_id, buffer) => (&upload_id, Some(buffer)),
+            };
+            let handle = self.index_uploads.get(&upload_id).unwrap();
+            let mesh_state = self.get_mut(handle);
+            if let (Some(buffer), DynMeshState::Uploading(upload)) = (buffer, mesh_state) {
+                upload.index_buffer = Some(buffer);
+            } else {
+                log::error!(
+                    "Index buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
+                    upload_id,
+                    handle
+                );
+                let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
+            }
+            self.index_uploads.remove(upload_id);
+            self.check_finished_upload(mesh_state);
+        }
+    }
+
+    fn check_finished_upload(&mut self, mesh_state: &mut DynMeshState) {
+        if let DynMeshState::Uploading(upload) = mesh_state {
+            if upload.vertex_buffer.is_some() && upload.index_buffer.is_some() {}
+        }
+    }
+
+    pub fn add_dyn_mesh(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
+        let mesh_state = self.start_upload(mesh_data)?;
 
         self.storage.process_drops();
-        let drop_slab_key = self.storage.allocate(dyn_mesh);
+        let drop_slab_key = self.storage.allocate(mesh_state);
+        let handle = DynMeshHandle {
+            key: drop_slab_key.generic_drop_slab_key(),
+        };
 
-        Ok(DynMeshHandle {
-            handle: drop_slab_key.generic_drop_slab_key(),
-        })
+        let DynMeshState::Uploading(upload) = mesh_state;
+        self.vertex_uploads.insert(upload.vertex_upload_id, handle);
+        self.index_uploads.insert(upload.index_upload_id, handle);
+
+        Ok(handle)
     }
 
-    pub fn get(&self, dyn_mesh_handle: &DynMeshHandle) -> &DynMeshState {
+    pub fn get(&self, handle: &DynMeshHandle) -> &DynMeshState {
         self.storage
-            .get(&dyn_mesh_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "DynMeshStorage did not contain handle {:?}.",
-                    dyn_mesh_handle
-                )
-            })
+            .get(&handle.key.drop_slab_key())
+            .unwrap_or_else(|| panic!("DynMeshStorage did not contain handle {:?}.", handle))
     }
 
-    pub fn get_mut(&mut self, dyn_mesh_handle: &DynMeshHandle) -> &mut DynMeshState {
+    pub fn get_mut(&mut self, handle: &DynMeshHandle) -> &mut DynMeshState {
         self.storage
-            .get_mut(&dyn_mesh_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "DynMeshStorage did not contain handle {:?}.",
-                    dyn_mesh_handle
-                )
-            })
+            .get_mut(&handle.key.drop_slab_key())
+            .unwrap_or_else(|| panic!("DynMeshStorage did not contain handle {:?}.", handle))
     }
 }
 
@@ -243,20 +295,18 @@ impl DynMeshResource {
     }
 
     fn read(&self) -> RwLockReadGuard<DynMeshStorage> {
-        let registry = &self.storage;
-        registry.try_read().unwrap_or_else(move || {
+        let storage = &self.storage;
+        storage.try_read().unwrap_or_else(move || {
             log::warn!("DynMeshStorage is being written by another thread.");
-
-            registry.read()
+            storage.read()
         })
     }
 
     fn write(&mut self) -> RwLockWriteGuard<DynMeshStorage> {
-        let registry = &self.storage;
-        registry.try_write().unwrap_or_else(move || {
+        let storage = &self.storage;
+        storage.try_write().unwrap_or_else(move || {
             log::warn!("DynMeshStorage is being read or written by another thread.");
-
-            registry.write()
+            storage.write()
         })
     }
 
@@ -281,33 +331,44 @@ impl DynMeshResource {
         if let Some(ref mut upload) = storage.uploader {
             let _res = upload.update();
         }
+        storage.process_upload_results();
     }
 
-    pub fn add_dyn_mesh(&mut self, dyn_mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
-        let dyn_mesh_handle = {
+    pub fn add_dyn_mesh(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
+        let handle = {
             let mut storage = self.write();
-            storage.add_dyn_mesh(dyn_mesh_data)
+            storage.add_dyn_mesh(mesh_data)
         };
 
-        dyn_mesh_handle
+        handle
     }
 
     pub fn update_dyn_mesh(
         &mut self,
-        dyn_mesh_handle: &DynMeshHandle,
-        dyn_mesh_data: DynMeshData,
+        handle: &DynMeshHandle,
+        mesh_data: DynMeshData,
     ) -> RafxResult<()> {
         let mut storage = self.write();
-        let dyn_mesh = storage.start_upload(dyn_mesh_data)?;
-        let old_dyn_mesh = storage.get_mut(dyn_mesh_handle);
-        let _old = std::mem::replace(old_dyn_mesh, dyn_mesh);
+        let mesh_state = storage.start_upload(mesh_data)?;
+
+        let DynMeshState::Uploading(upload) = mesh_state;
+        storage
+            .vertex_uploads
+            .insert(upload.vertex_upload_id, handle.clone());
+        storage
+            .index_uploads
+            .insert(upload.index_upload_id, handle.clone());
+
+        let old_mesh_state = storage.get_mut(handle);
+        let _old = std::mem::replace(old_mesh_state, mesh_state);
+
         Ok(())
     }
 
-    pub fn get(&self, dyn_mesh_handle: &DynMeshHandle) -> Option<&DynMesh> {
+    pub fn get(&self, handle: &DynMeshHandle) -> Option<&DynMesh> {
         let storage = self.read();
-        if let DynMeshState::Completed(dyn_mesh) = storage.get(dyn_mesh_handle) {
-            Some(dyn_mesh)
+        if let DynMeshState::Completed(mesh) = storage.get(handle) {
+            Some(mesh)
         } else {
             None
         }
