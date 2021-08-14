@@ -351,8 +351,9 @@ impl DemoApp {
 
         {
             profiling::scope!("update dyn mesh");
+            let mut asset_manager = self.resources.get_mut::<AssetManager>().unwrap();
             let mut dyn_mesh_resource = self.resources.get_mut::<DynMeshResource>().unwrap();
-            dyn_mesh_resource.update();
+            dyn_mesh_resource.update(&mut asset_manager);
         }
 
         {

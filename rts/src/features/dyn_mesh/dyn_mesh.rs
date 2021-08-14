@@ -10,6 +10,7 @@ use rafx::{
     framework::{BufferResource, DescriptorSetArc, MaterialPassResource, ResourceArc},
     rafx_visibility::VisibleBounds,
     render_feature_extract_job_predule::*,
+    render_feature_renderer_prelude::AssetManager,
     render_feature_write_job_prelude::RafxResult,
 };
 use rafx_plugins::{
@@ -28,7 +29,7 @@ pub struct DynMeshDataPart {
 }
 
 pub struct DynMeshDataInner {
-    pub mesh_parts: Vec<Option<DynMeshDataPart>>,
+    pub mesh_parts: Vec<DynMeshDataPart>,
     pub vertex_buffer: Vec<u8>,
     pub index_buffer: Vec<u8>,
     pub visible_bounds: VisibleBounds,
@@ -202,7 +203,7 @@ impl DynMeshStorage {
         }))
     }
 
-    pub fn process_upload_results(&mut self) {
+    pub fn process_upload_results(&mut self, asset_manager: &mut AssetManager) {
         for upload_result in self.vertex_rx.try_iter() {
             let (upload_id, buffer) = match upload_result {
                 BufferUploadResult::UploadError(upload_id) => (&upload_id, None),
@@ -222,7 +223,7 @@ impl DynMeshStorage {
                 let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
             }
             self.vertex_uploads.remove(upload_id);
-            self.check_finished_upload(mesh_state);
+            self.check_finished_upload(mesh_state, asset_manager);
         }
         for upload_result in self.index_rx.try_iter() {
             let (upload_id, buffer) = match upload_result {
@@ -243,13 +244,97 @@ impl DynMeshStorage {
                 let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
             }
             self.index_uploads.remove(upload_id);
-            self.check_finished_upload(mesh_state);
+            self.check_finished_upload(mesh_state, asset_manager);
         }
     }
 
-    fn check_finished_upload(&mut self, mesh_state: &mut DynMeshState) {
+    fn check_finished_upload(
+        &mut self,
+        mesh_state: &mut DynMeshState,
+        asset_manager: &mut AssetManager,
+    ) {
         if let DynMeshState::Uploading(upload) = mesh_state {
-            if upload.vertex_buffer.is_some() && upload.index_buffer.is_some() {}
+            if let (Some(vertex_buffer), Some(index_buffer)) =
+                (upload.vertex_buffer, upload.index_buffer)
+            {
+                let visible_bounds = upload.mesh_data.inner.visible_bounds;
+                let vertex_buffer = asset_manager.resources().insert_buffer(vertex_buffer);
+                let index_buffer = asset_manager.resources().insert_buffer(index_buffer);
+                let mesh_parts: Vec<_> = upload
+                    .mesh_data
+                    .inner
+                    .mesh_parts
+                    .iter()
+                    .map(|mesh_part| {
+                        let material_instance = asset_manager
+                            .committed_asset(&mesh_part.material_instance)
+                            .unwrap();
+
+                        let textured_pass_index = material_instance
+                            .material
+                            .find_pass_by_name("mesh textured")
+                            .expect("could not find `mesh textured` pass in mesh part material");
+
+                        let textured_z_pass_index = material_instance
+                            .material
+                            .find_pass_by_name("mesh textured z")
+                            .expect("could not find `mesh textured z` pass in mesh part material");
+
+                        assert_eq!(
+                            textured_z_pass_index,
+                            textured_pass_index + 1,
+                            "expected `mesh textured z` to occur after `mesh textured`"
+                        );
+
+                        let untextured_pass_index = material_instance
+                            .material
+                            .find_pass_by_name("mesh untextured")
+                            .expect("could not find `mesh untextured` pass in mesh part material");
+
+                        let untextured_z_pass_index = material_instance
+                            .material
+                            .find_pass_by_name("mesh untextured z")
+                            .expect(
+                                "could not find `mesh untextured z` pass in mesh part material",
+                            );
+
+                        assert_eq!(
+                            untextured_z_pass_index,
+                            untextured_pass_index + 1,
+                            "expected `mesh untextured z` to occur after `mesh untextured`"
+                        );
+
+                        let wireframe_pass_index = material_instance
+                            .material
+                            .find_pass_by_name("mesh wireframe")
+                            .expect("could not find `mesh wireframe` pass in mesh part material");
+
+                        Some(DynMeshPart {
+                            material_instance: material_instance.clone(),
+                            textured_pass_index,
+                            untextured_pass_index,
+                            wireframe_pass_index,
+                            vertex_buffer_offset_in_bytes: mesh_part.vertex_buffer_offset_in_bytes,
+                            vertex_buffer_size_in_bytes: mesh_part.vertex_buffer_size_in_bytes,
+                            index_buffer_offset_in_bytes: mesh_part.index_buffer_offset_in_bytes,
+                            index_buffer_size_in_bytes: mesh_part.index_buffer_size_in_bytes,
+                            index_type: mesh_part.index_type,
+                        })
+                    })
+                    .collect();
+
+                let inner = DynMeshInner {
+                    vertex_buffer,
+                    index_buffer,
+                    mesh_parts,
+                    visible_bounds,
+                };
+                let dyn_mesh = DynMesh {
+                    inner: Arc::new(inner),
+                };
+
+                let _old = std::mem::replace(mesh_state, DynMeshState::Completed(dyn_mesh));
+            }
         }
     }
 
@@ -326,12 +411,12 @@ impl DynMeshResource {
         );
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, asset_manager: &mut AssetManager) {
         let mut storage = self.write();
         if let Some(ref mut upload) = storage.uploader {
             let _res = upload.update();
         }
-        storage.process_upload_results();
+        storage.process_upload_results(asset_manager);
     }
 
     pub fn add_dyn_mesh(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
