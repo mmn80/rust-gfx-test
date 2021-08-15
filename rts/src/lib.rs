@@ -622,20 +622,6 @@ impl DemoApp {
                 } => {
                     //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
 
-                    #[cfg(feature = "rafx-vulkan")]
-                    if *virtual_keycode == VirtualKeyCode::V {
-                        let stats = resources
-                            .get::<rafx::api::RafxDeviceContext>()
-                            .unwrap()
-                            .vk_device_context()
-                            .unwrap()
-                            .allocator()
-                            .calculate_stats()
-                            .unwrap();
-                        println!("{:#?}", stats);
-                        was_handled = true;
-                    }
-
                     if *virtual_keycode == VirtualKeyCode::M {
                         let metrics = resources.get::<AssetManager>().unwrap().metrics();
                         println!("{:#?}", metrics);
