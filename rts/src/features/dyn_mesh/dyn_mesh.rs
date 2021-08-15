@@ -119,7 +119,7 @@ struct DynMeshUpload {
 }
 
 enum DynMeshState {
-    Uploading(DynMeshUpload),
+    Uploading(DynMeshUpload, Option<DynMesh>),
     Completed(DynMesh),
     UploadError,
 }
@@ -175,7 +175,11 @@ impl DynMeshStorage {
         }
     }
 
-    pub fn start_upload(&mut self, mut mesh_data: DynMeshData) -> RafxResult<DynMeshState> {
+    pub fn start_upload(
+        &mut self,
+        mut mesh_data: DynMeshData,
+        handle: Option<&DynMeshHandle>,
+    ) -> RafxResult<DynMeshState> {
         if mesh_data.vertex_buffer.is_none() || mesh_data.index_buffer.is_none() {
             return Err(RafxError::StringError(
                 "Dyn mesh data does not contain data".to_string(),
@@ -195,15 +199,26 @@ impl DynMeshStorage {
             self.index_tx.clone(),
         )?;
 
-        Ok(DynMeshState::Uploading(DynMeshUpload {
-            mesh_data,
-            vertex_upload_id,
-            vertex_rx: self.vertex_rx.clone(),
-            vertex_buffer: None,
-            index_upload_id,
-            index_rx: self.index_rx.clone(),
-            index_buffer: None,
-        }))
+        let old_dyn_mash = handle.and_then(|handle| {
+            if let DynMeshState::Completed(dyn_mesh) = self.get(handle) {
+                Some(dyn_mesh.clone())
+            } else {
+                None
+            }
+        });
+
+        Ok(DynMeshState::Uploading(
+            DynMeshUpload {
+                mesh_data,
+                vertex_upload_id,
+                vertex_rx: self.vertex_rx.clone(),
+                vertex_buffer: None,
+                index_upload_id,
+                index_rx: self.index_rx.clone(),
+                index_buffer: None,
+            },
+            old_dyn_mash,
+        ))
     }
 
     pub fn process_upload_results(&mut self, asset_manager: &mut AssetManager) {
@@ -214,7 +229,7 @@ impl DynMeshStorage {
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
             let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
-            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) =
+            if let (Some(buffer), DynMeshState::Uploading(ref mut upload, _)) =
                 (buffer, self.get_mut(&handle))
             {
                 upload.vertex_buffer = Some(buffer);
@@ -236,7 +251,7 @@ impl DynMeshStorage {
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
             let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
-            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) =
+            if let (Some(buffer), DynMeshState::Uploading(ref mut upload, _)) =
                 (buffer, self.get_mut(&handle))
             {
                 upload.index_buffer = Some(buffer);
@@ -255,7 +270,7 @@ impl DynMeshStorage {
 
     fn check_finished_upload(&mut self, handle: &DynMeshHandle, asset_manager: &mut AssetManager) {
         let mesh_state = self.get_mut(handle);
-        if let DynMeshState::Uploading(upload) = mesh_state {
+        if let DynMeshState::Uploading(upload, _) = mesh_state {
             if let (Some(vertex_buffer), Some(index_buffer)) =
                 (upload.vertex_buffer.take(), upload.index_buffer.take())
             {
@@ -341,7 +356,7 @@ impl DynMeshStorage {
     }
 
     pub fn add_dyn_mesh(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
-        let mesh_state = self.start_upload(mesh_data)?;
+        let mesh_state = self.start_upload(mesh_data, None)?;
 
         self.storage.process_drops();
         let drop_slab_key = self.storage.allocate(mesh_state);
@@ -350,7 +365,7 @@ impl DynMeshStorage {
         };
 
         let mesh_state = self.storage.get(&drop_slab_key).unwrap();
-        if let DynMeshState::Uploading(upload) = mesh_state {
+        if let DynMeshState::Uploading(upload, _) = mesh_state {
             self.vertex_uploads
                 .insert(upload.vertex_upload_id.clone(), handle.clone());
             self.index_uploads
@@ -442,9 +457,9 @@ impl DynMeshResource {
         mesh_data: DynMeshData,
     ) -> RafxResult<()> {
         let mut storage = self.write();
-        let mesh_state = storage.start_upload(mesh_data)?;
+        let mesh_state = storage.start_upload(mesh_data, Some(handle))?;
 
-        if let DynMeshState::Uploading(ref upload) = mesh_state {
+        if let DynMeshState::Uploading(ref upload, _) = mesh_state {
             storage
                 .vertex_uploads
                 .insert(upload.vertex_upload_id.clone(), handle.clone());
@@ -463,10 +478,10 @@ impl DynMeshResource {
 
     pub fn get(&self, handle: &DynMeshHandle) -> Option<DynMesh> {
         let storage = self.read();
-        if let DynMeshState::Completed(mesh) = storage.get(handle) {
-            Some(mesh.clone())
-        } else {
-            None
+        match storage.get(handle) {
+            DynMeshState::Uploading(_, old_dyn_mesh) => old_dyn_mesh.clone(),
+            DynMeshState::Completed(mesh) => Some(mesh.clone()),
+            DynMeshState::UploadError => None,
         }
     }
 }
