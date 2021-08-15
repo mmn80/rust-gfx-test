@@ -72,7 +72,7 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
                     let entry = self.world.entry_ref(context.object_id().into()).unwrap();
                     let transform_component = entry.get_component::<TransformComponent>().unwrap();
                     Some(DynMeshRenderObjectInstanceData {
-                        dyn_mesh: dyn_mesh.clone(),
+                        dyn_mesh,
                         translation: transform_component.translation,
                         rotation: transform_component.rotation,
                         scale: transform_component.scale,

@@ -255,7 +255,7 @@ impl DynMeshStorage {
         let mesh_state = self.get_mut(handle);
         if let DynMeshState::Uploading(upload) = mesh_state {
             if let (Some(vertex_buffer), Some(index_buffer)) =
-                (upload.vertex_buffer, upload.index_buffer)
+                (upload.vertex_buffer.take(), upload.index_buffer.take())
             {
                 let visible_bounds = upload.mesh_data.visible_bounds;
                 let vertex_buffer = asset_manager.resources().insert_buffer(vertex_buffer);
@@ -309,7 +309,7 @@ impl DynMeshStorage {
                             .expect("could not find `mesh wireframe` pass in mesh part material");
 
                         Some(DynMeshPart {
-                            material_instance_handle: mesh_part.material_instance,
+                            material_instance_handle: mesh_part.material_instance.clone(),
                             material_instance: material_instance.clone(),
                             textured_pass_index,
                             untextured_pass_index,
@@ -347,9 +347,12 @@ impl DynMeshStorage {
             key: drop_slab_key.generic_drop_slab_key(),
         };
 
+        let mesh_state = self.storage.get(&drop_slab_key).unwrap();
         if let DynMeshState::Uploading(upload) = mesh_state {
-            self.vertex_uploads.insert(upload.vertex_upload_id, handle);
-            self.index_uploads.insert(upload.index_upload_id, handle);
+            self.vertex_uploads
+                .insert(upload.vertex_upload_id.clone(), handle.clone());
+            self.index_uploads
+                .insert(upload.index_upload_id.clone(), handle.clone());
         } else {
             unreachable!();
         }
@@ -439,13 +442,13 @@ impl DynMeshResource {
         let mut storage = self.write();
         let mesh_state = storage.start_upload(mesh_data)?;
 
-        if let DynMeshState::Uploading(upload) = mesh_state {
+        if let DynMeshState::Uploading(ref upload) = mesh_state {
             storage
                 .vertex_uploads
-                .insert(upload.vertex_upload_id, handle.clone());
+                .insert(upload.vertex_upload_id.clone(), handle.clone());
             storage
                 .index_uploads
-                .insert(upload.index_upload_id, handle.clone());
+                .insert(upload.index_upload_id.clone(), handle.clone());
         } else {
             unreachable!();
         }
@@ -456,10 +459,10 @@ impl DynMeshResource {
         Ok(())
     }
 
-    pub fn get(&self, handle: &DynMeshHandle) -> Option<&DynMesh> {
+    pub fn get(&self, handle: &DynMeshHandle) -> Option<DynMesh> {
         let storage = self.read();
         if let DynMeshState::Completed(mesh) = storage.get(handle) {
-            Some(mesh)
+            Some(mesh.clone())
         } else {
             None
         }
