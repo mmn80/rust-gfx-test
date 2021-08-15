@@ -214,8 +214,9 @@ impl DynMeshStorage {
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
             let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
-            let mesh_state = self.get_mut(&handle);
-            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) = (buffer, mesh_state) {
+            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) =
+                (buffer, self.get_mut(&handle))
+            {
                 upload.vertex_buffer = Some(buffer);
             } else {
                 log::error!(
@@ -223,7 +224,7 @@ impl DynMeshStorage {
                     upload_id,
                     handle
                 );
-                let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
+                let _old = std::mem::replace(self.get_mut(&handle), DynMeshState::UploadError);
             }
             self.vertex_uploads.remove(&upload_id);
             self.check_finished_upload(&handle, asset_manager);
@@ -235,8 +236,9 @@ impl DynMeshStorage {
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
             let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
-            let mesh_state = self.get_mut(&handle);
-            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) = (buffer, mesh_state) {
+            if let (Some(buffer), DynMeshState::Uploading(ref mut upload)) =
+                (buffer, self.get_mut(&handle))
+            {
                 upload.index_buffer = Some(buffer);
             } else {
                 log::error!(
@@ -244,7 +246,7 @@ impl DynMeshStorage {
                     upload_id,
                     handle
                 );
-                let _old = std::mem::replace(mesh_state, DynMeshState::UploadError);
+                let _old = std::mem::replace(self.get_mut(&handle), DynMeshState::UploadError);
             }
             self.index_uploads.remove(&upload_id);
             self.check_finished_upload(&handle, asset_manager);
