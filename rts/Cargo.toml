@@ -9,8 +9,7 @@ publish = false
 [dependencies]
 rafx = { path = "../../rafx/rafx", features = ["renderer", "basis-universal"] }
 rafx-plugins = { path = "../../rafx/rafx-plugins", features = ["legion", "egui", "egui-winit"] }
-rafx-plugins-shaders = { path = "../../rafx/rafx-plugins/rafx-plugins-shaders" }
-shaders = { path = "demo-shaders", package="demo-shaders" }
+shaders = { path = "demo-shaders", package = "demo-shaders" }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
 type-uuid = "0.1"
