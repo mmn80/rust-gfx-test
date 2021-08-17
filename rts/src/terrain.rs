@@ -1,3 +1,4 @@
+use crate::assets::terrain::TerrainConfigAsset;
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
     core::prelude::*,
@@ -75,6 +76,7 @@ impl IsEmpty for CubeVoxel {
 }
 
 pub struct Terrain {
+    config: TerrainConfigAsset,
     pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
@@ -265,7 +267,12 @@ impl TerrainResource {
         })
     }
 
-    pub fn new_terrain(&mut self, fill_extent: Extent3i, fill_value: CubeVoxel) -> TerrainHandle {
+    pub fn new_terrain(
+        &mut self,
+        config: TerrainConfigAsset,
+        fill_extent: Extent3i,
+        fill_value: CubeVoxel,
+    ) -> TerrainHandle {
         let mut terrain = {
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
@@ -279,6 +286,7 @@ impl TerrainResource {
 
             let (render_tx, render_rx) = unbounded();
             Terrain {
+                config,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
                 render_chunks: HashMap::new(),

@@ -52,7 +52,7 @@ impl Importer for TerrainConfigImporter {
     where
         Self: Sized,
     {
-        1
+        2
     }
 
     fn version(&self) -> u32 {
@@ -84,11 +84,17 @@ impl Importer for TerrainConfigImporter {
         let null_image_handle = make_handle_from_str("fc937369-cad2-4a00-bf42-5968f1210784")?;
 
         let mut materials = vec![];
-        for source in source_data.materials {
-            let material_instance_uuid = op.new_asset_uuid();
-            unstable_state
-                .material_instance_asset_uuids
-                .push(material_instance_uuid);
+        for (idx, source) in source_data.materials.into_iter().enumerate() {
+            let material_instance_uuid = if idx < unstable_state.material_instance_asset_uuids.len()
+            {
+                unstable_state.material_instance_asset_uuids[idx]
+            } else {
+                let material_instance_uuid = op.new_asset_uuid();
+                unstable_state
+                    .material_instance_asset_uuids
+                    .push(material_instance_uuid);
+                material_instance_uuid
+            };
 
             let material_instance_handle = make_handle(material_instance_uuid);
 
@@ -183,15 +189,13 @@ impl Importer for TerrainConfigImporter {
             });
         }
 
-        let asset_data = TerrainConfigAssetData { materials };
-
         imported_assets.push(ImportedAsset {
             id: unstable_state.terrain_asset_uuid.unwrap(),
             search_tags: vec![],
             build_deps: vec![],
             load_deps: vec![],
             build_pipeline: None,
-            asset_data: Box::new(asset_data),
+            asset_data: Box::new(TerrainConfigAssetData { materials }),
         });
 
         *stable_state = unstable_state.into();

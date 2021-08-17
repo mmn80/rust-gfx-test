@@ -1,4 +1,5 @@
 use crate::{
+    assets::terrain::TerrainConfigAssetTypeRendererPlugin,
     camera::RTSCamera,
     features::dyn_mesh::{BufferUploaderConfig, DynMeshRendererPlugin, DynMeshResource},
     terrain::TerrainResource,
@@ -67,6 +68,7 @@ pub fn rendering_init(
 
     let mut renderer_builder = RendererBuilder::default();
     renderer_builder = renderer_builder
+        .add_asset(Arc::new(TerrainConfigAssetTypeRendererPlugin))
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))

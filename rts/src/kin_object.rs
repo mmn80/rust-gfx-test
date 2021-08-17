@@ -1,4 +1,5 @@
 use crate::{
+    assets::terrain::TerrainConfigAsset,
     camera::RTSCamera,
     input::{InputResource, MouseButton},
     terrain::{TerrainHandle, TerrainResource},
@@ -8,8 +9,8 @@ use egui::Button;
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
 use rafx::{
+    assets::{distill_impl::AssetResource, AssetManager},
     render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},
-    render_feature_renderer_prelude::AssetManager,
     visibility::CullModel,
 };
 use rafx_plugins::{
@@ -40,10 +41,22 @@ pub struct KinObjectsState {
 
 impl KinObjectsState {
     pub fn new(resources: &Resources) -> Self {
-        //let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-        //let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
+        let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+        let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
+        let terrain_config_asset_handle = asset_resource
+            .load_asset_path::<TerrainConfigAsset, _>("materials/terrain_materials.terrainconfig");
+        let terrain_config_asset = {
+            asset_manager
+                .wait_for_asset_to_load(&terrain_config_asset_handle, &mut asset_resource, "")
+                .unwrap();
+            asset_manager
+                .committed_asset(&terrain_config_asset_handle)
+                .unwrap()
+                .clone()
+        };
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let terrain = terrain_resource.new_terrain(
+            terrain_config_asset,
             Extent3i::from_min_and_shape(Point3i::ZERO, Point3i::fill(256)),
             1.into(),
         );
