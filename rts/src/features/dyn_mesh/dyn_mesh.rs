@@ -1,7 +1,6 @@
 pub use super::buffer_upload::BufferUploaderConfig;
 use super::buffer_upload::{BufferUploadId, BufferUploadResult, BufferUploader};
 use crossbeam_channel::{Receiver, Sender};
-use distill::loader::handle::Handle;
 use fnv::FnvHashMap;
 use rafx::{
     api::{RafxBuffer, RafxDeviceContext, RafxError, RafxIndexType, RafxQueue, RafxResourceType},
@@ -20,7 +19,7 @@ use rafx_plugins::{
 use std::sync::Arc;
 
 pub struct DynMeshDataPart {
-    pub material_instance: Handle<MaterialInstanceAsset>,
+    pub material_instance: MaterialInstanceAsset,
     pub vertex_buffer_offset_in_bytes: u32,
     pub vertex_buffer_size_in_bytes: u32,
     pub index_buffer_offset_in_bytes: u32,
@@ -36,7 +35,6 @@ pub struct DynMeshData {
 }
 
 pub struct DynMeshPart {
-    pub material_instance_handle: Handle<MaterialInstanceAsset>,
     pub material_instance: MaterialInstanceAsset,
     pub textured_pass_index: usize,
     pub untextured_pass_index: usize,
@@ -282,9 +280,7 @@ impl DynMeshStorage {
                     .mesh_parts
                     .iter()
                     .map(|mesh_part| {
-                        let material_instance = asset_manager
-                            .committed_asset(&mesh_part.material_instance)
-                            .unwrap();
+                        let material_instance = mesh_part.material_instance.clone();
 
                         let textured_pass_index = material_instance
                             .material
@@ -326,8 +322,7 @@ impl DynMeshStorage {
                             .expect("could not find `mesh wireframe` pass in mesh part material");
 
                         Some(DynMeshPart {
-                            material_instance_handle: mesh_part.material_instance.clone(),
-                            material_instance: material_instance.clone(),
+                            material_instance,
                             textured_pass_index,
                             untextured_pass_index,
                             wireframe_pass_index,

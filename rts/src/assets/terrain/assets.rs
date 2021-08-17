@@ -95,7 +95,7 @@ pub struct TerrainConfigAssetInner {
 #[derive(TypeUuid, Clone)]
 #[uuid = "4b5d4341-1d48-4051-a283-db545fb4a4f0"]
 pub struct TerrainConfigAsset {
-    inner: Arc<TerrainConfigAssetInner>,
+    pub inner: Arc<TerrainConfigAssetInner>,
 }
 
 pub struct TerrainConfigLoadHandler;

@@ -1,19 +1,30 @@
-use crate::assets::terrain::TerrainConfigAsset;
+use crate::{
+    assets::terrain::TerrainConfigAsset,
+    features::dyn_mesh::{DynMeshData, DynMeshDataPart},
+};
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
     core::prelude::*,
     mesh::{
         greedy_quads, padded_greedy_quads_chunk_extent, GreedyQuadsBuffer, IsOpaque, MergeVoxel,
-        PosNormTexMesh, RIGHT_HANDED_Y_UP_CONFIG,
+        QuadGroup, RIGHT_HANDED_Y_UP_CONFIG,
     },
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use glam::Vec3;
 use rafx::{
+    api::RafxIndexType,
+    assets::push_buffer::PushBuffer,
     base::slab::{DropSlab, GenericDropSlabKey},
+    rafx_visibility::{
+        geometry::{AxisAlignedBoundingBox, BoundingSphere},
+        VisibleBounds,
+    },
     render_feature_extract_job_predule::*,
     visibility::VisibilityObjectArc,
 };
+use rafx_plugins::features::mesh::MeshVertex;
 use std::{collections::HashMap, sync::Arc};
 
 pub struct ChunkState {
@@ -43,7 +54,7 @@ impl TerrainRenderChunk {
 
 pub struct RenderChunkTaskResults {
     pub key: ChunkKey3,
-    pub mesh: PosNormTexMesh,
+    pub mesh: DynMeshData,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -111,7 +122,7 @@ impl Terrain {
     }
 
     pub fn update_render_chunks(&mut self) {
-        let to_render: Vec<_> = self
+        let to_render: Vec<(_, _, Array3x1<CubeVoxel>)> = self
             .render_chunks
             .iter()
             .filter(|(_key, chunk)| {
@@ -133,26 +144,18 @@ impl Terrain {
         if to_render.len() > 0 {
             log::info!("Starting {} greedy mesh jobs", to_render.len());
         }
+
         for (key, padded_chunk_extent, padded_chunk) in to_render {
             let render_tx = self.render_tx.clone();
+            let config = self.config.clone();
             let task = self.task_pool.spawn(async move {
                 let mut buffer = GreedyQuadsBuffer::new(
                     padded_chunk_extent,
                     RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
                 );
                 greedy_quads(&padded_chunk, &padded_chunk_extent, &mut buffer);
-                let mut mesh = PosNormTexMesh::default();
-                for group in buffer.quad_groups.iter() {
-                    for quad in group.quads.iter() {
-                        group.face.add_quad_to_pos_norm_tex_mesh(
-                            RIGHT_HANDED_Y_UP_CONFIG.u_flip_face,
-                            false,
-                            &quad,
-                            1.0,
-                            &mut mesh,
-                        );
-                    }
-                }
+                let extent = padded_chunk_extent.padded(-1);
+                let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, extent, &config);
                 let results = RenderChunkTaskResults {
                     key: key.clone(),
                     mesh,
@@ -171,8 +174,8 @@ impl Terrain {
 
                 chunks.push((
                     result.key.minimum,
-                    result.mesh.positions.len(),
-                    result.mesh.indices.len(),
+                    result.mesh.vertex_buffer.map_or_else(|| 0, |b| b.len()),
+                    result.mesh.index_buffer.map_or_else(|| 0, |b| b.len()),
                 ));
             };
         }
@@ -185,6 +188,120 @@ impl Terrain {
                 tot_pos,
                 tot_ind,
             );
+        }
+    }
+
+    fn make_dyn_mesh_data(
+        voxels: &Array3x1<CubeVoxel>,
+        quads: &GreedyQuadsBuffer,
+        extent: Extent3i,
+        config: &TerrainConfigAsset,
+    ) -> DynMeshData {
+        let mut quad_parts = HashMap::new();
+        for (idx, group) in quads.quad_groups.iter().enumerate() {
+            for quad in group.quads.iter() {
+                let mat = voxels.get(quad.minimum);
+                let entry = quad_parts
+                    .entry(mat.0)
+                    .or_insert(PerMaterialGreedyQuadsBuffer::new(mat));
+                entry.quad_groups[idx].quads.push(*quad);
+            }
+        }
+        let mut all_vertices = PushBuffer::new(16384);
+        let mut all_indices = PushBuffer::new(16384);
+        let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
+        for (mat, quads) in quad_parts.iter() {
+            let mesh_part = {
+                let material_instance = config.inner.materials.get(*mat as usize);
+                if let Some(material_instance) = material_instance {
+                    let vertex_offset =
+                        all_vertices.pad_to_alignment(std::mem::size_of::<MeshVertex>());
+                    let indices_offset = all_indices.pad_to_alignment(std::mem::size_of::<u32>());
+                    for group in quads.quad_groups.iter() {
+                        for quad in group.quads.iter() {
+                            let face = &group.face;
+                            let vertex_offset =
+                                all_vertices.pad_to_alignment(std::mem::size_of::<MeshVertex>());
+                            let positions = &face.quad_mesh_positions(quad, 1.0);
+                            let normals = &face.quad_mesh_normals();
+                            let uvs =
+                                face.tex_coords(RIGHT_HANDED_Y_UP_CONFIG.u_flip_face, true, quad);
+                            for i in 0..4 {
+                                all_vertices.push(
+                                    &[MeshVertex {
+                                        position: positions[i],
+                                        normal: normals[i],
+                                        tangent: Default::default(),
+                                        tex_coord: uvs[i],
+                                    }],
+                                    1,
+                                );
+                            }
+                            let indices = &face.quad_mesh_indices(vertex_offset as u32);
+                            all_indices.push(indices, std::mem::size_of::<u32>());
+                        }
+                    }
+                    let vertex_size = all_vertices.len() - vertex_offset;
+                    let indices_size = all_indices.len() - indices_offset;
+
+                    Some(DynMeshDataPart {
+                        material_instance: material_instance.clone(),
+                        vertex_buffer_offset_in_bytes: vertex_offset as u32,
+                        vertex_buffer_size_in_bytes: vertex_size as u32,
+                        index_buffer_offset_in_bytes: indices_offset as u32,
+                        index_buffer_size_in_bytes: indices_size as u32,
+                        index_type: RafxIndexType::Uint32,
+                    })
+                } else {
+                    log::error!(
+                        "Invalid terrain material index {} (# of materials: {})",
+                        mat,
+                        config.inner.materials.len()
+                    );
+                    None
+                }
+            };
+            if let Some(mesh_part) = mesh_part {
+                mesh_parts.push(mesh_part);
+            }
+        }
+
+        let min = extent.minimum;
+        let min = Vec3::new(min.x() as f32, min.y() as f32, min.z() as f32);
+        let max = extent.max();
+        let max = Vec3::new(max.x() as f32, max.y() as f32, max.z() as f32);
+        let sphere_center = Vec3::new(
+            min.x + (max.x - min.x) / 2.,
+            min.y + (max.y - min.y) / 2.,
+            min.z + (max.z - min.z) / 2.,
+        );
+        let sphere_radius = sphere_center.distance(max);
+        let visible_bounds = VisibleBounds {
+            aabb: AxisAlignedBoundingBox { min, max },
+            obb: Default::default(),
+            bounding_sphere: BoundingSphere::new(sphere_center, sphere_radius),
+            hash: 0,
+        };
+
+        DynMeshData {
+            mesh_parts,
+            vertex_buffer: Some(all_vertices.into_data()),
+            index_buffer: Some(all_indices.into_data()),
+            visible_bounds,
+        }
+    }
+}
+
+pub struct PerMaterialGreedyQuadsBuffer {
+    pub quad_groups: [QuadGroup; 6],
+    pub material: CubeVoxel,
+}
+
+impl PerMaterialGreedyQuadsBuffer {
+    pub fn new(material: CubeVoxel) -> Self {
+        PerMaterialGreedyQuadsBuffer {
+            quad_groups: RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
+            material,
         }
     }
 }
