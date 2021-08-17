@@ -183,7 +183,7 @@ impl Terrain {
             let tot_pos: usize = chunks.iter().map(|p| p.1).sum();
             let tot_ind: usize = chunks.iter().map(|p| p.2).sum();
             log::info!(
-                "{} terrain meshes generated: {} positions, {} indices",
+                "{} terrain meshes generated: vertex buffer: {} bytes, index buffer: {} bytes",
                 chunks.len(),
                 tot_pos,
                 tot_ind,
@@ -202,7 +202,7 @@ impl Terrain {
             for quad in group.quads.iter() {
                 let mat = voxels.get(quad.minimum);
                 let entry = quad_parts
-                    .entry(mat.0)
+                    .entry(mat.0 - 1)
                     .or_insert(PerMaterialGreedyQuadsBuffer::new(mat));
                 entry.quad_groups[idx].quads.push(*quad);
             }
