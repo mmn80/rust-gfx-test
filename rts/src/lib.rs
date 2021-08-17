@@ -30,6 +30,7 @@ use winit::{
     window::{Fullscreen, Window},
 };
 
+mod assets;
 mod camera;
 pub mod daemon_args;
 mod demo_renderer_thread_pool;
