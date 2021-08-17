@@ -1,6 +1,9 @@
 use crate::{
     assets::terrain::TerrainConfigAsset,
-    features::dyn_mesh::{DynMeshData, DynMeshDataPart},
+    features::dyn_mesh::{
+        DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
+        DynMeshResource,
+    },
 };
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
@@ -12,7 +15,7 @@ use building_blocks::{
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use rafx::{
     api::RafxIndexType,
     assets::push_buffer::PushBuffer,
@@ -22,7 +25,7 @@ use rafx::{
         VisibleBounds,
     },
     render_feature_extract_job_predule::*,
-    visibility::VisibilityObjectArc,
+    visibility::{CullModel, VisibilityObjectArc},
 };
 use rafx_plugins::features::mesh::MeshVertex;
 use std::{collections::HashMap, sync::Arc};
@@ -33,6 +36,8 @@ pub struct ChunkState {
 }
 
 pub struct TerrainRenderChunk {
+    pub id: u64,
+    pub dyn_mesh_handle: Option<DynMeshHandle>,
     pub render_object_handle: Option<RenderObjectHandle>,
     pub visibility_object_handle: Option<VisibilityObjectArc>,
     pub source_version: u32,
@@ -43,6 +48,8 @@ pub struct TerrainRenderChunk {
 impl TerrainRenderChunk {
     pub fn new() -> Self {
         TerrainRenderChunk {
+            id: rand::random(),
+            dyn_mesh_handle: None,
             render_object_handle: None,
             visibility_object_handle: None,
             source_version: 0,
@@ -121,7 +128,12 @@ impl Terrain {
         }
     }
 
-    pub fn update_render_chunks(&mut self) {
+    pub fn update_render_chunks(
+        &mut self,
+        dyn_mesh_resource: &mut DynMeshResource,
+        dyn_mesh_render_objects: &mut DynMeshRenderObjectSet,
+        visibility_region: &VisibilityRegion,
+    ) {
         let to_render: Vec<(_, _, Array3x1<CubeVoxel>)> = self
             .render_chunks
             .iter()
@@ -166,28 +178,35 @@ impl Terrain {
                 chunk.render_task = Some(task);
             }
         }
-        let mut chunks = vec![];
+        let mut chunks = 0;
         for result in self.render_rx.try_iter() {
             if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
                 chunk.render_task = None;
                 chunk.rendered_version += 1;
+                chunks += 1;
 
-                chunks.push((
-                    result.key.minimum,
-                    result.mesh.vertex_buffer.map_or_else(|| 0, |b| b.len()),
-                    result.mesh.index_buffer.map_or_else(|| 0, |b| b.len()),
-                ));
+                let visible_bounds = result.mesh.visible_bounds.clone();
+                if let Some(handle) = &chunk.dyn_mesh_handle {
+                    let _res = dyn_mesh_resource.update_dyn_mesh(&handle, result.mesh);
+                } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(result.mesh) {
+                    chunk.dyn_mesh_handle = Some(handle.clone());
+                    let render_object_handle = dyn_mesh_render_objects
+                        .register_render_object(DynMeshRenderObject { mesh: handle });
+                    chunk.visibility_object_handle = Some({
+                        let handle = visibility_region.register_static_object(
+                            ObjectId::from(chunk.id), //TODO: this may clash with entities
+                            CullModel::VisibleBounds(visible_bounds),
+                        );
+                        handle.set_transform(visible_bounds.aabb.min, Quat::IDENTITY, Vec3::ONE);
+                        handle.add_render_object(&render_object_handle);
+                        handle
+                    });
+                    chunk.render_object_handle = Some(render_object_handle);
+                }
             };
         }
-        if chunks.len() > 0 {
-            let tot_pos: usize = chunks.iter().map(|p| p.1).sum();
-            let tot_ind: usize = chunks.iter().map(|p| p.2).sum();
-            log::info!(
-                "{} terrain meshes generated: vertex buffer: {} bytes, index buffer: {} bytes",
-                chunks.len(),
-                tot_pos,
-                tot_ind,
-            );
+        if chunks > 0 {
+            log::info!("{} terrain meshes generated", chunks,);
         }
     }
 
@@ -207,6 +226,7 @@ impl Terrain {
                 entry.quad_groups[idx].quads.push(*quad);
             }
         }
+
         let mut all_vertices = PushBuffer::new(16384);
         let mut all_indices = PushBuffer::new(16384);
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
@@ -266,6 +286,15 @@ impl Terrain {
             }
         }
 
+        DynMeshData {
+            mesh_parts,
+            vertex_buffer: Some(all_vertices.into_data()),
+            index_buffer: Some(all_indices.into_data()),
+            visible_bounds: Self::make_visible_bounds(&extent, 0),
+        }
+    }
+
+    fn make_visible_bounds(extent: &Extent3i, hash: u64) -> VisibleBounds {
         let min = extent.minimum;
         let min = Vec3::new(min.x() as f32, min.y() as f32, min.z() as f32);
         let max = extent.max();
@@ -276,18 +305,12 @@ impl Terrain {
             min.z + (max.z - min.z) / 2.,
         );
         let sphere_radius = sphere_center.distance(max);
-        let visible_bounds = VisibleBounds {
+
+        VisibleBounds {
             aabb: AxisAlignedBoundingBox { min, max },
             obb: Default::default(),
             bounding_sphere: BoundingSphere::new(sphere_center, sphere_radius),
-            hash: 0,
-        };
-
-        DynMeshData {
-            mesh_parts,
-            vertex_buffer: Some(all_vertices.into_data()),
-            index_buffer: Some(all_indices.into_data()),
-            visible_bounds,
+            hash,
         }
     }
 }

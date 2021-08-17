@@ -1,6 +1,7 @@
 use crate::{
     assets::terrain::TerrainConfigAsset,
     camera::RTSCamera,
+    features::dyn_mesh::{DynMeshRenderObjectSet, DynMeshResource},
     input::{InputResource, MouseButton},
     terrain::{TerrainHandle, TerrainResource},
 };
@@ -105,10 +106,17 @@ impl KinObjectsState {
             }
         }
 
+        let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
+        let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);
-        terrain.update_render_chunks();
+        terrain.update_render_chunks(
+            &mut dyn_mesh_resource,
+            &mut dyn_mesh_render_objects,
+            &visibility_region,
+        );
     }
 
     pub fn spawn(
