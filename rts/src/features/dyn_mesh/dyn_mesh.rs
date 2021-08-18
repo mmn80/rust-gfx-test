@@ -18,6 +18,7 @@ use rafx_plugins::{
 };
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct DynMeshDataPart {
     pub material_instance: MaterialInstanceAsset,
     pub vertex_buffer_offset_in_bytes: u32,
@@ -27,6 +28,7 @@ pub struct DynMeshDataPart {
     pub index_type: RafxIndexType,
 }
 
+#[derive(Clone)]
 pub struct DynMeshData {
     pub mesh_parts: Vec<DynMeshDataPart>,
     pub vertex_buffer: Option<Vec<u8>>,

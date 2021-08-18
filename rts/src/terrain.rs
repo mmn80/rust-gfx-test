@@ -233,7 +233,7 @@ impl Terrain {
             };
         }
         if chunks > 0 {
-            log::info!("{} terrain meshes generated", chunks,);
+            log::info!("{} terrain meshes generated", chunks);
         }
     }
 
@@ -250,10 +250,11 @@ impl Terrain {
                 let entry = quad_parts
                     .entry(mat.0 - 1)
                     .or_insert(PerMaterialGreedyQuadsBuffer::new(mat));
-                entry.quad_groups[idx].quads.push(*quad);
+                entry.quad_groups[idx].quads.push(quad.clone());
             }
         }
 
+        let mut vertices_num = 0;
         let mut all_vertices = PushBuffer::new(16384);
         let mut all_indices = PushBuffer::new(16384);
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
@@ -267,8 +268,6 @@ impl Terrain {
                     for group in quads.quad_groups.iter() {
                         for quad in group.quads.iter() {
                             let face = &group.face;
-                            let vertex_offset =
-                                all_vertices.pad_to_alignment(std::mem::size_of::<MeshVertex>());
                             let positions = &face.quad_mesh_positions(quad, 1.0);
                             let normals = &face.quad_mesh_normals();
                             let uvs =
@@ -284,7 +283,8 @@ impl Terrain {
                                     1,
                                 );
                             }
-                            let indices = &face.quad_mesh_indices(vertex_offset as u32);
+                            let indices = &face.quad_mesh_indices(vertices_num);
+                            vertices_num += 4;
                             all_indices.push(indices, std::mem::size_of::<u32>());
                         }
                     }
@@ -325,7 +325,11 @@ impl Terrain {
         let min = extent.minimum;
         let min = Vec3::new(min.x() as f32, min.y() as f32, min.z() as f32);
         let max = extent.max();
-        let max = Vec3::new(max.x() as f32, max.y() as f32, max.z() as f32);
+        let max = Vec3::new(
+            max.x() as f32 + 1.,
+            max.y() as f32 + 1.,
+            max.z() as f32 + 1.,
+        );
         let sphere_center = Vec3::new(
             min.x + (max.x - min.x) / 2.,
             min.y + (max.y - min.y) / 2.,
@@ -345,6 +349,17 @@ impl Terrain {
 pub struct PerMaterialGreedyQuadsBuffer {
     pub quad_groups: [QuadGroup; 6],
     pub material: CubeVoxel,
+}
+
+impl PerMaterialGreedyQuadsBuffer {
+    pub fn num_quads(&self) -> usize {
+        let mut sum = 0;
+        for group in self.quad_groups.iter() {
+            sum += group.quads.len();
+        }
+
+        sum
+    }
 }
 
 impl PerMaterialGreedyQuadsBuffer {
