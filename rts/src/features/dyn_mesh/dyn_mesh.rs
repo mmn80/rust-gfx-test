@@ -180,17 +180,24 @@ impl DynMeshStorage {
     ) -> RafxResult<DynMeshState> {
         if mesh_data.vertex_buffer.is_none() || mesh_data.index_buffer.is_none() {
             return Err(RafxError::StringError(
+                "Dyn mesh data is not initialized".to_string(),
+            ));
+        }
+        let vertex_data = std::mem::take(&mut mesh_data.vertex_buffer).unwrap();
+        let index_data = std::mem::take(&mut mesh_data.index_buffer).unwrap();
+
+        if vertex_data.is_empty() || index_data.is_empty() {
+            return Err(RafxError::StringError(
                 "Dyn mesh data does not contain data".to_string(),
             ));
         }
+
         let uploader = self.uploader.as_ref().unwrap();
-        let vertex_data = std::mem::take(&mut mesh_data.vertex_buffer).unwrap();
         let vertex_upload_id = uploader.upload_buffer(
             RafxResourceType::VERTEX_BUFFER,
             vertex_data,
             self.vertex_tx.clone(),
         )?;
-        let index_data = std::mem::take(&mut mesh_data.index_buffer).unwrap();
         let index_upload_id = uploader.upload_buffer(
             RafxResourceType::INDEX_BUFFER,
             index_data,
@@ -248,7 +255,7 @@ impl DynMeshStorage {
                 BufferUploadResult::UploadDrop(upload_id) => (upload_id, None),
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
-            let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
+            let handle = self.index_uploads.get(&upload_id).unwrap().clone();
             if let (Some(buffer), DynMeshState::Uploading(ref mut upload, _)) =
                 (buffer, self.get_mut(&handle))
             {

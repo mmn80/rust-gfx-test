@@ -180,6 +180,7 @@ impl Terrain {
                 chunk.render_task = Some(task);
             }
         }
+
         let mut chunks = 0;
         for result in self.render_rx.try_iter() {
             if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
