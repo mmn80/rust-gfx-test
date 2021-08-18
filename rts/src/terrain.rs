@@ -206,9 +206,12 @@ impl Terrain {
                         render_object_handle: render_object_handle.clone(),
                     };
 
+                    let entity = world.push((transform_component, mesh_component));
+                    chunk.entity = Some(entity);
+
                     let visibility_object_handle = {
                         let handle = visibility_region.register_static_object(
-                            ObjectId::from(chunk.entity),
+                            ObjectId::from(entity),
                             CullModel::VisibleBounds(visible_bounds),
                         );
                         handle.set_transform(
@@ -219,13 +222,10 @@ impl Terrain {
                         handle.add_render_object(&render_object_handle);
                         handle
                     };
-                    let visibility_component = VisibilityComponent {
+                    let mut entry = world.entry(entity).unwrap();
+                    entry.add_component(VisibilityComponent {
                         visibility_object_handle: visibility_object_handle.clone(),
-                    };
-
-                    let entity =
-                        world.push((transform_component, mesh_component, visibility_component));
-                    chunk.entity = Some(entity);
+                    });
 
                     chunk.visibility_object_handle = Some(visibility_object_handle);
                     chunk.render_object_handle = Some(render_object_handle);
