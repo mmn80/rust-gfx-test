@@ -2,21 +2,14 @@ use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
     input::{InputResource, MouseButton},
-    terrain::{TerrainHandle, TerrainResource},
+    terrain::{CubeVoxel, TerrainHandle, TerrainResource},
 };
-use building_blocks::core::prelude::*;
+use building_blocks::{core::prelude::*, storage::prelude::*};
 use egui::Button;
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
-use rafx::{
-    assets::{distill_impl::AssetResource, AssetManager},
-    render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},
-    visibility::CullModel,
-};
-use rafx_plugins::{
-    components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{egui::EguiContextResource, mesh::MeshRenderObjectSet},
-};
+use rafx::assets::{distill_impl::AssetResource, AssetManager};
+use rafx_plugins::{components::TransformComponent, features::egui::EguiContextResource};
 use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -34,7 +27,7 @@ pub struct KinObjectComponent {
 
 pub struct KinObjectsState {
     terrain: TerrainHandle,
-    meshes: HashMap<KinObjectType, RenderObjectHandle>,
+    objects: HashMap<KinObjectType, Array3x1<CubeVoxel>>,
     ui_spawning: bool,
     ui_object_type: KinObjectType,
 }
@@ -72,10 +65,31 @@ impl KinObjectsState {
             Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
             1.into(),
         );
-        let meshes = HashMap::new();
+        let mut objects = HashMap::new();
+
+        let building = Array3x1::<CubeVoxel>::fill(
+            Extent3i::from_min_and_shape(Point3i::ZERO, PointN([10, 10, 10])),
+            4.into(),
+        );
+        objects.insert(KinObjectType::Building, building);
+
+        let mut tree = Array3x1::<CubeVoxel>::fill(
+            Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 15])),
+            0.into(),
+        );
+        tree.fill_extent(
+            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 10])),
+            3.into(),
+        );
+        tree.fill_extent(
+            &Extent3i::from_min_and_shape(PointN([-2, -2, 10]), PointN([5, 5, 5])),
+            2.into(),
+        );
+        objects.insert(KinObjectType::Tree, tree);
+
         KinObjectsState {
             terrain,
-            meshes,
+            objects,
             ui_spawning: false,
             ui_object_type: KinObjectType::Building,
         }
@@ -153,12 +167,6 @@ impl KinObjectsState {
             rotation: Quat::IDENTITY,
         };
 
-        // mesh component
-        let mesh_render_object = self.meshes.get(&object_type).unwrap().clone();
-        let mesh_component = MeshComponent {
-            render_object_handle: mesh_render_object.clone(),
-        };
-
         // kin object component
         let kin_object_component = KinObjectComponent {
             object_type,
@@ -168,36 +176,32 @@ impl KinObjectsState {
 
         // entity
         log::info!("Spawn entity {:?} at: {}", object_type, position);
-        let entity = world.push((transform_component, mesh_component, kin_object_component));
+        let _entity = world.push((transform_component, kin_object_component));
 
-        // visibility component
-        let asset_manager = resources.get::<AssetManager>().unwrap();
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
-        let mesh_render_objects = mesh_render_objects.read();
-        let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
-        let mut entry = world.entry(entity).unwrap();
-        entry.add_component(VisibilityComponent {
-            visibility_object_handle: {
-                let handle = visibility_region.register_dynamic_object(
-                    ObjectId::from(entity),
-                    CullModel::VisibleBounds(
-                        asset_manager
-                            .committed_asset(&asset_handle)
-                            .unwrap()
-                            .inner
-                            .asset_data
-                            .visible_bounds,
-                    ),
-                );
-                handle.set_transform(
-                    transform_component.translation,
-                    transform_component.rotation,
-                    transform_component.scale,
-                );
-                handle.add_render_object(&mesh_render_object);
-                handle
-            },
-        });
+        // voxels
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let mut storage = terrain_resource.write();
+        let terrain = storage.get_mut(&self.terrain);
+
+        let mut object = self.objects.get(&object_type).unwrap().clone();
+        object.set_minimum(PointN([
+            position.x as i32,
+            position.y as i32,
+            position.z as i32,
+        ]));
+        copy_extent(
+            &object.extent(),
+            &object,
+            &mut terrain.voxels.lod_view_mut(0),
+        );
+        let mut chunks = vec![];
+        terrain
+            .voxels
+            .visit_occupied_chunks(0, &object.extent(), |chunk| {
+                chunks.push(ChunkKey3::new(0, chunk.extent().minimum));
+            });
+        for chunk_key in chunks {
+            terrain.set_chunk_dirty(chunk_key);
+        }
     }
 }
