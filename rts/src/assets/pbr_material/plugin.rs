@@ -1,15 +1,15 @@
-use super::{TerrainConfigAssetType, TerrainConfigImporter};
+use super::{PbrMaterialAssetType, PbrMaterialImporter};
 use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     distill::daemon::AssetDaemon,
     renderer::RendererAssetPlugin,
 };
 
-pub struct TerrainConfigAssetTypeRendererPlugin;
+pub struct PbrMaterialAssetTypeRendererPlugin;
 
-impl RendererAssetPlugin for TerrainConfigAssetTypeRendererPlugin {
+impl RendererAssetPlugin for PbrMaterialAssetTypeRendererPlugin {
     fn configure_asset_daemon(&self, asset_daemon: AssetDaemon) -> AssetDaemon {
-        asset_daemon.with_importer("terrainconfig", TerrainConfigImporter)
+        asset_daemon.with_importer("pbrmaterial", PbrMaterialImporter)
     }
 
     fn register_asset_types(
@@ -17,6 +17,6 @@ impl RendererAssetPlugin for TerrainConfigAssetTypeRendererPlugin {
         asset_manager: &mut AssetManager,
         asset_resource: &mut AssetResource,
     ) {
-        asset_manager.register_asset_type::<TerrainConfigAssetType>(asset_resource);
+        asset_manager.register_asset_type::<PbrMaterialAssetType>(asset_resource);
     }
 }

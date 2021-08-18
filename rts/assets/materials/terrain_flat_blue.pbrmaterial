@@ -1,0 +1,15 @@
+(
+    name: "flat blue",
+    base_color_factor: (0.1, 0.1, 0.8, 1.0),
+    emissive_factor: (0.0, 0.0, 0.0),
+    metallic_factor: 0.1,
+    roughness_factor: 0.8,
+    normal_texture_scale: 1.0,
+    occlusion_texture_strength: 1.0,
+    alpha_cutoff: 0.5,
+    base_color_texture: None,
+    metallic_roughness_texture: None,
+    normal_texture: None,
+    occlusion_texture: None,
+    emissive_texture: None,
+)

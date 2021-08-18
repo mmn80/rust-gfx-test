@@ -1,5 +1,5 @@
 use crate::{
-    assets::terrain::TerrainConfigAsset,
+    assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
     input::{InputResource, MouseButton},
     terrain::{TerrainHandle, TerrainResource},
@@ -43,21 +43,32 @@ impl KinObjectsState {
     pub fn new(resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
-        let terrain_config_asset_handle = asset_resource
-            .load_asset_path::<TerrainConfigAsset, _>("materials/terrain_materials.terrainconfig");
-        let terrain_config_asset = {
-            asset_manager
-                .wait_for_asset_to_load(&terrain_config_asset_handle, &mut asset_resource, "")
-                .unwrap();
-            asset_manager
-                .committed_asset(&terrain_config_asset_handle)
-                .unwrap()
-                .clone()
-        };
+        let terrain_materials = vec![
+            KinObjectsState::load_pbr_material(
+                "materials/terrain_flat_red.pbrmaterial",
+                &mut asset_manager,
+                &mut asset_resource,
+            ),
+            KinObjectsState::load_pbr_material(
+                "materials/terrain_flat_green.pbrmaterial",
+                &mut asset_manager,
+                &mut asset_resource,
+            ),
+            KinObjectsState::load_pbr_material(
+                "materials/terrain_flat_blue.pbrmaterial",
+                &mut asset_manager,
+                &mut asset_resource,
+            ),
+            KinObjectsState::load_pbr_material(
+                "materials/terrain_metal.pbrmaterial",
+                &mut asset_manager,
+                &mut asset_resource,
+            ),
+        ];
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let w = 256;
         let terrain = terrain_resource.new_terrain(
-            terrain_config_asset,
+            terrain_materials,
             Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
             1.into(),
         );
@@ -68,6 +79,21 @@ impl KinObjectsState {
             ui_spawning: false,
             ui_object_type: KinObjectType::Building,
         }
+    }
+
+    fn load_pbr_material(
+        path: &str,
+        asset_manager: &mut AssetManager,
+        asset_resource: &mut AssetResource,
+    ) -> PbrMaterialAsset {
+        let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
+        asset_manager
+            .wait_for_asset_to_load(&material_handle, asset_resource, "")
+            .unwrap();
+        asset_manager
+            .committed_asset(&material_handle)
+            .unwrap()
+            .clone()
     }
 
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {

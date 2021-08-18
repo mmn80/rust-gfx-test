@@ -1,5 +1,5 @@
 use crate::{
-    assets::terrain::TerrainConfigAsset,
+    assets::pbr_material::PbrMaterialAsset,
     features::dyn_mesh::{
         DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
         DynMeshResource,
@@ -98,7 +98,7 @@ impl IsEmpty for CubeVoxel {
 }
 
 pub struct Terrain {
-    config: TerrainConfigAsset,
+    materials: Vec<PbrMaterialAsset>,
     pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
@@ -161,7 +161,7 @@ impl Terrain {
 
         for (key, padded_chunk) in to_render {
             let render_tx = self.render_tx.clone();
-            let config = self.config.clone();
+            let config = self.materials.clone();
             let padded_extent = padded_chunk.extent().clone();
             let task = self.task_pool.spawn(async move {
                 let mut buffer =
@@ -240,7 +240,7 @@ impl Terrain {
     fn make_dyn_mesh_data(
         voxels: &Array3x1<CubeVoxel>,
         quads: &GreedyQuadsBuffer,
-        config: &TerrainConfigAsset,
+        materials: &Vec<PbrMaterialAsset>,
     ) -> DynMeshData {
         let mut quad_parts = HashMap::new();
         for (idx, group) in quads.quad_groups.iter().enumerate() {
@@ -259,8 +259,8 @@ impl Terrain {
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
         for (mat, quads) in quad_parts.iter() {
             let mesh_part = {
-                let material_instance = config.inner.materials.get(*mat as usize);
-                if let Some(material_instance) = material_instance {
+                let pbr_material = materials.get(*mat as usize);
+                if let Some(pbr_material) = pbr_material {
                     let vertex_offset =
                         all_vertices.pad_to_alignment(std::mem::size_of::<MeshVertex>());
                     let indices_offset = all_indices.pad_to_alignment(std::mem::size_of::<u32>());
@@ -291,7 +291,7 @@ impl Terrain {
                     let indices_size = all_indices.len() - indices_offset;
 
                     Some(DynMeshDataPart {
-                        material_instance: material_instance.clone(),
+                        material_instance: pbr_material.get_material_instance(),
                         vertex_buffer_offset_in_bytes: vertex_offset as u32,
                         vertex_buffer_size_in_bytes: vertex_size as u32,
                         index_buffer_offset_in_bytes: indices_offset as u32,
@@ -302,7 +302,7 @@ impl Terrain {
                     log::error!(
                         "Invalid terrain material index {} (# of materials: {})",
                         mat,
-                        config.inner.materials.len()
+                        materials.len()
                     );
                     None
                 }
@@ -443,7 +443,7 @@ impl TerrainResource {
 
     pub fn new_terrain(
         &mut self,
-        config: TerrainConfigAsset,
+        materials: Vec<PbrMaterialAsset>,
         fill_extent: Extent3i,
         fill_value: CubeVoxel,
     ) -> TerrainHandle {
@@ -460,7 +460,7 @@ impl TerrainResource {
 
             let (render_tx, render_rx) = unbounded();
             Terrain {
-                config,
+                materials,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
                 render_chunks: HashMap::new(),

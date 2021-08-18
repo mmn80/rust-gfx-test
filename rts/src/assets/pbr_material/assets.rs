@@ -11,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use type_uuid::*;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TerrainMaterialConfigSource {
+#[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]
+#[uuid = "df939dee-7ff0-496d-ae45-11ffbe268e4f"]
+pub struct PbrMaterialSource {
     pub name: String,
 
     pub base_color_factor: [f32; 4],
@@ -30,9 +31,9 @@ pub struct TerrainMaterialConfigSource {
     pub emissive_texture: Option<Handle<ImageAsset>>,
 }
 
-impl Default for TerrainMaterialConfigSource {
+impl Default for PbrMaterialSource {
     fn default() -> Self {
-        TerrainMaterialConfigSource {
+        PbrMaterialSource {
             name: "<noname>".to_string(),
             base_color_factor: [1.0, 1.0, 1.0, 1.0],
             emissive_factor: [0.0, 0.0, 0.0],
@@ -50,7 +51,7 @@ impl Default for TerrainMaterialConfigSource {
     }
 }
 
-impl Into<MeshMaterialDataShaderParam> for TerrainMaterialConfigSource {
+impl Into<MeshMaterialDataShaderParam> for PbrMaterialSource {
     fn into(self) -> MeshMaterialDataShaderParam {
         MeshMaterialDataShaderParam {
             base_color_factor: self.base_color_factor.into(),
@@ -71,61 +72,44 @@ impl Into<MeshMaterialDataShaderParam> for TerrainMaterialConfigSource {
 }
 
 #[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]
-#[uuid = "df939dee-7ff0-496d-ae45-11ffbe268e4f"]
-pub struct TerrainConfigAssetSourceData {
-    pub materials: Vec<TerrainMaterialConfigSource>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TerrainMaterialConfig {
-    pub source: TerrainMaterialConfigSource,
-    pub material: Handle<MaterialInstanceAsset>,
-}
-
-#[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]
 #[uuid = "54670c73-8b04-4fa3-acf3-ec63deff0a99"]
-pub struct TerrainConfigAssetData {
-    pub materials: Vec<TerrainMaterialConfig>,
-}
-
-pub struct TerrainConfigAssetInner {
-    pub materials: Vec<MaterialInstanceAsset>,
+pub struct PbrMaterialAssetData {
+    pub source: PbrMaterialSource,
+    pub material: Handle<MaterialInstanceAsset>,
 }
 
 #[derive(TypeUuid, Clone)]
 #[uuid = "4b5d4341-1d48-4051-a283-db545fb4a4f0"]
-pub struct TerrainConfigAsset {
-    pub inner: Arc<TerrainConfigAssetInner>,
+pub struct PbrMaterialAsset {
+    pub inner: Arc<MaterialInstanceAsset>,
 }
 
-pub struct TerrainConfigLoadHandler;
+impl PbrMaterialAsset {
+    pub fn get_material_instance(&self) -> MaterialInstanceAsset {
+        self.inner.as_ref().clone()
+    }
+}
 
-impl DefaultAssetTypeLoadHandler<TerrainConfigAssetData, TerrainConfigAsset>
-    for TerrainConfigLoadHandler
+pub struct PbrMaterialLoadHandler;
+
+impl DefaultAssetTypeLoadHandler<PbrMaterialAssetData, PbrMaterialAsset>
+    for PbrMaterialLoadHandler
 {
     #[profiling::function]
     fn load(
         asset_manager: &mut AssetManager,
-        terrain_config_asset: TerrainConfigAssetData,
-    ) -> RafxResult<TerrainConfigAsset> {
-        let materials = terrain_config_asset
-            .materials
-            .into_iter()
-            .map(|config| {
-                asset_manager
-                    .committed_asset(&config.material)
-                    .unwrap()
-                    .clone()
-            })
-            .collect();
+        asset_data: PbrMaterialAssetData,
+    ) -> RafxResult<PbrMaterialAsset> {
+        let material = asset_manager
+            .committed_asset(&asset_data.material)
+            .unwrap()
+            .clone();
 
-        let inner = TerrainConfigAssetInner { materials };
-
-        Ok(TerrainConfigAsset {
-            inner: Arc::new(inner),
+        Ok(PbrMaterialAsset {
+            inner: Arc::new(material),
         })
     }
 }
 
-pub type TerrainConfigAssetType =
-    DefaultAssetTypeHandler<TerrainConfigAssetData, TerrainConfigAsset, TerrainConfigLoadHandler>;
+pub type PbrMaterialAssetType =
+    DefaultAssetTypeHandler<PbrMaterialAssetData, PbrMaterialAsset, PbrMaterialLoadHandler>;
