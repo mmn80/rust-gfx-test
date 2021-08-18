@@ -111,9 +111,11 @@ struct DynMeshUpload {
     pub vertex_upload_id: BufferUploadId,
     pub vertex_rx: Receiver<BufferUploadResult>,
     pub vertex_buffer: Option<RafxBuffer>,
+    pub vertex_buffer_uploaded: bool,
     pub index_upload_id: BufferUploadId,
     pub index_rx: Receiver<BufferUploadResult>,
     pub index_buffer: Option<RafxBuffer>,
+    pub index_buffer_uploaded: bool,
 }
 
 enum DynMeshState {
@@ -125,6 +127,12 @@ enum DynMeshState {
 #[derive(Clone, Debug)]
 pub struct DynMeshHandle {
     key: GenericDropSlabKey,
+}
+
+impl std::fmt::Display for DynMeshHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.key)
+    }
 }
 
 struct DynMeshStorage {
@@ -218,9 +226,11 @@ impl DynMeshStorage {
                 vertex_upload_id,
                 vertex_rx: self.vertex_rx.clone(),
                 vertex_buffer: None,
+                vertex_buffer_uploaded: false,
                 index_upload_id,
                 index_rx: self.index_rx.clone(),
                 index_buffer: None,
+                index_buffer_uploaded: false,
             },
             old_dyn_mash,
         ))
@@ -238,6 +248,7 @@ impl DynMeshStorage {
                 (buffer, self.get_mut(&handle))
             {
                 upload.vertex_buffer = Some(buffer);
+                upload.vertex_buffer_uploaded = true;
             } else {
                 log::error!(
                     "Vertex buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
@@ -260,6 +271,7 @@ impl DynMeshStorage {
                 (buffer, self.get_mut(&handle))
             {
                 upload.index_buffer = Some(buffer);
+                upload.index_buffer_uploaded = true;
             } else {
                 log::error!(
                     "Index buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
@@ -276,6 +288,9 @@ impl DynMeshStorage {
     fn check_finished_upload(&mut self, handle: &DynMeshHandle, asset_manager: &mut AssetManager) {
         let mesh_state = self.get_mut(handle);
         if let DynMeshState::Uploading(upload, _) = mesh_state {
+            if !upload.vertex_buffer_uploaded || !upload.index_buffer_uploaded {
+                return;
+            }
             if let (Some(vertex_buffer), Some(index_buffer)) =
                 (upload.vertex_buffer.take(), upload.index_buffer.take())
             {
@@ -353,6 +368,8 @@ impl DynMeshStorage {
                 };
 
                 let _old = std::mem::replace(mesh_state, DynMeshState::Completed(dyn_mesh));
+            } else {
+                unreachable!();
             }
         }
     }
