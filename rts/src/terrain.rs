@@ -16,6 +16,7 @@ use building_blocks::{
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use glam::{Quat, Vec3};
+use legion::{Entity, Resources, World};
 use rafx::{
     api::RafxIndexType,
     assets::push_buffer::PushBuffer,
@@ -27,7 +28,10 @@ use rafx::{
     render_feature_extract_job_predule::*,
     visibility::{CullModel, VisibilityObjectArc},
 };
-use rafx_plugins::features::mesh::MeshVertex;
+use rafx_plugins::{
+    components::{MeshComponent, TransformComponent, VisibilityComponent},
+    features::mesh::MeshVertex,
+};
 use std::{collections::HashMap, sync::Arc};
 
 pub struct ChunkState {
@@ -36,7 +40,7 @@ pub struct ChunkState {
 }
 
 pub struct TerrainRenderChunk {
-    pub id: u64,
+    pub entity: Option<Entity>,
     pub dyn_mesh_handle: Option<DynMeshHandle>,
     pub render_object_handle: Option<RenderObjectHandle>,
     pub visibility_object_handle: Option<VisibilityObjectArc>,
@@ -48,7 +52,7 @@ pub struct TerrainRenderChunk {
 impl TerrainRenderChunk {
     pub fn new() -> Self {
         TerrainRenderChunk {
-            id: rand::random(),
+            entity: None,
             dyn_mesh_handle: None,
             render_object_handle: None,
             visibility_object_handle: None,
@@ -128,12 +132,10 @@ impl Terrain {
         }
     }
 
-    pub fn update_render_chunks(
-        &mut self,
-        dyn_mesh_resource: &mut DynMeshResource,
-        dyn_mesh_render_objects: &mut DynMeshRenderObjectSet,
-        visibility_region: &VisibilityRegion,
-    ) {
+    pub fn update_render_chunks(&mut self, world: &mut World, resources: &Resources) {
+        let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
+        let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let to_render: Vec<(_, _, Array3x1<CubeVoxel>)> = self
             .render_chunks
             .iter()
@@ -190,17 +192,41 @@ impl Terrain {
                     let _res = dyn_mesh_resource.update_dyn_mesh(&handle, result.mesh);
                 } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(result.mesh) {
                     chunk.dyn_mesh_handle = Some(handle.clone());
+
+                    let transform_component = TransformComponent {
+                        translation: visible_bounds.aabb.min,
+                        scale: Vec3::ONE,
+                        rotation: Quat::IDENTITY,
+                    };
+
                     let render_object_handle = dyn_mesh_render_objects
                         .register_render_object(DynMeshRenderObject { mesh: handle });
-                    chunk.visibility_object_handle = Some({
+                    let mesh_component = MeshComponent {
+                        render_object_handle: render_object_handle.clone(),
+                    };
+
+                    let visibility_object_handle = {
                         let handle = visibility_region.register_static_object(
-                            ObjectId::from(chunk.id), //TODO: this may clash with entities
+                            ObjectId::from(chunk.entity),
                             CullModel::VisibleBounds(visible_bounds),
                         );
-                        handle.set_transform(visible_bounds.aabb.min, Quat::IDENTITY, Vec3::ONE);
+                        handle.set_transform(
+                            transform_component.translation,
+                            transform_component.rotation,
+                            transform_component.scale,
+                        );
                         handle.add_render_object(&render_object_handle);
                         handle
-                    });
+                    };
+                    let visibility_component = VisibilityComponent {
+                        visibility_object_handle: visibility_object_handle.clone(),
+                    };
+
+                    let entity =
+                        world.push((transform_component, mesh_component, visibility_component));
+                    chunk.entity = Some(entity);
+
+                    chunk.visibility_object_handle = Some(visibility_object_handle);
                     chunk.render_object_handle = Some(render_object_handle);
                 }
             };
