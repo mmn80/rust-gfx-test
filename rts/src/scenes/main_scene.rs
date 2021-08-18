@@ -11,19 +11,12 @@ use distill::loader::handle::Handle;
 use glam::Vec3;
 use legion::{IntoQuery, Resources, World, Write};
 use rafx::{
-    assets::{distill_impl::AssetResource, AssetManager},
+    assets::distill_impl::AssetResource,
     renderer::ViewportsResource,
-    visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityRegion},
+    visibility::{ViewFrustumArc, VisibilityRegion},
 };
 use rafx_plugins::{
-    assets::{font::FontAsset, mesh::MeshAsset},
-    components::{
-        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
-    },
-    features::{
-        mesh::{MeshRenderObject, MeshRenderObjectSet},
-        text::TextResource,
-    },
+    assets::font::FontAsset, components::DirectionalLightComponent, features::text::TextResource,
 };
 
 pub(super) struct MainScene {
@@ -38,72 +31,12 @@ impl MainScene {
         let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
         *render_options = RenderOptions::default_3d();
 
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-
-        //
-        // Add a floor
-        //
         let font = {
-            let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-            let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
-            let floor_mesh_asset =
-                asset_resource.load_asset_path::<MeshAsset, _>("blender/cement_floor.glb");
-            asset_manager
-                .wait_for_asset_to_load(&floor_mesh_asset, &mut asset_resource, "")
-                .unwrap();
-
-            const FLOOR_SIZE: f32 = 48.;
-            const FLOOR_NUM: i32 = 10;
-
-            let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
-            let floor_mesh = mesh_render_objects.register_render_object(MeshRenderObject {
-                mesh: floor_mesh_asset.clone(),
-            });
-
-            for x in -FLOOR_NUM..FLOOR_NUM {
-                for y in -FLOOR_NUM..FLOOR_NUM {
-                    let position = Vec3::new(x as f32 * FLOOR_SIZE, y as f32 * FLOOR_SIZE, -1.);
-                    let transform_component = TransformComponent {
-                        translation: position,
-                        ..Default::default()
-                    };
-
-                    let mesh_component = MeshComponent {
-                        render_object_handle: floor_mesh.clone(),
-                    };
-
-                    let entity = world.push((transform_component, mesh_component));
-                    let mut entry = world.entry(entity).unwrap();
-                    entry.add_component(VisibilityComponent {
-                        visibility_object_handle: {
-                            let handle = visibility_region.register_static_object(
-                                ObjectId::from(entity),
-                                CullModel::VisibleBounds(
-                                    asset_manager
-                                        .committed_asset(&floor_mesh_asset)
-                                        .unwrap()
-                                        .inner
-                                        .asset_data
-                                        .visible_bounds,
-                                ),
-                            );
-                            handle.set_transform(
-                                transform_component.translation,
-                                transform_component.rotation,
-                                transform_component.scale,
-                            );
-                            handle.add_render_object(&floor_mesh);
-                            handle
-                        },
-                    });
-                }
-            }
+            let asset_resource = resources.get_mut::<AssetResource>().unwrap();
             asset_resource.load_asset_path::<FontAsset, _>("fonts/mplus-1p-regular.ttf")
         };
 
-        //
-        // Directional light
-        //
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         {
             let light_from = Vec3::new(-5.0, 5.0, 5.0);
             let light_to = Vec3::ZERO;
