@@ -136,7 +136,7 @@ impl Terrain {
         let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        let to_render: Vec<(_, _, Array3x1<CubeVoxel>)> = self
+        let to_render: Vec<(_, Array3x1<CubeVoxel>)> = self
             .render_chunks
             .iter()
             .filter(|(_key, chunk)| {
@@ -152,24 +152,23 @@ impl Terrain {
                     &self.voxels.lod_view(0),
                     &mut padded_chunk,
                 );
-                (key.clone(), padded_chunk_extent, padded_chunk)
+                (key.clone(), padded_chunk)
             })
             .collect();
         if to_render.len() > 0 {
             log::info!("Starting {} greedy mesh jobs", to_render.len());
         }
 
-        for (key, padded_chunk_extent, padded_chunk) in to_render {
+        for (key, padded_chunk) in to_render {
             let render_tx = self.render_tx.clone();
             let config = self.config.clone();
+            let padded_extent = padded_chunk.extent().clone();
             let task = self.task_pool.spawn(async move {
-                let mut buffer = GreedyQuadsBuffer::new(
-                    padded_chunk_extent,
-                    RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
-                );
-                greedy_quads(&padded_chunk, &padded_chunk_extent, &mut buffer);
-                let extent = padded_chunk_extent.padded(-1);
-                let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, extent, &config);
+                let mut buffer =
+                    GreedyQuadsBuffer::new(padded_extent, RIGHT_HANDED_Y_UP_CONFIG.quad_groups());
+                greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
+
+                let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &config);
                 let results = RenderChunkTaskResults {
                     key: key.clone(),
                     mesh,
@@ -195,7 +194,7 @@ impl Terrain {
                     chunk.dyn_mesh_handle = Some(handle.clone());
 
                     let transform_component = TransformComponent {
-                        translation: visible_bounds.aabb.min,
+                        translation: Vec3::ZERO,
                         scale: Vec3::ONE,
                         rotation: Quat::IDENTITY,
                     };
@@ -214,10 +213,11 @@ impl Terrain {
                             ObjectId::from(entity),
                             CullModel::VisibleBounds(visible_bounds),
                         );
+                        let pos = result.key.minimum;
                         handle.set_transform(
-                            transform_component.translation,
-                            transform_component.rotation,
-                            transform_component.scale,
+                            Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
+                            Quat::IDENTITY,
+                            Vec3::ONE,
                         );
                         handle.add_render_object(&render_object_handle);
                         handle
@@ -240,7 +240,6 @@ impl Terrain {
     fn make_dyn_mesh_data(
         voxels: &Array3x1<CubeVoxel>,
         quads: &GreedyQuadsBuffer,
-        extent: Extent3i,
         config: &TerrainConfigAsset,
     ) -> DynMeshData {
         let mut quad_parts = HashMap::new();
@@ -317,28 +316,21 @@ impl Terrain {
             mesh_parts,
             vertex_buffer: Some(all_vertices.into_data()),
             index_buffer: Some(all_indices.into_data()),
-            visible_bounds: Self::make_visible_bounds(&extent, 0),
+            visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
         }
     }
 
     fn make_visible_bounds(extent: &Extent3i, hash: u64) -> VisibleBounds {
-        let min = extent.minimum;
-        let min = Vec3::new(min.x() as f32, min.y() as f32, min.z() as f32);
-        let max = extent.max();
-        let max = Vec3::new(
-            max.x() as f32 + 1.,
-            max.y() as f32 + 1.,
-            max.z() as f32 + 1.,
-        );
-        let sphere_center = Vec3::new(
-            min.x + (max.x - min.x) / 2.,
-            min.y + (max.y - min.y) / 2.,
-            min.z + (max.z - min.z) / 2.,
-        );
+        let max = extent.shape;
+        let max = Vec3::new(max.x() as f32, max.y() as f32, max.z() as f32) + Vec3::ONE;
+        let sphere_center = max / 2.;
         let sphere_radius = sphere_center.distance(max);
 
         VisibleBounds {
-            aabb: AxisAlignedBoundingBox { min, max },
+            aabb: AxisAlignedBoundingBox {
+                min: Vec3::ZERO,
+                max,
+            },
             obb: Default::default(),
             bounding_sphere: BoundingSphere::new(sphere_center, sphere_radius),
             hash,

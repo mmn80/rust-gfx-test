@@ -310,7 +310,7 @@ impl DynObjectsState {
         // transform component
         const SCALE_MIN: f32 = 0.5;
         const SCALE_MAX: f32 = 2.;
-        let position = Vec3::new(position.x, position.y, 0.0);
+        let position = Vec3::new(position.x, position.y, 1.0);
         let mut rng = thread_rng();
         let rand_scale_xy = rng.gen_range(SCALE_MIN..SCALE_MAX);
         let transform_component = TransformComponent {

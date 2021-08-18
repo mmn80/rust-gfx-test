@@ -55,7 +55,7 @@ impl KinObjectsState {
                 .clone()
         };
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-        let w = 16;
+        let w = 256;
         let terrain = terrain_resource.new_terrain(
             terrain_config_asset,
             Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
