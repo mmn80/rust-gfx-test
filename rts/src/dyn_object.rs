@@ -312,12 +312,10 @@ impl DynObjectsState {
         const SCALE_MAX: f32 = 2.;
         let position = Vec3::new(position.x, position.y, 0.0);
         let mut rng = thread_rng();
-        let rand_scale_z = rng.gen_range(SCALE_MIN..SCALE_MAX);
         let rand_scale_xy = rng.gen_range(SCALE_MIN..SCALE_MAX);
-        let offset = rand_scale_z - 1.;
         let transform_component = TransformComponent {
-            translation: position + Vec3::new(0., 0., offset),
-            scale: Vec3::new(rand_scale_xy, rand_scale_xy, rand_scale_z),
+            translation: position,
+            scale: Vec3::new(rand_scale_xy, rand_scale_xy, 1.),
             rotation: Quat::from_rotation_z(rng.gen_range(0.0..2.0 * std::f32::consts::PI)),
         };
 

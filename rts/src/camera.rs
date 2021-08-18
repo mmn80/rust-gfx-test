@@ -124,7 +124,7 @@ impl RTSCamera {
 
     pub fn ray_cast_terrain(&self, screen_x: u32, screen_y: u32) -> Vec3 {
         let ray_vec = self.make_ray(screen_x, screen_y);
-        let floor = AABB::new(point![-1000., -1000., -2.], point![1000., 1000., -1.]);
+        let floor = AABB::new(point![-1000., -1000., -2.], point![1000., 1000., 0.]);
         let eye = self.eye();
         let ray = Ray::new(
             point![eye.x, eye.y, eye.z],
