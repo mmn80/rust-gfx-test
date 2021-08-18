@@ -5,6 +5,9 @@
         terrain_asset_uuid: Some("a02eae0a-c436-496f-9b83-3731d8e8f905"),
         material_instance_asset_uuids: [
             "8f6b10af-3477-465d-94c0-db1416a6ee6c",
+            "928661a2-d36c-4a92-a167-5d2847878935",
+            "2a6a5da8-051e-40e4-a118-58db7f08ccab",
+            "3bc944f1-c603-4c0e-b234-db9838b0676e",
         ],
     ),
 )
