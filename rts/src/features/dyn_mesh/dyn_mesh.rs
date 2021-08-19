@@ -36,6 +36,39 @@ pub struct DynMeshData {
     pub visible_bounds: VisibleBounds,
 }
 
+impl std::fmt::Display for DynMeshData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let vtx_sz = self.vertex_buffer.as_ref().unwrap().len();
+        let idx_sz = self.index_buffer.as_ref().unwrap().len();
+        let vtx_q = 4 * std::mem::size_of::<rafx_plugins::features::mesh::MeshVertex>() as u32;
+        let idx_q = 6 * std::mem::size_of::<u32>() as u32;
+        write!(
+            f,
+            "vx_tot: {}b={}q; ix_tot: {}b={}q; parts: {}",
+            vtx_sz,
+            vtx_sz / (vtx_q as usize),
+            idx_sz,
+            idx_sz / (idx_q as usize),
+            itertools::Itertools::join(
+                &mut self.mesh_parts.iter().map(|p| {
+                    format!(
+                        "vx: ({}b={}q, {}b={}q), ix: ({}b={}q, {}b={}q)",
+                        p.vertex_buffer_offset_in_bytes,
+                        p.vertex_buffer_offset_in_bytes / vtx_q,
+                        p.vertex_buffer_size_in_bytes,
+                        p.vertex_buffer_size_in_bytes / vtx_q,
+                        p.index_buffer_offset_in_bytes,
+                        p.index_buffer_offset_in_bytes / idx_q,
+                        p.index_buffer_size_in_bytes,
+                        p.index_buffer_size_in_bytes / idx_q
+                    )
+                }),
+                ", "
+            )
+        )
+    }
+}
+
 pub struct DynMeshPart {
     pub material_instance: MaterialInstanceAsset,
     pub textured_pass_index: usize,

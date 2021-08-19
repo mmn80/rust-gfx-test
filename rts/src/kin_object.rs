@@ -178,7 +178,7 @@ impl KinObjectsState {
         log::info!("Spawn entity {:?} at: {}", object_type, position);
         let _entity = world.push((transform_component, kin_object_component));
 
-        // voxels
+        // update voxels
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);
@@ -194,10 +194,12 @@ impl KinObjectsState {
             &object,
             &mut terrain.voxels.lod_view_mut(0),
         );
+
+        // set chunks dirty
         let mut chunks = vec![];
         terrain
             .voxels
-            .visit_occupied_chunks(0, &object.extent(), |chunk| {
+            .visit_occupied_chunks(0, &object.extent().padded(1), |chunk| {
                 chunks.push(ChunkKey3::new(0, chunk.extent().minimum));
             });
         for chunk_key in chunks {

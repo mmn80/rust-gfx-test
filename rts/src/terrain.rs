@@ -15,6 +15,7 @@ use building_blocks::{
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use fnv::FnvHashMap;
 use glam::{Quat, Vec3};
 use legion::{Entity, Resources, World};
 use rafx::{
@@ -187,6 +188,8 @@ impl Terrain {
                 chunk.rendered_version += 1;
                 chunks += 1;
 
+                log::info!("Dyn mesh built. {}", result.mesh.clone());
+
                 let visible_bounds = result.mesh.visible_bounds.clone();
                 if let Some(handle) = &chunk.dyn_mesh_handle {
                     let _res = dyn_mesh_resource.update_dyn_mesh(&handle, result.mesh);
@@ -242,10 +245,11 @@ impl Terrain {
         quads: &GreedyQuadsBuffer,
         materials: &Vec<PbrMaterialAsset>,
     ) -> DynMeshData {
-        let mut quad_parts = HashMap::new();
+        let mut quad_parts: FnvHashMap<_, _> = Default::default();
         for (idx, group) in quads.quad_groups.iter().enumerate() {
             for quad in group.quads.iter() {
                 let mat = voxels.get(quad.minimum);
+                assert_ne!(mat.0, 0);
                 let entry = quad_parts
                     .entry(mat.0 - 1)
                     .or_insert(PerMaterialGreedyQuadsBuffer::new(mat));
@@ -253,17 +257,29 @@ impl Terrain {
             }
         }
 
+        let parts_debug: Vec<_> = quad_parts.iter().collect();
+        log::info!(
+            "Start building dyn mesh: {}",
+            itertools::Itertools::join(
+                &mut parts_debug
+                    .iter()
+                    .map(|(m, q)| { format!("mat: {}, quads: {}", m, q.num_quads()) }),
+                ", "
+            )
+        );
+
+        let num_quads = quads.num_quads();
+        let mut all_vertices = PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertex>());
+        let mut all_indices = PushBuffer::new(num_quads * 6 * std::mem::size_of::<u32>());
+
         let mut vertices_num = 0;
-        let mut all_vertices = PushBuffer::new(16384);
-        let mut all_indices = PushBuffer::new(16384);
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
         for (mat, quads) in quad_parts.iter() {
             let mesh_part = {
                 let pbr_material = materials.get(*mat as usize);
                 if let Some(pbr_material) = pbr_material {
-                    let vertex_offset =
-                        all_vertices.pad_to_alignment(std::mem::size_of::<MeshVertex>());
-                    let indices_offset = all_indices.pad_to_alignment(std::mem::size_of::<u32>());
+                    let vertex_offset = all_vertices.len();
+                    let indices_offset = all_indices.len();
                     for group in quads.quad_groups.iter() {
                         for quad in group.quads.iter() {
                             let face = &group.face;
@@ -271,6 +287,9 @@ impl Terrain {
                             let normals = &face.quad_mesh_normals();
                             let uvs =
                                 face.tex_coords(RIGHT_HANDED_Y_UP_CONFIG.u_flip_face, true, quad);
+                            let indices = &face.quad_mesh_indices(vertices_num);
+
+                            vertices_num += 4;
                             for i in 0..4 {
                                 all_vertices.push(
                                     &[MeshVertex {
@@ -282,8 +301,6 @@ impl Terrain {
                                     1,
                                 );
                             }
-                            let indices = &face.quad_mesh_indices(vertices_num);
-                            vertices_num += 4;
                             all_indices.push(indices, std::mem::size_of::<u32>());
                         }
                     }
