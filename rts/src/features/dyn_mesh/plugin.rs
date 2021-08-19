@@ -1,12 +1,11 @@
-use rafx::render_feature_renderer_prelude::*;
-
 use super::*;
 use crate::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, TransparentRenderPhase,
     WireframeRenderPhase,
 };
 use distill::loader::handle::Handle;
-use rafx::assets::MaterialAsset;
+use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
+use rafx_plugins::features::mesh::ShadowMapResource;
 
 pub struct DynMeshStaticResources {
     pub depth_material: Handle<MaterialAsset>,
@@ -86,21 +85,11 @@ impl RenderFeaturePlugin for DynMeshRendererPlugin {
 
         render_resources.insert(DynMeshStaticResources { depth_material });
 
+        let mut shadow_map_resource = render_resources.fetch_mut::<ShadowMapResource>();
+        shadow_map_resource.add_shadow_map_feature::<DynMeshRenderFeature>();
+
         Ok(())
     }
-
-    // fn add_render_views(
-    //     &self,
-    //     extract_resources: &ExtractResources,
-    //     render_resources: &RenderResources,
-    //     render_view_set: &RenderViewSet,
-    //     render_views: &mut Vec<RenderView>,
-    // ) {
-    //     let mut shadow_map_resource = render_resources.fetch_mut::<ShadowMapResource>();
-    //     shadow_map_resource.recalculate_shadow_map_views(&render_view_set, extract_resources);
-
-    //     shadow_map_resource.append_render_views(render_views);
-    // }
 
     fn new_frame_packet(
         &self,
