@@ -257,20 +257,20 @@ impl Terrain {
             }
         }
 
-        let parts_debug: Vec<_> = quad_parts.iter().collect();
-        log::info!(
-            "Start building dyn mesh: {}",
-            itertools::Itertools::join(
-                &mut parts_debug
-                    .iter()
-                    .map(|(m, q)| { format!("mat: {}, quads: {}", m, q.num_quads()) }),
-                ", "
-            )
-        );
+        // let parts_debug: Vec<_> = quad_parts.iter().collect();
+        // log::info!(
+        //     "Start building dyn mesh: {}",
+        //     itertools::Itertools::join(
+        //         &mut parts_debug
+        //             .iter()
+        //             .map(|(m, q)| { format!("mat: {}, quads: {}", m, q.num_quads()) }),
+        //         ", "
+        //     )
+        // );
 
         let num_quads = quads.num_quads();
         let mut all_vertices = PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertex>());
-        let mut all_indices = PushBuffer::new(num_quads * 6 * std::mem::size_of::<u32>());
+        let mut all_indices = PushBuffer::new(num_quads * 6 * std::mem::size_of::<u16>());
 
         let mut vertices_num = 0;
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
@@ -278,6 +278,12 @@ impl Terrain {
             let mesh_part = {
                 let pbr_material = materials.get(*mat as usize);
                 if let Some(pbr_material) = pbr_material {
+                    let total_indices = quads.num_quads() * 6;
+                    let index_type = if total_indices >= 0xFFFF {
+                        RafxIndexType::Uint32
+                    } else {
+                        RafxIndexType::Uint16
+                    };
                     let vertex_offset = all_vertices.len();
                     let indices_offset = all_indices.len();
                     for group in quads.quad_groups.iter() {
@@ -287,7 +293,7 @@ impl Terrain {
                             let normals = &face.quad_mesh_normals();
                             let uvs =
                                 face.tex_coords(RIGHT_HANDED_Y_UP_CONFIG.u_flip_face, true, quad);
-                            let indices = &face.quad_mesh_indices(vertices_num);
+                            let indices32 = &face.quad_mesh_indices(vertices_num);
 
                             vertices_num += 4;
                             for i in 0..4 {
@@ -301,7 +307,15 @@ impl Terrain {
                                     1,
                                 );
                             }
-                            all_indices.push(indices, std::mem::size_of::<u32>());
+                            match index_type {
+                                rafx::api::RafxIndexType::Uint16 => {
+                                    let indices16 = Self::convert_to_u16(indices32);
+                                    all_indices.push(&indices16, std::mem::size_of::<u16>());
+                                }
+                                rafx::api::RafxIndexType::Uint32 => {
+                                    all_indices.push(indices32, std::mem::size_of::<u32>());
+                                }
+                            }
                         }
                     }
                     let vertex_size = all_vertices.len() - vertex_offset;
@@ -313,7 +327,7 @@ impl Terrain {
                         vertex_buffer_size_in_bytes: vertex_size as u32,
                         index_buffer_offset_in_bytes: indices_offset as u32,
                         index_buffer_size_in_bytes: indices_size as u32,
-                        index_type: RafxIndexType::Uint32,
+                        index_type,
                     })
                 } else {
                     log::error!(
@@ -335,6 +349,13 @@ impl Terrain {
             index_buffer: Some(all_indices.into_data()),
             visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
         }
+    }
+
+    fn convert_to_u16(indices_u32: &[u32]) -> Vec<u16> {
+        indices_u32
+            .iter()
+            .map(|&x| std::convert::TryInto::try_into(x).unwrap())
+            .collect()
     }
 
     fn make_visible_bounds(extent: &Extent3i, hash: u64) -> VisibleBounds {

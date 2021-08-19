@@ -196,7 +196,11 @@ impl<'write> RenderFeatureWriteJob<'write> for DynMeshWriteJob<'write> {
         })?;
 
         command_buffer.cmd_draw_indexed(
-            mesh_part.index_buffer_size_in_bytes / 2, //sizeof(u16)
+            mesh_part.index_buffer_size_in_bytes
+                / (match mesh_part.index_type {
+                    rafx::api::RafxIndexType::Uint32 => 4,
+                    rafx::api::RafxIndexType::Uint16 => 2,
+                }),
             0,
             0,
         )?;

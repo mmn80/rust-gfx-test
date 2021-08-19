@@ -51,6 +51,11 @@ impl std::fmt::Display for DynMeshData {
             idx_sz / (idx_q as usize),
             itertools::Itertools::join(
                 &mut self.mesh_parts.iter().map(|p| {
+                    let idx_q = 6
+                        * (match p.index_type {
+                            rafx::api::RafxIndexType::Uint32 => std::mem::size_of::<u32>(),
+                            rafx::api::RafxIndexType::Uint16 => std::mem::size_of::<u16>(),
+                        }) as u32;
                     format!(
                         "vx: ({}b={}q, {}b={}q), ix: ({}b={}q, {}b={}q)",
                         p.vertex_buffer_offset_in_bytes,
