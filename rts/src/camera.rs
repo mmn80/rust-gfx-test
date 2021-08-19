@@ -1,5 +1,8 @@
 use crate::{
-    features::dyn_mesh::DynMeshRenderFeature,
+    features::dyn_mesh::{
+        DynMeshNoShadowsRenderFeatureFlag, DynMeshRenderFeature, DynMeshUnlitRenderFeatureFlag,
+        DynMeshUntexturedRenderFeatureFlag, DynMeshWireframeRenderFeatureFlag,
+    },
     input::{InputResource, KeyboardKey},
     time::TimeState,
     RenderOptions,
@@ -209,21 +212,29 @@ impl RTSCamera {
         if render_options.show_wireframes {
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<MeshWireframeRenderFeatureFlag>();
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<DynMeshWireframeRenderFeatureFlag>();
         }
 
         if !render_options.enable_lighting {
             feature_flag_mask_builder =
                 feature_flag_mask_builder.add_render_feature_flag::<MeshUnlitRenderFeatureFlag>();
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<DynMeshUnlitRenderFeatureFlag>();
         }
 
         if !render_options.enable_textures {
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<MeshUntexturedRenderFeatureFlag>();
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<DynMeshUntexturedRenderFeatureFlag>();
         }
 
         if !render_options.show_shadows {
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<MeshNoShadowsRenderFeatureFlag>();
+            feature_flag_mask_builder = feature_flag_mask_builder
+                .add_render_feature_flag::<DynMeshNoShadowsRenderFeatureFlag>();
         }
 
         viewports_resource.main_view_meta = Some(RenderViewMeta {
