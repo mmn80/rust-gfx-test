@@ -188,7 +188,7 @@ impl Terrain {
                 chunk.rendered_version += 1;
                 chunks += 1;
 
-                log::info!("Dyn mesh built. {}", result.mesh.clone());
+                // log::info!("Dyn mesh built. {}", result.mesh.clone());
 
                 let visible_bounds = result.mesh.visible_bounds.clone();
                 if let Some(handle) = &chunk.dyn_mesh_handle {
@@ -256,17 +256,6 @@ impl Terrain {
                 entry.quad_groups[idx].quads.push(quad.clone());
             }
         }
-
-        // let parts_debug: Vec<_> = quad_parts.iter().collect();
-        // log::info!(
-        //     "Start building dyn mesh: {}",
-        //     itertools::Itertools::join(
-        //         &mut parts_debug
-        //             .iter()
-        //             .map(|(m, q)| { format!("mat: {}, quads: {}", m, q.num_quads()) }),
-        //         ", "
-        //     )
-        // );
 
         let num_quads = quads.num_quads();
         let mut all_vertices = PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertex>());
