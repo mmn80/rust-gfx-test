@@ -40,10 +40,12 @@ impl KinObjectsState {
         log::info!("Loading terrain materials...");
 
         let terrain_material_paths = vec![
-            "materials/terrain_flat_red.pbrmaterial",
-            "materials/terrain_flat_green.pbrmaterial",
-            "materials/terrain_flat_blue.pbrmaterial",
-            "materials/terrain_metal.pbrmaterial",
+            "materials/terrain/flat_red.pbrmaterial",
+            "materials/terrain/flat_green.pbrmaterial",
+            "materials/terrain/flat_blue.pbrmaterial",
+            "materials/terrain/metal.pbrmaterial",
+            "materials/terrain/round-pattern-wallpaper.pbrmaterial",
+            "materials/terrain/diamond-inlay-tile.pbrmaterial",
         ];
         let terrain_materials: Vec<_> = terrain_material_paths
             .iter()
@@ -66,13 +68,13 @@ impl KinObjectsState {
         let terrain = terrain_resource.new_terrain(
             terrain_materials,
             Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
-            1.into(),
+            5.into(),
         );
         let mut objects = HashMap::new();
 
         let building = Array3x1::<CubeVoxel>::fill(
             Extent3i::from_min_and_shape(Point3i::ZERO, PointN([10, 10, 10])),
-            4.into(),
+            6.into(),
         );
         objects.insert(KinObjectType::Building, building);
 

@@ -1,8 +1,0 @@
-(
-    version: 2,
-    importer_options: (),
-    importer_state: (
-        terrain_asset_uuid: Some("47d9e187-c2ec-4703-95b7-41a103f21eb7"),
-        material_instance_asset_uuid: Some("2b0d7e49-b5a8-4161-bf23-f1d1b9eeafd6"),
-    ),
-)
