@@ -1,6 +1,6 @@
 (
     name: "diamond inlay tile",
-    base_color_factor: (1.0, 1.0, 1.0, 1.0),
+    base_color_factor: (1.0, 0.8, 0.8, 1.0),
     emissive_factor: (0.0, 0.0, 0.0),
     metallic_factor: 1.0,
     roughness_factor: 1.0,

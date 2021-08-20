@@ -46,6 +46,9 @@ impl KinObjectsState {
             "materials/terrain/metal.pbrmaterial",
             "materials/terrain/round-pattern-wallpaper.pbrmaterial",
             "materials/terrain/diamond-inlay-tile.pbrmaterial",
+            "materials/terrain/curly_tile.pbrmaterial",
+            "materials/terrain/simple_tile.pbrmaterial",
+            "materials/terrain/black_plastic.pbrmaterial",
         ];
         let terrain_materials: Vec<_> = terrain_material_paths
             .iter()
@@ -68,27 +71,47 @@ impl KinObjectsState {
         let terrain = terrain_resource.new_terrain(
             terrain_materials,
             Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
-            5.into(),
+            8.into(),
         );
         let mut objects = HashMap::new();
 
-        let building = Array3x1::<CubeVoxel>::fill(
-            Extent3i::from_min_and_shape(Point3i::ZERO, PointN([10, 10, 10])),
+        let mut building = Array3x1::<CubeVoxel>::fill(
+            Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 8])),
+            0.into(),
+        );
+        building.fill_extent(
+            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 4])),
             6.into(),
+        );
+        building.fill_extent(
+            &Extent3i::from_min_and_shape(PointN([1, 1, 4]), PointN([6, 6, 3])),
+            6.into(),
+        );
+        building.fill_extent(
+            &Extent3i::from_min_and_shape(PointN([1, 1, 7]), PointN([6, 6, 1])),
+            5.into(),
         );
         objects.insert(KinObjectType::Building, building);
 
         let mut tree = Array3x1::<CubeVoxel>::fill(
-            Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 15])),
+            Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 9])),
             0.into(),
         );
         tree.fill_extent(
-            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 10])),
-            3.into(),
+            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 4])),
+            9.into(),
         );
         tree.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([-2, -2, 10]), PointN([5, 5, 5])),
-            2.into(),
+            &Extent3i::from_min_and_shape(PointN([-2, -2, 4]), PointN([5, 5, 3])),
+            7.into(),
+        );
+        tree.fill_extent(
+            &Extent3i::from_min_and_shape(PointN([-1, -1, 7]), PointN([3, 3, 1])),
+            7.into(),
+        );
+        tree.fill_extent(
+            &Extent3i::from_min_and_shape(PointN([0, 0, 8]), PointN([1, 1, 1])),
+            7.into(),
         );
         objects.insert(KinObjectType::Tree, tree);
 

@@ -1,0 +1,15 @@
+(
+    name: "curly tile",
+    base_color_factor: (0.1, 0.8, 0.1, 1.0),
+    emissive_factor: (0.0, 0.0, 0.0),
+    metallic_factor: 1.0,
+    roughness_factor: 1.0,
+    normal_texture_scale: 1.0,
+    occlusion_texture_strength: 1.0,
+    alpha_cutoff: 0.5,
+    base_color_texture: Some("../../textures/terrain/curly_tile.base.png"),
+    metallic_roughness_texture: Some("../../textures/terrain/curly_tile.metallic_roughness.png"),
+    normal_texture: Some("../../textures/terrain/curly_tile.normal.png"),
+    occlusion_texture: Some("../../textures/terrain/curly_tile.occlusion.png"),
+    emissive_texture: None,
+)

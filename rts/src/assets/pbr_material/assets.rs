@@ -1,6 +1,6 @@
 use distill::loader::handle::Handle;
 use rafx::{
-    api::RafxResult,
+    api::{RafxError, RafxResult},
     assets::{
         AssetManager, DefaultAssetTypeHandler, DefaultAssetTypeLoadHandler, ImageAsset,
         MaterialInstanceAsset,
@@ -100,14 +100,16 @@ impl DefaultAssetTypeLoadHandler<PbrMaterialAssetData, PbrMaterialAsset>
         asset_manager: &mut AssetManager,
         asset_data: PbrMaterialAssetData,
     ) -> RafxResult<PbrMaterialAsset> {
-        let material = asset_manager
-            .committed_asset(&asset_data.material)
-            .unwrap()
-            .clone();
-
-        Ok(PbrMaterialAsset {
-            inner: Arc::new(material),
-        })
+        if let Some(material) = asset_manager.committed_asset(&asset_data.material) {
+            Ok(PbrMaterialAsset {
+                inner: Arc::new(material.clone()),
+            })
+        } else {
+            Err(RafxError::StringError(format!(
+                "PbrMaterial {} failed loading material instance asset",
+                asset_data.source.name
+            )))
+        }
     }
 }
 
