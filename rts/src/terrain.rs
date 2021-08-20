@@ -270,16 +270,23 @@ impl Terrain {
 
         let num_quads = quads.num_quads();
         let mut all_vertices = PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertex>());
-        let mut all_indices = PushBuffer::new(num_quads * 6 * std::mem::size_of::<u16>());
+        let mut all_indices = PushBuffer::new(
+            num_quads
+                * 6
+                * if num_quads * 6 >= 0xFFFF {
+                    std::mem::size_of::<u32>()
+                } else {
+                    std::mem::size_of::<u16>()
+                },
+        );
 
-        let mut vertices_num = 0;
         let mut mesh_parts: Vec<DynMeshDataPart> = Vec::with_capacity(quad_parts.len());
         for (mat, quads) in quad_parts.iter() {
             let mesh_part = {
                 let pbr_material = materials.get(*mat as usize);
                 if let Some(pbr_material) = pbr_material {
-                    let total_indices = quads.num_quads() * 6;
-                    let index_type = if total_indices >= 0xFFFF {
+                    let mut vertices_num = 0;
+                    let index_type = if quads.num_quads() * 6 >= 0xFFFF {
                         RafxIndexType::Uint32
                     } else {
                         RafxIndexType::Uint16
@@ -293,7 +300,7 @@ impl Terrain {
                             let normals = &face.quad_mesh_normals();
                             let uvs =
                                 face.tex_coords(RIGHT_HANDED_Y_UP_CONFIG.u_flip_face, true, quad);
-                            let indices32 = &face.quad_mesh_indices(vertices_num);
+                            let indices_u32 = &face.quad_mesh_indices(vertices_num);
 
                             vertices_num += 4;
                             for i in 0..4 {
@@ -304,16 +311,19 @@ impl Terrain {
                                         tangent: Default::default(),
                                         tex_coord: uvs[i],
                                     }],
-                                    1,
+                                    4,
                                 );
                             }
                             match index_type {
                                 rafx::api::RafxIndexType::Uint16 => {
-                                    let indices16 = Self::convert_to_u16(indices32);
-                                    all_indices.push(&indices16, std::mem::size_of::<u16>());
+                                    let indices_u16: Vec<u16> = indices_u32
+                                        .iter()
+                                        .map(|&x| std::convert::TryInto::try_into(x).unwrap())
+                                        .collect();
+                                    all_indices.push(&indices_u16, std::mem::size_of::<u16>());
                                 }
                                 rafx::api::RafxIndexType::Uint32 => {
-                                    all_indices.push(indices32, std::mem::size_of::<u32>());
+                                    all_indices.push(indices_u32, std::mem::size_of::<u32>());
                                 }
                             }
                         }
@@ -349,13 +359,6 @@ impl Terrain {
             index_buffer: Some(all_indices.into_data()),
             visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
         }
-    }
-
-    fn convert_to_u16(indices_u32: &[u32]) -> Vec<u16> {
-        indices_u32
-            .iter()
-            .map(|&x| std::convert::TryInto::try_into(x).unwrap())
-            .collect()
     }
 
     fn make_visible_bounds(extent: &Extent3i, hash: u64) -> VisibleBounds {

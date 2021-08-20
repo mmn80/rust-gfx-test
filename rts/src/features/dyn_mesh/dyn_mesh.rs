@@ -41,10 +41,10 @@ impl std::fmt::Display for DynMeshData {
         let vtx_sz = self.vertex_buffer.as_ref().unwrap().len();
         let idx_sz = self.index_buffer.as_ref().unwrap().len();
         let vtx_q = 4 * std::mem::size_of::<rafx_plugins::features::mesh::MeshVertex>() as u32;
-        let idx_q = 6 * std::mem::size_of::<u32>() as u32;
+        let idx_q = 6 * std::mem::size_of::<u16>() as u32;
         write!(
             f,
-            "vx_tot: {}b={}q; ix_tot: {}b={}q; parts: {}",
+            "vx_all: {} ({}q); ix_all: {} (~{}q); parts: {}",
             vtx_sz,
             vtx_sz / (vtx_q as usize),
             idx_sz,
@@ -57,7 +57,7 @@ impl std::fmt::Display for DynMeshData {
                             rafx::api::RafxIndexType::Uint16 => std::mem::size_of::<u16>(),
                         }) as u32;
                     format!(
-                        "vx: ({}b={}q, {}b={}q), ix: ({}b={}q, {}b={}q)",
+                        "vx: [{} ({}q) += {} ({}q)], ix: [{} ({}q) += {} ({}q)]",
                         p.vertex_buffer_offset_in_bytes,
                         p.vertex_buffer_offset_in_bytes / vtx_q,
                         p.vertex_buffer_size_in_bytes,

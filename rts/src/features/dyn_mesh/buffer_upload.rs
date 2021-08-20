@@ -472,11 +472,11 @@ impl BufferUploader {
                         result_tx.send(BufferUploadResult::UploadComplete(upload_id, buffer));
                 }
                 UploadOpResult::UploadError(upload_id, result_tx) => {
-                    log::trace!("Uploading buffer {:?} failed", upload_id);
+                    log::error!("Uploading buffer {:?} failed", upload_id);
                     let _res = result_tx.send(BufferUploadResult::UploadError(upload_id));
                 }
                 UploadOpResult::UploadDrop(upload_id, result_tx) => {
-                    log::trace!("Uploading buffer {:?} cancelled", upload_id);
+                    log::error!("Uploading buffer {:?} cancelled", upload_id);
                     let _res = result_tx.send(BufferUploadResult::UploadDrop(upload_id));
                 }
             }
