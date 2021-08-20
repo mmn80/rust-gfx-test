@@ -36,28 +36,31 @@ impl KinObjectsState {
     pub fn new(resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
-        let terrain_materials = vec![
-            KinObjectsState::load_pbr_material(
-                "materials/terrain_flat_red.pbrmaterial",
-                &mut asset_manager,
-                &mut asset_resource,
-            ),
-            KinObjectsState::load_pbr_material(
-                "materials/terrain_flat_green.pbrmaterial",
-                &mut asset_manager,
-                &mut asset_resource,
-            ),
-            KinObjectsState::load_pbr_material(
-                "materials/terrain_flat_blue.pbrmaterial",
-                &mut asset_manager,
-                &mut asset_resource,
-            ),
-            KinObjectsState::load_pbr_material(
-                "materials/terrain_metal.pbrmaterial",
-                &mut asset_manager,
-                &mut asset_resource,
-            ),
+
+        log::info!("Loading terrain materials...");
+
+        let terrain_material_paths = vec![
+            "materials/terrain_flat_red.pbrmaterial",
+            "materials/terrain_flat_green.pbrmaterial",
+            "materials/terrain_flat_blue.pbrmaterial",
+            "materials/terrain_metal.pbrmaterial",
         ];
+        let terrain_materials: Vec<_> = terrain_material_paths
+            .iter()
+            .map(|path| {
+                let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(*path);
+                asset_manager
+                    .wait_for_asset_to_load(&material_handle, &mut asset_resource, "")
+                    .unwrap();
+                asset_manager
+                    .committed_asset(&material_handle)
+                    .unwrap()
+                    .clone()
+            })
+            .collect();
+
+        log::info!("Terrain materials loaded");
+
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let w = 4096;
         let terrain = terrain_resource.new_terrain(
@@ -93,21 +96,6 @@ impl KinObjectsState {
             ui_spawning: false,
             ui_object_type: KinObjectType::Building,
         }
-    }
-
-    fn load_pbr_material(
-        path: &str,
-        asset_manager: &mut AssetManager,
-        asset_resource: &mut AssetResource,
-    ) -> PbrMaterialAsset {
-        let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
-        asset_manager
-            .wait_for_asset_to_load(&material_handle, asset_resource, "")
-            .unwrap();
-        asset_manager
-            .committed_asset(&material_handle)
-            .unwrap()
-            .clone()
     }
 
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {

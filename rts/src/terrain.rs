@@ -21,7 +21,10 @@ use legion::{Entity, Resources, World};
 use rafx::{
     api::RafxIndexType,
     assets::push_buffer::PushBuffer,
-    base::slab::{DropSlab, GenericDropSlabKey},
+    base::{
+        slab::{DropSlab, GenericDropSlabKey},
+        Instant,
+    },
     rafx_visibility::{
         geometry::{AxisAlignedBoundingBox, BoundingSphere},
         VisibleBounds,
@@ -137,6 +140,7 @@ impl Terrain {
         let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+        let extract_start = Instant::now();
         let to_render: Vec<(_, Array3x1<CubeVoxel>)> = self
             .render_chunks
             .iter()
@@ -157,7 +161,12 @@ impl Terrain {
             })
             .collect();
         if to_render.len() > 0 {
-            log::info!("Starting {} greedy mesh jobs", to_render.len());
+            let duration = Instant::now() - extract_start;
+            log::info!(
+                "Starting {} greedy mesh jobs (data extraction took {}ms)",
+                to_render.len(),
+                duration.as_secs_f64() / 1000.
+            );
         }
 
         for (key, padded_chunk) in to_render {
@@ -477,6 +486,8 @@ impl TerrainResource {
         fill_extent: Extent3i,
         fill_value: CubeVoxel,
     ) -> TerrainHandle {
+        log::info!("Creating terrain...");
+
         let mut terrain = {
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
@@ -505,6 +516,8 @@ impl TerrainResource {
             let mut storage = self.write();
             storage.register_terrain(terrain)
         };
+
+        log::info!("Terrain created");
 
         terrain_handle
     }

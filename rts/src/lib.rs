@@ -300,8 +300,10 @@ impl DemoApp {
                 time_state.current_instant(),
                 std::time::Duration::from_secs_f32(1.0),
             ) {
-                log::info!("FPS: {}", time_state.updates_per_second());
-                //renderer.dump_stats();
+                let fps = time_state.updates_per_second();
+                if fps < 55. || fps > 65. {
+                    log::info!("FPS: {}", time_state.updates_per_second());
+                }
             }
         }
 

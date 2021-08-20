@@ -56,6 +56,8 @@ impl DynObjectsState {
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
         let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
 
+        log::info!("Loading dyn object meshes...");
+
         let container_1_asset = asset_resource.load_asset_path("blender/storage_container1.glb");
         let container_2_asset = asset_resource.load_asset_path("blender/storage_container2.glb");
         let blue_icosphere_asset =
@@ -90,6 +92,8 @@ impl DynObjectsState {
                 mesh: blue_icosphere_asset,
             }),
         );
+
+        log::info!("Dyn object meshes loaded");
 
         DynObjectsState {
             meshes,
