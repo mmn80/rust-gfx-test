@@ -30,13 +30,14 @@ use rafx::{
         VisibleBounds,
     },
     render_feature_extract_job_predule::*,
+    renderer::ViewportsResource,
     visibility::{CullModel, VisibilityObjectArc},
 };
 use rafx_plugins::{
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::mesh::MeshVertex,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{cmp::max, collections::HashMap, sync::Arc};
 
 pub struct ChunkState {
     pub source_version: u32,
@@ -110,6 +111,8 @@ pub struct Terrain {
     render_rx: Receiver<RenderChunkTaskResults>,
 }
 
+const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 32;
+
 impl Terrain {
     pub fn set_chunk_dirty(&mut self, chunk: ChunkKey3) -> bool {
         let entry = self
@@ -137,17 +140,34 @@ impl Terrain {
     }
 
     pub fn update_render_chunks(&mut self, world: &mut World, resources: &Resources) {
+        let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+        let eye = viewports_resource
+            .main_view_meta
+            .as_ref()
+            .and_then(|view| Some(view.eye_position))
+            .unwrap_or_default();
         let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let extract_start = Instant::now();
-        let to_render: Vec<(_, Array3x1<CubeVoxel>)> = self
+        let mut changed_keys: Vec<_> = self
             .render_chunks
             .iter()
             .filter(|(_key, chunk)| {
                 chunk.render_task.is_none() && chunk.rendered_version < chunk.source_version
             })
-            .map(|(key, _chunk)| {
+            .map(|(key, _chunk)| key.clone())
+            .collect();
+        changed_keys.sort_unstable_by_key(|key| {
+            max(
+                (key.minimum.x() - eye.x as i32).abs(),
+                (key.minimum.y() - eye.y as i32).abs(),
+            )
+        });
+        let to_render: Vec<(_, Array3x1<CubeVoxel>)> = changed_keys
+            .iter()
+            .take(MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME)
+            .map(|key| {
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                     &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
@@ -162,10 +182,10 @@ impl Terrain {
             .collect();
         if to_render.len() > 0 {
             let duration = Instant::now() - extract_start;
-            log::info!(
+            log::debug!(
                 "Starting {} greedy mesh jobs (data extraction took {}ms)",
                 to_render.len(),
-                duration.as_secs_f64() / 1000.
+                (duration.as_secs_f64() * 1000.) as u32
             );
         }
 
@@ -245,7 +265,7 @@ impl Terrain {
             };
         }
         if chunks > 0 {
-            log::info!("{} terrain meshes generated", chunks);
+            log::debug!("{} terrain meshes generated", chunks);
         }
     }
 
