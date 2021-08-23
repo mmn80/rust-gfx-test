@@ -1,6 +1,7 @@
 use crate::{
     camera::RTSCamera,
     input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
+    terrain::{TerrainHandle, TerrainResource},
     time::TimeState,
 };
 use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
@@ -44,6 +45,7 @@ pub struct DynObjectComponent {
 
 pub struct DynObjectsState {
     meshes: HashMap<DynObjectType, RenderObjectHandle>,
+    terrain: TerrainHandle,
     ui_spawning: bool,
     ui_object_type: DynObjectType,
     pub ui_selected_count: u32,
@@ -51,7 +53,7 @@ pub struct DynObjectsState {
 }
 
 impl DynObjectsState {
-    pub fn new(resources: &Resources) -> Self {
+    pub fn new(resources: &Resources, terrain: TerrainHandle) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
         let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
@@ -97,6 +99,7 @@ impl DynObjectsState {
 
         DynObjectsState {
             meshes,
+            terrain,
             ui_spawning: false,
             ui_object_type: DynObjectType::Container1,
             ui_selected_count: 0,
@@ -281,24 +284,39 @@ impl DynObjectsState {
         if self.ui_spawning {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
-                let cursor = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
-                self.spawn(self.ui_object_type, cursor, resources, world);
+                let cast_result = {
+                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
+                    let storage = terrain_resource.read();
+                    let terrain = storage.get(&self.terrain);
+                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                };
+
+                if let Some(cursor) = cast_result {
+                    self.spawn(self.ui_object_type, cursor, resources, world);
+                }
                 self.ui_spawning = false;
             }
         } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
             let mut first = true;
             let cursor_pos = input.mouse_position();
-            let mut target = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
-            let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
-            for (transform, dyn_object) in query.iter_mut(world) {
-                if dyn_object.selected {
-                    if !first {
+            let cast_result = {
+                let terrain_resource = resources.get::<TerrainResource>().unwrap();
+                let storage = terrain_resource.read();
+                let terrain = storage.get(&self.terrain);
+                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+            };
+            if let Some(mut target) = cast_result {
+                target.z += 2.;
+                let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
+                for (transform, dyn_object) in query.iter_mut(world) {
+                    if dyn_object.selected {
+                        if !first {
+                            target.x += transform.scale.x;
+                        }
+                        dyn_object.move_target = Some(target);
                         target.x += transform.scale.x;
+                        first = false;
                     }
-                    dyn_object.move_target =
-                        Some(Vec3::new(target.x, target.y, transform.translation.z));
-                    target.x += transform.scale.x;
-                    first = false;
                 }
             }
         }
@@ -314,7 +332,7 @@ impl DynObjectsState {
         // transform component
         const SCALE_MIN: f32 = 0.5;
         const SCALE_MAX: f32 = 2.;
-        let position = Vec3::new(position.x, position.y, 1.0);
+        let position = Vec3::new(position.x, position.y, position.z + 2.);
         let mut rng = thread_rng();
         let rand_scale_xy = rng.gen_range(SCALE_MIN..SCALE_MAX);
         let transform_component = TransformComponent {

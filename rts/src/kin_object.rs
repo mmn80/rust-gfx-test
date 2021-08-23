@@ -26,7 +26,7 @@ pub struct KinObjectComponent {
 }
 
 pub struct KinObjectsState {
-    terrain: TerrainHandle,
+    pub terrain: TerrainHandle,
     objects: HashMap<KinObjectType, Array3x1<CubeVoxel>>,
     ui_spawning: bool,
     ui_object_type: KinObjectType,
@@ -153,8 +153,15 @@ impl KinObjectsState {
         if self.ui_spawning {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
-                let cursor = camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32);
-                self.spawn(self.ui_object_type, cursor, resources, world);
+                let cast_result = {
+                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
+                    let storage = terrain_resource.read();
+                    let terrain = storage.get(&self.terrain);
+                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                };
+                if let Some(cursor) = cast_result {
+                    self.spawn(self.ui_object_type, cursor, resources, world);
+                }
                 self.ui_spawning = false;
             }
         }

@@ -12,6 +12,7 @@ use building_blocks::{
         greedy_quads, padded_greedy_quads_chunk_extent, GreedyQuadsBuffer, IsOpaque, MergeVoxel,
         QuadGroup, RIGHT_HANDED_Y_UP_CONFIG,
     },
+    search::GridRayTraversal3,
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -425,6 +426,21 @@ impl Terrain {
             bounding_sphere: BoundingSphere::new(sphere_center, sphere_radius),
             hash,
         }
+    }
+
+    pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<Point3i> {
+        let start = PointN([start.x, start.y, start.z]);
+        let ray = PointN([ray.x, ray.y, ray.z]);
+        let mut traversal = GridRayTraversal3::new(start, ray);
+        for _ in 0..256 {
+            let current = traversal.current_voxel();
+            let vox = self.voxels.get_point(0, current);
+            if vox.0 != 0 {
+                return Some(current);
+            }
+            traversal.step();
+        }
+        return None;
     }
 }
 

@@ -54,8 +54,8 @@ impl MainScene {
         }
 
         let main_view_frustum = visibility_region.register_view_frustum();
-        let dyn_objects = DynObjectsState::new(resources);
         let kin_objects = KinObjectsState::new(resources);
+        let dyn_objects = DynObjectsState::new(resources, kin_objects.terrain.clone());
 
         MainScene {
             main_view_frustum,
