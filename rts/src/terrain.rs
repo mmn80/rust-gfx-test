@@ -428,20 +428,30 @@ impl Terrain {
         }
     }
 
-    pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<Point3i> {
+    pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<RayCastResult> {
         let start = PointN([start.x, start.y, start.z]);
         let ray = PointN([ray.x, ray.y, ray.z]);
         let mut traversal = GridRayTraversal3::new(start, ray);
+        let mut prev = PointN([start.x() as i32, start.y() as i32, start.z() as i32]);
         for _ in 0..256 {
             let current = traversal.current_voxel();
             let vox = self.voxels.get_point(0, current);
             if vox.0 != 0 {
-                return Some(current);
+                return Some(RayCastResult {
+                    hit: current,
+                    before_hit: prev,
+                });
             }
+            prev = current;
             traversal.step();
         }
         return None;
     }
+}
+
+pub struct RayCastResult {
+    pub hit: Point3i,
+    pub before_hit: Point3i,
 }
 
 pub struct PerMaterialGreedyQuadsBuffer {

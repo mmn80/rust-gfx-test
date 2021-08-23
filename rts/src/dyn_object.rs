@@ -291,8 +291,14 @@ impl DynObjectsState {
                     camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
                 };
 
-                if let Some(cursor) = cast_result {
-                    self.spawn(self.ui_object_type, cursor, resources, world);
+                if let Some(result) = cast_result {
+                    let p = result.hit;
+                    self.spawn(
+                        self.ui_object_type,
+                        Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
+                        resources,
+                        world,
+                    );
                 }
                 self.ui_spawning = false;
             }
@@ -305,8 +311,9 @@ impl DynObjectsState {
                 let terrain = storage.get(&self.terrain);
                 camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
             };
-            if let Some(mut target) = cast_result {
-                target.z += 2.;
+            if let Some(result) = cast_result {
+                let p = result.hit;
+                let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
                 let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
                 for (transform, dyn_object) in query.iter_mut(world) {
                     if dyn_object.selected {
@@ -332,7 +339,7 @@ impl DynObjectsState {
         // transform component
         const SCALE_MIN: f32 = 0.5;
         const SCALE_MAX: f32 = 2.;
-        let position = Vec3::new(position.x, position.y, position.z + 2.);
+        let position = Vec3::new(position.x, position.y, position.z + 1.);
         let mut rng = thread_rng();
         let rand_scale_xy = rng.gen_range(SCALE_MIN..SCALE_MAX);
         let transform_component = TransformComponent {

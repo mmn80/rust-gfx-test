@@ -159,8 +159,13 @@ impl KinObjectsState {
                     let terrain = storage.get(&self.terrain);
                     camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
                 };
-                if let Some(cursor) = cast_result {
-                    self.spawn(self.ui_object_type, cursor, resources, world);
+                if let Some(result) = cast_result {
+                    self.spawn(
+                        self.ui_object_type,
+                        PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
+                        resources,
+                        world,
+                    );
                 }
                 self.ui_spawning = false;
             }
@@ -175,14 +180,18 @@ impl KinObjectsState {
     pub fn spawn(
         &self,
         object_type: KinObjectType,
-        position: Vec3,
+        position: Point3i,
         resources: &Resources,
         world: &mut World,
     ) {
         // transform component
-        let position = Vec3::new(position.x, position.y, 0.0);
+        let translation = Vec3::new(
+            position.x() as f32,
+            position.y() as f32,
+            position.z() as f32,
+        );
         let transform_component = TransformComponent {
-            translation: position,
+            translation,
             scale: Vec3::ONE,
             rotation: Quat::IDENTITY,
         };
@@ -195,7 +204,7 @@ impl KinObjectsState {
         };
 
         // entity
-        log::info!("Spawn entity {:?} at: {}", object_type, position);
+        log::info!("Spawn entity {:?} at: {}", object_type, translation);
         let _entity = world.push((transform_component, kin_object_component));
 
         // update voxels
@@ -204,11 +213,9 @@ impl KinObjectsState {
         let terrain = storage.get_mut(&self.terrain);
 
         let mut object = self.objects.get(&object_type).unwrap().clone();
-        object.set_minimum(PointN([
-            position.x as i32,
-            position.y as i32,
-            position.z as i32,
-        ]));
+        let mut half_size = object.extent().shape / 2;
+        *half_size.z_mut() = 0;
+        object.set_minimum(position - half_size);
         copy_extent(
             &object.extent(),
             &object,

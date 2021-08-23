@@ -4,7 +4,7 @@ use crate::{
         DynMeshUntexturedRenderFeatureFlag, DynMeshWireframeRenderFeatureFlag,
     },
     input::{InputResource, KeyboardKey},
-    terrain::Terrain,
+    terrain::{RayCastResult, Terrain},
     time::TimeState,
     RenderOptions,
 };
@@ -126,11 +126,11 @@ impl RTSCamera {
         screen_x: u32,
         screen_y: u32,
         terrain: &Terrain,
-    ) -> Option<Vec3> {
+    ) -> Option<RayCastResult> {
         let eye = self.eye();
         let ray = self.make_ray(screen_x, screen_y);
-        if let Some(p) = terrain.ray_cast(eye, ray) {
-            Some(Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32))
+        if let Some(result) = terrain.ray_cast(eye, ray) {
+            Some(result)
         } else {
             log::error!("Failed terrain ray cast, start: {}, ray: {}", eye, ray);
             None
