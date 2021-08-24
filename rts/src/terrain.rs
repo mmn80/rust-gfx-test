@@ -44,35 +44,6 @@ use std::{
     sync::Arc,
 };
 
-pub struct ChunkState {
-    pub source_version: u32,
-    pub rendered_version: u32,
-}
-
-pub struct TerrainRenderChunk {
-    pub entity: Option<Entity>,
-    pub dyn_mesh_handle: Option<DynMeshHandle>,
-    pub render_object_handle: Option<RenderObjectHandle>,
-    pub visibility_object_handle: Option<VisibilityObjectArc>,
-    pub source_version: u32,
-    pub rendered_version: u32,
-    pub render_task: Option<Task<()>>,
-}
-
-impl TerrainRenderChunk {
-    pub fn new() -> Self {
-        TerrainRenderChunk {
-            entity: None,
-            dyn_mesh_handle: None,
-            render_object_handle: None,
-            visibility_object_handle: None,
-            source_version: 0,
-            rendered_version: 0,
-            render_task: None,
-        }
-    }
-}
-
 pub struct RenderChunkTaskMetrics {
     pub quads_time: u32,   // µs
     pub mesh_time: u32,    // µs
@@ -171,8 +142,9 @@ impl RenderChunkMetrics {
     }
 
     pub fn get_distribution_metrics(&self) -> RenderChunkDistributionMetrics {
+        let extract_total = self.extract.iter().map(|m| m.tasks as usize).sum();
         let extract_time = SingleDistributionMetrics {
-            samples: self.extract.len(),
+            samples: extract_total,
             failed: 0,
             min_time: 0.,
             max_time: 0.,
@@ -181,7 +153,7 @@ impl RenderChunkMetrics {
                 .iter()
                 .map(|r| r.extract_time as usize)
                 .sum::<usize>() as f64
-                / self.extract.len() as f64,
+                / extract_total as f64,
             std_dev: 0.,
         };
 
@@ -255,6 +227,30 @@ impl IsEmpty for CubeVoxel {
     }
 }
 
+pub struct TerrainRenderChunk {
+    pub entity: Option<Entity>,
+    pub dyn_mesh_handle: Option<DynMeshHandle>,
+    pub render_object_handle: Option<RenderObjectHandle>,
+    pub visibility_object_handle: Option<VisibilityObjectArc>,
+    pub source_version: u32,
+    pub rendered_version: u32,
+    pub render_task: Option<Task<()>>,
+}
+
+impl TerrainRenderChunk {
+    pub fn new() -> Self {
+        TerrainRenderChunk {
+            entity: None,
+            dyn_mesh_handle: None,
+            render_object_handle: None,
+            visibility_object_handle: None,
+            source_version: 0,
+            rendered_version: 0,
+            render_task: None,
+        }
+    }
+}
+
 pub struct Terrain {
     materials: Vec<PbrMaterialAsset>,
     material_names: HashMap<String, u16>,
@@ -264,10 +260,12 @@ pub struct Terrain {
     render_tx: Sender<RenderChunkTaskResults>,
     render_rx: Receiver<RenderChunkTaskResults>,
     metrics: RenderChunkMetrics,
+    initialized: bool,
 }
 
 const MAX_RENDER_CHUNK_JOBS: usize = 16;
 const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 4;
+const MAX_RENDER_CHUNK_JOBS_INIT: usize = 65536;
 
 impl Terrain {
     pub fn get_default_material_names() -> Vec<&'static str> {
@@ -354,7 +352,7 @@ impl Terrain {
             .iter()
             .filter(|(_key, chunk)| chunk.render_task.is_some())
             .count();
-        if current_jobs < MAX_RENDER_CHUNK_JOBS {
+        if !self.initialized || current_jobs < MAX_RENDER_CHUNK_JOBS {
             let extract_start = Instant::now();
             let mut changed_keys: Vec<_> = self
                 .render_chunks
@@ -372,10 +370,14 @@ impl Terrain {
             });
             let to_render: Vec<(_, Array3x1<CubeVoxel>)> = changed_keys
                 .iter()
-                .take(min(
-                    MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
-                    MAX_RENDER_CHUNK_JOBS - current_jobs,
-                ))
+                .take(if self.initialized {
+                    min(
+                        MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
+                        MAX_RENDER_CHUNK_JOBS - current_jobs,
+                    )
+                } else {
+                    MAX_RENDER_CHUNK_JOBS_INIT
+                })
                 .map(|key| {
                     let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                         &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
@@ -400,6 +402,7 @@ impl Terrain {
                     tasks: to_render.len() as u32,
                     extract_time,
                 });
+                self.initialized = true;
             }
 
             for (key, padded_chunk) in to_render {
@@ -857,6 +860,7 @@ impl TerrainResource {
                 render_tx,
                 render_rx,
                 metrics: Default::default(),
+                initialized: false,
             }
         };
 
