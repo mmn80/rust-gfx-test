@@ -159,13 +159,18 @@ impl KinObjectsState {
                     if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
                         self.ui_spawning = true;
                     }
-                }
-                ui.add_space(10.);
-                let ck = Checkbox::new(&mut self.ui_edit_mode, "Terrain edit mode");
-                ui.add(ck);
-                if self.ui_edit_mode {
-                    for material_name in Terrain::get_default_material_names() {
-                        ui.radio_value(&mut self.ui_edit_material, material_name, material_name);
+                    ui.add_space(10.);
+                    ui.separator();
+                    let ck = Checkbox::new(&mut self.ui_edit_mode, "Edit mode");
+                    ui.add(ck);
+                    if self.ui_edit_mode {
+                        for material_name in Terrain::get_default_material_names() {
+                            ui.radio_value(
+                                &mut self.ui_edit_material,
+                                material_name,
+                                material_name,
+                            );
+                        }
                     }
                 }
             });
