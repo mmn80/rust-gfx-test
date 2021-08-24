@@ -68,6 +68,9 @@ impl KinObjectsState {
             terrain_resource.new_terrain(
                 terrain_materials,
                 Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
+                // TerrainFillStyle::Same {
+                //     material: "simple_tile",
+                // },
                 TerrainFillStyle::Checkers {
                     zero: "simple_tile",
                     one: "black_plastic",

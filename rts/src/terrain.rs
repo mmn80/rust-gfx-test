@@ -275,6 +275,7 @@ pub struct Terrain {
 const MAX_RENDER_CHUNK_JOBS: usize = 16;
 const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 4;
 const MAX_RENDER_CHUNK_JOBS_INIT: usize = 65536;
+const MAX_DISTANCE_FROM_CAMERA: i32 = 256;
 
 impl Terrain {
     pub fn get_default_material_names() -> Vec<&'static str> {
@@ -366,8 +367,11 @@ impl Terrain {
             let mut changed_keys: Vec<_> = self
                 .render_chunks
                 .iter()
-                .filter(|(_key, chunk)| {
-                    chunk.render_task.is_none() && chunk.rendered_version < chunk.source_version
+                .filter(|(key, chunk)| {
+                    (key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                        && (key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                        && chunk.render_task.is_none()
+                        && chunk.rendered_version < chunk.source_version
                 })
                 .map(|(key, _chunk)| key.clone())
                 .collect();
