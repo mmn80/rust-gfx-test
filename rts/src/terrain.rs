@@ -814,6 +814,17 @@ impl TerrainStorage {
 }
 
 #[derive(Clone)]
+pub enum TerrainFillStyle {
+    Same {
+        material: &'static str,
+    },
+    Checkers {
+        zero: &'static str,
+        one: &'static str,
+    },
+}
+
+#[derive(Clone)]
 pub struct TerrainResource {
     storage: Arc<RwLock<TerrainStorage>>,
 }
@@ -847,20 +858,45 @@ impl TerrainResource {
         &mut self,
         materials: Vec<(&'static str, PbrMaterialAsset)>,
         fill_extent: Extent3i,
-        fill_value: &'static str,
+        fill_style: TerrainFillStyle,
     ) -> TerrainHandle {
         log::info!("Creating terrain...");
 
         let mut terrain = {
-            let fill_value =
-                CubeVoxel(materials.iter().position(|r| r.0 == fill_value).unwrap() as u16 + 1);
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
                 let ambient_value = CubeVoxel::default();
                 let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
                 let mut voxels = builder.build_with_hash_map_storage();
                 let mut lod0 = voxels.lod_view_mut(0);
-                lod0.fill_extent(&fill_extent, fill_value);
+                match fill_style {
+                    TerrainFillStyle::Same { material } => {
+                        let fill_value = CubeVoxel(
+                            materials.iter().position(|r| r.0 == material).unwrap() as u16 + 1,
+                        );
+                        lod0.fill_extent(&fill_extent, fill_value);
+                    }
+                    TerrainFillStyle::Checkers { zero, one } => {
+                        let zero_voxel = CubeVoxel(
+                            materials.iter().position(|r| r.0 == zero).unwrap() as u16 + 1,
+                        );
+                        let one_voxel = CubeVoxel(
+                            materials.iter().position(|r| r.0 == one).unwrap() as u16 + 1,
+                        );
+                        for p in fill_extent.iter_points() {
+                            let px = p.x() % 2;
+                            let py = p.y() % 2;
+                            lod0.fill_extent(
+                                &Extent3i::from_min_and_shape(p, Point3i::ONES),
+                                if (px + py) % 2 == 0 {
+                                    zero_voxel
+                                } else {
+                                    one_voxel
+                                },
+                            );
+                        }
+                    }
+                };
                 voxels
             };
 

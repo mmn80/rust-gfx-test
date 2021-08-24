@@ -2,7 +2,7 @@ use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
     input::{InputResource, KeyboardKey, MouseButton},
-    terrain::{CubeVoxel, Terrain, TerrainHandle, TerrainResource},
+    terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
 };
 use building_blocks::{core::prelude::*, storage::prelude::*};
 use egui::{Button, Checkbox};
@@ -68,7 +68,10 @@ impl KinObjectsState {
             terrain_resource.new_terrain(
                 terrain_materials,
                 Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
-                "simple_tile",
+                TerrainFillStyle::Checkers {
+                    zero: "simple_tile",
+                    one: "black_plastic",
+                },
             )
         };
         let terrain_resource = resources.get::<TerrainResource>().unwrap();
