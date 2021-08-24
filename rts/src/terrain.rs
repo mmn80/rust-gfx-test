@@ -105,6 +105,7 @@ impl IsEmpty for CubeVoxel {
 
 pub struct Terrain {
     materials: Vec<PbrMaterialAsset>,
+    material_names: HashMap<String, u16>,
     pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
@@ -115,6 +116,32 @@ pub struct Terrain {
 const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 32;
 
 impl Terrain {
+    pub fn get_default_material_names() -> Vec<&'static str> {
+        vec![
+            "flat_red",
+            "flat_green",
+            "flat_blue",
+            "metal",
+            "round-pattern-wallpaper",
+            "diamond-inlay-tile",
+            "curly_tile",
+            "simple_tile",
+            "black_plastic",
+        ]
+    }
+
+    pub fn material_by_name(&self, name: &'static str) -> Option<PbrMaterialAsset> {
+        self.material_names
+            .get(name)
+            .and_then(|idx| Some(self.materials[*idx as usize].clone()))
+    }
+
+    pub fn voxel_by_material(&self, material_name: &'static str) -> Option<CubeVoxel> {
+        self.material_names
+            .get(material_name)
+            .and_then(|idx| Some(CubeVoxel(*idx + 1)))
+    }
+
     pub fn set_chunk_dirty(&mut self, chunk: ChunkKey3) -> bool {
         let entry = self
             .render_chunks
@@ -559,13 +586,15 @@ impl TerrainResource {
 
     pub fn new_terrain(
         &mut self,
-        materials: Vec<PbrMaterialAsset>,
+        materials: Vec<(&'static str, PbrMaterialAsset)>,
         fill_extent: Extent3i,
-        fill_value: CubeVoxel,
+        fill_value: &'static str,
     ) -> TerrainHandle {
         log::info!("Creating terrain...");
 
         let mut terrain = {
+            let fill_value =
+                CubeVoxel(materials.iter().position(|r| r.0 == fill_value).unwrap() as u16 + 1);
             let voxels = {
                 let chunk_shape = Point3i::fill(16);
                 let ambient_value = CubeVoxel::default();
@@ -577,8 +606,15 @@ impl TerrainResource {
             };
 
             let (render_tx, render_rx) = unbounded();
+            let material_names = materials
+                .iter()
+                .enumerate()
+                .map(|(idx, v)| (v.0.to_string(), idx as u16))
+                .collect();
+            let materials = materials.iter().map(|v| v.1.clone()).collect();
             Terrain {
                 materials,
+                material_names,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
                 render_chunks: HashMap::new(),

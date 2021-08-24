@@ -1,11 +1,11 @@
 use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
-    input::{InputResource, MouseButton},
-    terrain::{CubeVoxel, TerrainHandle, TerrainResource},
+    input::{InputResource, KeyboardKey, MouseButton},
+    terrain::{CubeVoxel, Terrain, TerrainHandle, TerrainResource},
 };
 use building_blocks::{core::prelude::*, storage::prelude::*};
-use egui::Button;
+use egui::{Button, Checkbox};
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
 use rafx::assets::{distill_impl::AssetResource, AssetManager};
@@ -30,6 +30,8 @@ pub struct KinObjectsState {
     objects: HashMap<KinObjectType, Array3x1<CubeVoxel>>,
     ui_spawning: bool,
     ui_object_type: KinObjectType,
+    ui_edit_mode: bool,
+    ui_edit_material: &'static str,
 }
 
 impl KinObjectsState {
@@ -39,87 +41,97 @@ impl KinObjectsState {
 
         log::info!("Loading terrain materials...");
 
-        let terrain_material_paths = vec![
-            "materials/terrain/flat_red.pbrmaterial",
-            "materials/terrain/flat_green.pbrmaterial",
-            "materials/terrain/flat_blue.pbrmaterial",
-            "materials/terrain/metal.pbrmaterial",
-            "materials/terrain/round-pattern-wallpaper.pbrmaterial",
-            "materials/terrain/diamond-inlay-tile.pbrmaterial",
-            "materials/terrain/curly_tile.pbrmaterial",
-            "materials/terrain/simple_tile.pbrmaterial",
-            "materials/terrain/black_plastic.pbrmaterial",
-        ];
-        let terrain_materials: Vec<_> = terrain_material_paths
+        let material_names = Terrain::get_default_material_names();
+        let terrain_materials: Vec<_> = material_names
             .iter()
-            .map(|path| {
-                let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(*path);
+            .map(|name| {
+                let path = format!("materials/terrain/{}.pbrmaterial", *name);
+                let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
                 asset_manager
                     .wait_for_asset_to_load(&material_handle, &mut asset_resource, "")
                     .unwrap();
-                asset_manager
-                    .committed_asset(&material_handle)
-                    .unwrap()
-                    .clone()
+                (
+                    *name,
+                    asset_manager
+                        .committed_asset(&material_handle)
+                        .unwrap()
+                        .clone(),
+                )
             })
             .collect();
 
         log::info!("Terrain materials loaded");
 
-        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-        let w = 4096;
-        let terrain = terrain_resource.new_terrain(
-            terrain_materials,
-            Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
-            8.into(),
-        );
+        let terrain_handle = {
+            let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+            let w = 4096;
+            terrain_resource.new_terrain(
+                terrain_materials,
+                Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
+                "simple_tile",
+            )
+        };
+        let terrain_resource = resources.get::<TerrainResource>().unwrap();
+        let storage = terrain_resource.read();
+        let terrain = storage.get(&terrain_handle);
+
+        let empty = 0.into();
+        let dimond_tile = terrain.voxel_by_material("diamond-inlay-tile").unwrap();
+        let round_tile = terrain
+            .voxel_by_material("round-pattern-wallpaper")
+            .unwrap();
+        let curly_tile = terrain.voxel_by_material("curly_tile").unwrap();
+        let black_plastic = terrain.voxel_by_material("black_plastic").unwrap();
+
         let mut objects = HashMap::new();
 
         let mut building = Array3x1::<CubeVoxel>::fill(
             Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 8])),
-            0.into(),
+            empty,
         );
         building.fill_extent(
             &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 4])),
-            6.into(),
+            dimond_tile,
         );
         building.fill_extent(
             &Extent3i::from_min_and_shape(PointN([1, 1, 4]), PointN([6, 6, 3])),
-            6.into(),
+            dimond_tile,
         );
         building.fill_extent(
             &Extent3i::from_min_and_shape(PointN([1, 1, 7]), PointN([6, 6, 1])),
-            5.into(),
+            round_tile,
         );
         objects.insert(KinObjectType::Building, building);
 
         let mut tree = Array3x1::<CubeVoxel>::fill(
             Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 9])),
-            0.into(),
+            empty,
         );
         tree.fill_extent(
             &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 4])),
-            9.into(),
+            black_plastic,
         );
         tree.fill_extent(
             &Extent3i::from_min_and_shape(PointN([-2, -2, 4]), PointN([5, 5, 3])),
-            7.into(),
+            curly_tile,
         );
         tree.fill_extent(
             &Extent3i::from_min_and_shape(PointN([-1, -1, 7]), PointN([3, 3, 1])),
-            7.into(),
+            curly_tile,
         );
         tree.fill_extent(
             &Extent3i::from_min_and_shape(PointN([0, 0, 8]), PointN([1, 1, 1])),
-            7.into(),
+            curly_tile,
         );
         objects.insert(KinObjectType::Tree, tree);
 
         KinObjectsState {
-            terrain,
+            terrain: terrain_handle,
             objects,
             ui_spawning: false,
             ui_object_type: KinObjectType::Building,
+            ui_edit_mode: false,
+            ui_edit_material: "simple_tile",
         }
     }
 
@@ -148,24 +160,56 @@ impl KinObjectsState {
                         self.ui_spawning = true;
                     }
                 }
+                ui.add_space(10.);
+                let ck = Checkbox::new(&mut self.ui_edit_mode, "Terrain edit mode");
+                ui.add(ck);
+                if self.ui_edit_mode {
+                    for material_name in Terrain::get_default_material_names() {
+                        ui.radio_value(&mut self.ui_edit_material, material_name, material_name);
+                    }
+                }
             });
 
-        if self.ui_spawning {
+        if self.ui_spawning || self.ui_edit_mode {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
-                let cast_result = {
+                let (cast_result, default_material) = {
                     let terrain_resource = resources.get::<TerrainResource>().unwrap();
                     let storage = terrain_resource.read();
                     let terrain = storage.get(&self.terrain);
-                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                    let cast_result =
+                        camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain);
+                    let default_material =
+                        terrain.voxel_by_material(self.ui_edit_material).unwrap();
+                    (cast_result, default_material)
                 };
                 if let Some(result) = cast_result {
-                    self.spawn(
-                        self.ui_object_type,
-                        PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
-                        resources,
-                        world,
-                    );
+                    if self.ui_spawning {
+                        self.spawn(
+                            self.ui_object_type,
+                            PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
+                            resources,
+                            world,
+                        );
+                    } else if self.ui_edit_mode {
+                        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+                        let mut storage = terrain_resource.write();
+                        let terrain = storage.get_mut(&self.terrain);
+                        let p = {
+                            if input.is_key_down(KeyboardKey::LControl) {
+                                let p: &mut CubeVoxel = terrain.voxels.get_mut_point(0, result.hit);
+                                *p = 0.into();
+                                result.hit
+                            } else {
+                                let p: &mut CubeVoxel =
+                                    terrain.voxels.get_mut_point(0, result.before_hit);
+                                *p = default_material;
+                                result.before_hit
+                            }
+                        };
+                        let chunk_min = terrain.voxels.indexer.min_of_chunk_containing_point(p);
+                        terrain.set_chunk_dirty(ChunkKey3::new(0, chunk_min));
+                    }
                 }
                 self.ui_spawning = false;
             }
