@@ -194,7 +194,7 @@ impl RenderChunkMetrics {
 
 pub struct RenderChunkTaskResults {
     pub key: ChunkKey3,
-    pub mesh: DynMeshData,
+    pub mesh: Option<DynMeshData>,
     pub metrics: RenderChunkTaskMetrics,
 }
 
@@ -247,6 +247,15 @@ impl TerrainRenderChunk {
             source_version: 0,
             rendered_version: 0,
             render_task: None,
+        }
+    }
+
+    fn clear(&mut self, world: &mut World) {
+        self.dyn_mesh_handle.take();
+        self.render_object_handle.take();
+        self.visibility_object_handle.take();
+        if let Some(entity) = self.entity.take() {
+            world.remove(entity);
         }
     }
 }
@@ -418,7 +427,13 @@ impl Terrain {
                     greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
                     let quads_duration = Instant::now() - quads_start;
                     let mesh_start = Instant::now();
-                    let (mesh, failed) = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &config);
+                    let (mesh, failed) = if buffer.num_quads() == 0 {
+                        (None, false)
+                    } else {
+                        let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &config);
+                        let failed = mesh.is_none();
+                        (mesh, failed)
+                    };
                     let mesh_duration = Instant::now() - mesh_start;
                     let results = RenderChunkTaskResults {
                         key: key.clone(),
@@ -427,7 +442,7 @@ impl Terrain {
                             quads_time: quads_duration.as_micros() as u32,
                             mesh_time: mesh_duration.as_micros() as u32,
                             results_time: 0,
-                            failed: failed > 0,
+                            failed,
                         },
                     };
                     let _result = render_tx.send(results);
@@ -439,7 +454,6 @@ impl Terrain {
         }
 
         // process render job results
-        let mut chunks = 0;
         for result in self.render_rx.try_iter() {
             let results_start = Instant::now();
             let mut metrics = result.metrics;
@@ -447,52 +461,57 @@ impl Terrain {
             if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
                 chunk.render_task = None;
                 chunk.rendered_version += 1;
-                chunks += 1;
 
                 // log::info!("Dyn mesh built. {}", result.mesh.clone());
 
-                let visible_bounds = result.mesh.visible_bounds.clone();
-                if let Some(handle) = &chunk.dyn_mesh_handle {
-                    let _res = dyn_mesh_resource.update_dyn_mesh(&handle, result.mesh);
-                } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(result.mesh) {
-                    chunk.dyn_mesh_handle = Some(handle.clone());
+                if let Some(mesh) = result.mesh {
+                    let visible_bounds = mesh.visible_bounds.clone();
+                    if let Some(handle) = &chunk.dyn_mesh_handle {
+                        if let Err(error) = dyn_mesh_resource.update_dyn_mesh(&handle, mesh) {
+                            log::error!("{}", error);
+                        }
+                    } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(mesh) {
+                        chunk.dyn_mesh_handle = Some(handle.clone());
 
-                    let transform_component = TransformComponent {
-                        translation: Vec3::ZERO,
-                        scale: Vec3::ONE,
-                        rotation: Quat::IDENTITY,
-                    };
+                        let transform_component = TransformComponent {
+                            translation: Vec3::ZERO,
+                            scale: Vec3::ONE,
+                            rotation: Quat::IDENTITY,
+                        };
 
-                    let render_object_handle = dyn_mesh_render_objects
-                        .register_render_object(DynMeshRenderObject { mesh: handle });
-                    let mesh_component = MeshComponent {
-                        render_object_handle: render_object_handle.clone(),
-                    };
+                        let render_object_handle = dyn_mesh_render_objects
+                            .register_render_object(DynMeshRenderObject { mesh: handle });
+                        let mesh_component = MeshComponent {
+                            render_object_handle: render_object_handle.clone(),
+                        };
 
-                    let entity = world.push((transform_component, mesh_component));
-                    chunk.entity = Some(entity);
+                        let entity = world.push((transform_component, mesh_component));
+                        chunk.entity = Some(entity);
 
-                    let visibility_object_handle = {
-                        let handle = visibility_region.register_static_object(
-                            ObjectId::from(entity),
-                            CullModel::VisibleBounds(visible_bounds),
-                        );
-                        let pos = result.key.minimum;
-                        handle.set_transform(
-                            Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
-                            Quat::IDENTITY,
-                            Vec3::ONE,
-                        );
-                        handle.add_render_object(&render_object_handle);
-                        handle
-                    };
-                    let mut entry = world.entry(entity).unwrap();
-                    entry.add_component(VisibilityComponent {
-                        visibility_object_handle: visibility_object_handle.clone(),
-                    });
+                        let visibility_object_handle = {
+                            let handle = visibility_region.register_static_object(
+                                ObjectId::from(entity),
+                                CullModel::VisibleBounds(visible_bounds),
+                            );
+                            let pos = result.key.minimum;
+                            handle.set_transform(
+                                Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
+                                Quat::IDENTITY,
+                                Vec3::ONE,
+                            );
+                            handle.add_render_object(&render_object_handle);
+                            handle
+                        };
+                        let mut entry = world.entry(entity).unwrap();
+                        entry.add_component(VisibilityComponent {
+                            visibility_object_handle: visibility_object_handle.clone(),
+                        });
 
-                    chunk.visibility_object_handle = Some(visibility_object_handle);
-                    chunk.render_object_handle = Some(render_object_handle);
+                        chunk.visibility_object_handle = Some(visibility_object_handle);
+                        chunk.render_object_handle = Some(render_object_handle);
+                    }
+                } else {
+                    chunk.clear(world);
                 }
             } else {
                 metrics.failed = true;
@@ -500,9 +519,6 @@ impl Terrain {
 
             metrics.results_time = (Instant::now() - results_start).as_micros() as u32;
             self.metrics.tasks.push(metrics);
-        }
-        if chunks > 0 {
-            log::debug!("{} terrain meshes generated", chunks);
         }
 
         self.check_reset_metrics(5.0, true);
@@ -534,8 +550,7 @@ impl Terrain {
         voxels: &Array3x1<CubeVoxel>,
         quads: &GreedyQuadsBuffer,
         materials: &Vec<PbrMaterialAsset>,
-    ) -> (DynMeshData, u16) {
-        let mut failed_parts = 0;
+    ) -> Option<DynMeshData> {
         let mut quad_parts: FnvHashMap<_, _> = Default::default();
         for (idx, group) in quads.quad_groups.iter().enumerate() {
             for quad in group.quads.iter() {
@@ -642,14 +657,18 @@ impl Terrain {
                     let vertex_size = all_vertices.len() - vertex_offset;
                     let indices_size = all_indices.len() - indices_offset;
 
-                    Some(DynMeshDataPart {
-                        material_instance: pbr_material.get_material_instance(),
-                        vertex_buffer_offset_in_bytes: vertex_offset as u32,
-                        vertex_buffer_size_in_bytes: vertex_size as u32,
-                        index_buffer_offset_in_bytes: indices_offset as u32,
-                        index_buffer_size_in_bytes: indices_size as u32,
-                        index_type,
-                    })
+                    if vertex_size == 0 || indices_size == 0 {
+                        None
+                    } else {
+                        Some(DynMeshDataPart {
+                            material_instance: pbr_material.get_material_instance(),
+                            vertex_buffer_offset_in_bytes: vertex_offset as u32,
+                            vertex_buffer_size_in_bytes: vertex_size as u32,
+                            index_buffer_offset_in_bytes: indices_offset as u32,
+                            index_buffer_size_in_bytes: indices_size as u32,
+                            index_type,
+                        })
+                    }
                 } else {
                     log::error!(
                         "Invalid terrain material index {} (# of materials: {})",
@@ -662,19 +681,20 @@ impl Terrain {
             if let Some(mesh_part) = mesh_part {
                 mesh_parts.push(mesh_part);
             } else {
-                failed_parts += 1;
+                return None;
             }
         }
 
-        (
-            DynMeshData {
-                mesh_parts,
-                vertex_buffer: Some(all_vertices.into_data()),
-                index_buffer: Some(all_indices.into_data()),
-                visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
-            },
-            failed_parts,
-        )
+        if mesh_parts.len() == 0 {
+            return None;
+        }
+
+        Some(DynMeshData {
+            mesh_parts,
+            vertex_buffer: Some(all_vertices.into_data()),
+            index_buffer: Some(all_indices.into_data()),
+            visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
+        })
     }
 
     fn make_visible_bounds(extent: &Extent3i, hash: u64) -> VisibleBounds {
