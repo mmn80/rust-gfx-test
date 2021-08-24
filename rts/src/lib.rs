@@ -365,6 +365,7 @@ impl DemoApp {
         }
 
         {
+            profiling::scope!("update scene");
             self.scene_manager.scene_action = self
                 .scene_manager
                 .update_scene(&mut self.world, &mut self.resources);

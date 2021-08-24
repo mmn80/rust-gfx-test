@@ -309,6 +309,23 @@ impl Terrain {
         }
     }
 
+    pub fn update_voxel(&mut self, point: Point3i, voxel: CubeVoxel) {
+        let vox_ref: &mut CubeVoxel = self.voxels.get_mut_point(0, point);
+        *vox_ref = voxel;
+        let keys = self
+            .voxels
+            .indexer
+            .chunk_mins_for_extent(&Extent3i::from_min_and_shape(point, Point3i::ONES).padded(1))
+            .map(|p| ChunkKey3::new(0, p));
+        for key in keys {
+            self.set_chunk_dirty(key);
+        }
+    }
+
+    pub fn clear_voxel(&mut self, point: Point3i) {
+        self.update_voxel(point, 0.into());
+    }
+
     pub fn reset_chunks(&mut self) {
         self.render_chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);

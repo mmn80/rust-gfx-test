@@ -195,30 +195,24 @@ impl KinObjectsState {
                         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
                         let mut storage = terrain_resource.write();
                         let terrain = storage.get_mut(&self.terrain);
-                        let p = {
-                            if input.is_key_down(KeyboardKey::LControl) {
-                                let p: &mut CubeVoxel = terrain.voxels.get_mut_point(0, result.hit);
-                                *p = 0.into();
-                                result.hit
-                            } else {
-                                let p: &mut CubeVoxel =
-                                    terrain.voxels.get_mut_point(0, result.before_hit);
-                                *p = default_material;
-                                result.before_hit
-                            }
-                        };
-                        let chunk_min = terrain.voxels.indexer.min_of_chunk_containing_point(p);
-                        terrain.set_chunk_dirty(ChunkKey3::new(0, chunk_min));
+                        if input.is_key_down(KeyboardKey::LControl) {
+                            terrain.clear_voxel(result.hit);
+                        } else {
+                            terrain.update_voxel(result.before_hit, default_material);
+                        }
                     }
                 }
                 self.ui_spawning = false;
             }
         }
 
-        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-        let mut storage = terrain_resource.write();
-        let terrain = storage.get_mut(&self.terrain);
-        terrain.update_render_chunks(world, resources);
+        {
+            profiling::scope!("update render chunks");
+            let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+            let mut storage = terrain_resource.write();
+            let terrain = storage.get_mut(&self.terrain);
+            terrain.update_render_chunks(world, resources);
+        }
     }
 
     pub fn spawn(
