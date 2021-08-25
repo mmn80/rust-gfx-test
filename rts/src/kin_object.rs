@@ -272,21 +272,21 @@ impl KinObjectsState {
                             let material = materials[idx];
                             ui.label(material);
 
-                            ui.add(egui::Slider::new(&mut params.octaves, 0..=16).text("octaves"));
+                            ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
                             ui.add(
                                 egui::Slider::new(&mut params.amplitude, 0.0..=64.0)
                                     .text("amplitude"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut params.frequency, 0.0..=8.0)
+                                egui::Slider::new(&mut params.frequency, 0.0..=4.0)
                                     .text("frequency"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut params.persistence, 0.0..=8.0)
+                                egui::Slider::new(&mut params.persistence, 0.0..=1.0)
                                     .text("persistence"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut params.lacunarity, 0.0..=8.0)
+                                egui::Slider::new(&mut params.lacunarity, 1.0..=4.0)
                                     .text("lacunarity"),
                             );
                             ui.add(
