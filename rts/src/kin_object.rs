@@ -32,10 +32,12 @@ pub struct KinObjectsState {
     ui_object_type: KinObjectType,
     ui_edit_mode: bool,
     ui_edit_material: &'static str,
+    ui_terrain_size: u32,
+    ui_terrain_style: TerrainFillStyle,
 }
 
 impl KinObjectsState {
-    pub fn new(resources: &Resources) -> Self {
+    pub fn new(resources: &Resources, world: &mut World) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
 
@@ -62,19 +64,18 @@ impl KinObjectsState {
 
         log::info!("Terrain materials loaded");
 
+        let ui_terrain_size: u32 = 4096;
+        let ui_terrain_style = TerrainFillStyle::FlatBoard {
+            material: "simple_tile",
+        };
         let terrain_handle = {
             let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-            let w = 4096;
             terrain_resource.new_terrain(
+                world,
                 terrain_materials,
-                Extent3i::from_min_and_shape(PointN([-w / 2, -w / 2, -1]), PointN([w, w, 1])),
-                // TerrainFillStyle::Same {
-                //     material: "simple_tile",
-                // },
-                TerrainFillStyle::Checkers {
-                    zero: "simple_tile",
-                    one: "black_plastic",
-                },
+                Point3i::ZERO,
+                ui_terrain_size,
+                ui_terrain_style.clone(),
             )
         };
         let terrain_resource = resources.get::<TerrainResource>().unwrap();
@@ -138,6 +139,8 @@ impl KinObjectsState {
             ui_object_type: KinObjectType::Building,
             ui_edit_mode: false,
             ui_edit_material: "simple_tile",
+            ui_terrain_size,
+            ui_terrain_style,
         }
     }
 
@@ -165,6 +168,7 @@ impl KinObjectsState {
                     if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
                         self.ui_spawning = true;
                     }
+
                     ui.add_space(10.);
                     ui.separator();
                     let ck = Checkbox::new(&mut self.ui_edit_mode, "Edit mode");
@@ -178,6 +182,77 @@ impl KinObjectsState {
                             );
                         }
                     }
+
+                    ui.add_space(10.);
+                    ui.separator();
+                    ui.collapsing("Reset terrain", |ui| {
+                        let mut size_str = format!("{}", self.ui_terrain_size);
+                        ui.horizontal(|ui| {
+                            ui.label("Size");
+                            ui.text_edit_singleline(&mut size_str);
+                            if let Ok(number) = size_str.parse() {
+                                self.ui_terrain_size = number;
+                            }
+                        });
+                        let mut style_idx = match self.ui_terrain_style {
+                            TerrainFillStyle::FlatBoard { material: _ } => 0,
+                            TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
+                        };
+                        ui.radio_value(&mut style_idx, 0, "Flat board");
+                        ui.radio_value(&mut style_idx, 1, "Checkers board");
+                        let materials = Terrain::get_default_material_names();
+                        if style_idx == 0 {
+                            let material = if let TerrainFillStyle::FlatBoard { material } =
+                                self.ui_terrain_style
+                            {
+                                material
+                            } else {
+                                materials[0]
+                            };
+
+                            let mut idx = materials.iter().position(|&r| r == material).unwrap();
+                            ui.add(egui::Slider::new(&mut idx, 0..=(materials.len() - 1)));
+                            let material = materials[idx];
+                            ui.label(material);
+
+                            self.ui_terrain_style = TerrainFillStyle::FlatBoard { material };
+                        } else if style_idx == 1 {
+                            let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
+                                self.ui_terrain_style
+                            {
+                                (zero, one)
+                            } else {
+                                (materials[0], materials[1])
+                            };
+
+                            let mut idx0 = materials.iter().position(|&r| r == zero).unwrap();
+                            ui.add(egui::Slider::new(&mut idx0, 0..=(materials.len() - 1)));
+                            let zero = materials[idx0];
+                            ui.label(zero);
+
+                            let mut idx1 = materials.iter().position(|&r| r == one).unwrap();
+                            ui.add(egui::Slider::new(&mut idx1, 0..=(materials.len() - 1)));
+                            let one = materials[idx1];
+                            ui.label(one);
+
+                            self.ui_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
+                        }
+                        if ui
+                            .add_sized([100., 30.], Button::new("Reset terrain"))
+                            .clicked()
+                        {
+                            let mut terrain_resource =
+                                resources.get_mut::<TerrainResource>().unwrap();
+                            let mut storage = terrain_resource.write();
+                            let terrain = storage.get_mut(&self.terrain);
+                            terrain.reset(
+                                world,
+                                Point3i::ZERO,
+                                self.ui_terrain_size,
+                                self.ui_terrain_style.clone(),
+                            );
+                        }
+                    });
                 }
             });
 

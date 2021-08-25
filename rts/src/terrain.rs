@@ -260,10 +260,12 @@ impl TerrainRenderChunk {
     }
 }
 
+pub type TerrainVoxels = ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>;
+
 pub struct Terrain {
     materials: Vec<PbrMaterialAsset>,
     material_names: HashMap<String, u16>,
-    pub voxels: ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>,
+    pub voxels: TerrainVoxels,
     task_pool: TaskPool,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
     render_tx: Sender<RenderChunkTaskResults>,
@@ -334,7 +336,10 @@ impl Terrain {
         self.update_voxel(point, 0.into());
     }
 
-    pub fn reset_chunks(&mut self) {
+    pub fn reset_chunks(&mut self, world: &mut World) {
+        for chunk in self.render_chunks.values_mut() {
+            chunk.clear(world);
+        }
         self.render_chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);
         let mut occupied = vec![];
@@ -344,6 +349,62 @@ impl Terrain {
         for chunk_min in occupied {
             self.set_chunk_dirty(ChunkKey3::new(0, chunk_min));
         }
+    }
+
+    pub fn generate_voxels(
+        materials: &HashMap<String, u16>,
+        origin: Point3i,
+        size: u32,
+        style: TerrainFillStyle,
+    ) -> TerrainVoxels {
+        let chunk_shape = Point3i::fill(16);
+        let ambient_value = CubeVoxel::default();
+        let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
+        let mut voxels = builder.build_with_hash_map_storage();
+        let mut lod0 = voxels.lod_view_mut(0);
+        let size = size as i32;
+        match style {
+            TerrainFillStyle::FlatBoard { material } => {
+                let fill_value = CubeVoxel(materials[material] + 1);
+                let minimum = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
+                let fill_extent = Extent3i::from_min_and_shape(minimum, PointN([size, size, 1]));
+                lod0.fill_extent(&fill_extent, fill_value);
+            }
+            TerrainFillStyle::CheckersBoard { zero, one } => {
+                let zero_voxel = CubeVoxel(materials[zero] + 1);
+                let one_voxel = CubeVoxel(materials[one] + 1);
+                let minimum = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
+                let fill_extent = Extent3i::from_min_and_shape(minimum, PointN([size, size, 1]));
+                for p in fill_extent.iter_points() {
+                    let px = p.x() % 2;
+                    let py = p.y() % 2;
+                    lod0.fill_extent(
+                        &Extent3i::from_min_and_shape(p, Point3i::ONES),
+                        if (px + py) % 2 == 0 {
+                            zero_voxel
+                        } else {
+                            one_voxel
+                        },
+                    );
+                }
+            }
+        };
+        voxels
+    }
+
+    pub fn reset(
+        &mut self,
+        world: &mut World,
+        origin: Point3i,
+        size: u32,
+        style: TerrainFillStyle,
+    ) {
+        log::info!("Resetting terrain...");
+
+        self.voxels = Self::generate_voxels(&self.material_names, origin, size, style);
+        self.reset_chunks(world);
+
+        log::info!("Terrain reset");
     }
 
     pub fn update_render_chunks(&mut self, world: &mut World, resources: &Resources) {
@@ -819,10 +880,10 @@ impl TerrainStorage {
 
 #[derive(Clone)]
 pub enum TerrainFillStyle {
-    Same {
+    FlatBoard {
         material: &'static str,
     },
-    Checkers {
+    CheckersBoard {
         zero: &'static str,
         one: &'static str,
     },
@@ -860,57 +921,23 @@ impl TerrainResource {
 
     pub fn new_terrain(
         &mut self,
+        world: &mut World,
         materials: Vec<(&'static str, PbrMaterialAsset)>,
-        fill_extent: Extent3i,
-        fill_style: TerrainFillStyle,
+        origin: Point3i,
+        size: u32,
+        style: TerrainFillStyle,
     ) -> TerrainHandle {
         log::info!("Creating terrain...");
 
         let mut terrain = {
-            let voxels = {
-                let chunk_shape = Point3i::fill(16);
-                let ambient_value = CubeVoxel::default();
-                let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
-                let mut voxels = builder.build_with_hash_map_storage();
-                let mut lod0 = voxels.lod_view_mut(0);
-                match fill_style {
-                    TerrainFillStyle::Same { material } => {
-                        let fill_value = CubeVoxel(
-                            materials.iter().position(|r| r.0 == material).unwrap() as u16 + 1,
-                        );
-                        lod0.fill_extent(&fill_extent, fill_value);
-                    }
-                    TerrainFillStyle::Checkers { zero, one } => {
-                        let zero_voxel = CubeVoxel(
-                            materials.iter().position(|r| r.0 == zero).unwrap() as u16 + 1,
-                        );
-                        let one_voxel = CubeVoxel(
-                            materials.iter().position(|r| r.0 == one).unwrap() as u16 + 1,
-                        );
-                        for p in fill_extent.iter_points() {
-                            let px = p.x() % 2;
-                            let py = p.y() % 2;
-                            lod0.fill_extent(
-                                &Extent3i::from_min_and_shape(p, Point3i::ONES),
-                                if (px + py) % 2 == 0 {
-                                    zero_voxel
-                                } else {
-                                    one_voxel
-                                },
-                            );
-                        }
-                    }
-                };
-                voxels
-            };
-
-            let (render_tx, render_rx) = unbounded();
             let material_names = materials
                 .iter()
                 .enumerate()
                 .map(|(idx, v)| (v.0.to_string(), idx as u16))
                 .collect();
             let materials = materials.iter().map(|v| v.1.clone()).collect();
+            let voxels = Terrain::generate_voxels(&material_names, origin, size, style);
+            let (render_tx, render_rx) = unbounded();
             Terrain {
                 materials,
                 material_names,
@@ -924,7 +951,7 @@ impl TerrainResource {
             }
         };
 
-        terrain.reset_chunks();
+        terrain.reset_chunks(world);
 
         let terrain_handle = {
             let mut storage = self.write();
