@@ -4,6 +4,7 @@ use crate::{
         DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
         DynMeshResource,
     },
+    perlin::PerlinNoise2D,
 };
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
@@ -363,19 +364,17 @@ impl Terrain {
         let mut voxels = builder.build_with_hash_map_storage();
         let mut lod0 = voxels.lod_view_mut(0);
         let size = size as i32;
+        let base_min = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
+        let base_extent = Extent3i::from_min_and_shape(base_min, PointN([size, size, 1]));
         match style {
             TerrainFillStyle::FlatBoard { material } => {
-                let fill_value = CubeVoxel(materials[material] + 1);
-                let minimum = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
-                let fill_extent = Extent3i::from_min_and_shape(minimum, PointN([size, size, 1]));
-                lod0.fill_extent(&fill_extent, fill_value);
+                let voxel = CubeVoxel(materials[material] + 1);
+                lod0.fill_extent(&base_extent, voxel);
             }
             TerrainFillStyle::CheckersBoard { zero, one } => {
                 let zero_voxel = CubeVoxel(materials[zero] + 1);
                 let one_voxel = CubeVoxel(materials[one] + 1);
-                let minimum = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
-                let fill_extent = Extent3i::from_min_and_shape(minimum, PointN([size, size, 1]));
-                for p in fill_extent.iter_points() {
+                for p in base_extent.iter_points() {
                     let px = p.x() % 2;
                     let py = p.y() % 2;
                     lod0.fill_extent(
@@ -386,6 +385,14 @@ impl Terrain {
                             one_voxel
                         },
                     );
+                }
+            }
+            TerrainFillStyle::PerlinNoise { params, material } => {
+                let voxel = CubeVoxel(materials[material] + 1);
+                for p in base_extent.iter_points() {
+                    let noise = params.get_noise(p.x() as f64, p.y() as f64) as i32;
+                    let top = PointN([p.x(), p.y(), noise - 8]);
+                    lod0.fill_extent(&Extent3i::from_min_and_shape(top, PointN([1, 1, 8])), voxel);
                 }
             }
         };
@@ -886,6 +893,10 @@ pub enum TerrainFillStyle {
     CheckersBoard {
         zero: &'static str,
         one: &'static str,
+    },
+    PerlinNoise {
+        params: PerlinNoise2D,
+        material: &'static str,
     },
 }
 

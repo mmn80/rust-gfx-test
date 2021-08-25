@@ -2,6 +2,7 @@ use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
     input::{InputResource, KeyboardKey, MouseButton},
+    perlin::PerlinNoise2D,
     terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
 };
 use building_blocks::{core::prelude::*, storage::prelude::*};
@@ -197,9 +198,14 @@ impl KinObjectsState {
                         let mut style_idx = match self.ui_terrain_style {
                             TerrainFillStyle::FlatBoard { material: _ } => 0,
                             TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
+                            TerrainFillStyle::PerlinNoise {
+                                params: _,
+                                material: _,
+                            } => 2,
                         };
                         ui.radio_value(&mut style_idx, 0, "Flat board");
                         ui.radio_value(&mut style_idx, 1, "Checkers board");
+                        ui.radio_value(&mut style_idx, 2, "Perlin noise");
                         let materials = Terrain::get_default_material_names();
                         if style_idx == 0 {
                             let material = if let TerrainFillStyle::FlatBoard { material } =
@@ -236,6 +242,64 @@ impl KinObjectsState {
                             ui.label(one);
 
                             self.ui_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
+                        } else if style_idx == 2 {
+                            let (mut params, material) =
+                                if let TerrainFillStyle::PerlinNoise { params, material } =
+                                    self.ui_terrain_style
+                                {
+                                    (params, material)
+                                } else {
+                                    (
+                                        PerlinNoise2D {
+                                            octaves: 6,
+                                            amplitude: 10.0,
+                                            frequency: 0.5,
+                                            persistence: 1.0,
+                                            lacunarity: 2.0,
+                                            scale: (
+                                                self.ui_terrain_size as f64,
+                                                self.ui_terrain_size as f64,
+                                            ),
+                                            bias: 0.,
+                                            seed: 42,
+                                        },
+                                        materials[0],
+                                    )
+                                };
+
+                            let mut idx = materials.iter().position(|&r| r == material).unwrap();
+                            ui.add(egui::Slider::new(&mut idx, 0..=(materials.len() - 1)));
+                            let material = materials[idx];
+                            ui.label(material);
+
+                            ui.add(egui::Slider::new(&mut params.octaves, 0..=16).text("octaves"));
+                            ui.add(
+                                egui::Slider::new(&mut params.amplitude, 0.0..=64.0)
+                                    .text("amplitude"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut params.frequency, 0.0..=8.0)
+                                    .text("frequency"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut params.persistence, 0.0..=8.0)
+                                    .text("persistence"),
+                            );
+                            ui.add(
+                                egui::Slider::new(&mut params.lacunarity, 0.0..=8.0)
+                                    .text("lacunarity"),
+                            );
+                            ui.add(
+                                egui::Slider::new(
+                                    &mut params.bias,
+                                    0.0..=self.ui_terrain_size as f64 + 1.,
+                                )
+                                .text("bias"),
+                            );
+                            ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
+
+                            self.ui_terrain_style =
+                                TerrainFillStyle::PerlinNoise { params, material };
                         }
                         if ui
                             .add_sized([100., 30.], Button::new("Reset terrain"))

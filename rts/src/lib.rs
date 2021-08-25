@@ -39,6 +39,7 @@ mod features;
 mod init;
 mod input;
 mod kin_object;
+mod perlin;
 mod scenes;
 mod terrain;
 mod time;
