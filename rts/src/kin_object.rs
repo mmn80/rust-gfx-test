@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use building_blocks::{core::prelude::*, storage::prelude::*};
 use egui::{Button, Checkbox};
@@ -20,6 +20,15 @@ use crate::{
 pub enum KinObjectType {
     Building,
     Tree,
+}
+
+impl Display for KinObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            KinObjectType::Building => write!(f, "Building"),
+            KinObjectType::Tree => write!(f, "Tree"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -156,16 +165,14 @@ impl KinObjectsState {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.radio_value(
-                        &mut ui_state.kin_object_type,
-                        KinObjectType::Building,
-                        "Building",
-                    );
-                    ui.radio_value(&mut ui_state.kin_object_type, KinObjectType::Tree, "Tree");
-                    ui.add_space(10.);
-                    if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
-                        ui_state.kin_spawning = true;
-                    }
+                    ui.horizontal_wrapped(|ui| {
+                        for (obj, _) in &self.objects {
+                            if ui.selectable_label(false, format!("{}", obj)).clicked() {
+                                ui_state.kin_object_type = *obj;
+                                ui_state.kin_spawning = true;
+                            }
+                        }
+                    });
                 });
 
             egui::CollapsingHeader::new("Edit terrain")

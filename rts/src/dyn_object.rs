@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
-use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
+use egui::{epaint::Shadow, Color32, Frame, Stroke};
 use glam::{Quat, Vec2, Vec3, Vec4};
 use legion::{IntoQuery, Read, Resources, World, Write};
 use rafx::{
@@ -36,6 +36,16 @@ pub enum DynObjectType {
     Container1,
     Container2,
     BlueIcosphere,
+}
+
+impl Display for DynObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            DynObjectType::Container1 => write!(f, "Container 1"),
+            DynObjectType::Container2 => write!(f, "Container 2"),
+            DynObjectType::BlueIcosphere => write!(f, "Blue icosphere"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -131,25 +141,14 @@ impl DynObjectsState {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.radio_value(
-                        &mut ui_state.dyn_object_type,
-                        DynObjectType::Container1,
-                        "Container1",
-                    );
-                    ui.radio_value(
-                        &mut ui_state.dyn_object_type,
-                        DynObjectType::Container2,
-                        "Container2",
-                    );
-                    ui.radio_value(
-                        &mut ui_state.dyn_object_type,
-                        DynObjectType::BlueIcosphere,
-                        "BlueIcosphere",
-                    );
-                    ui.add_space(10.);
-                    if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
-                        ui_state.dyn_spawning = true;
-                    }
+                    ui.horizontal_wrapped(|ui| {
+                        for (obj, _) in &self.meshes {
+                            if ui.selectable_label(false, format!("{}", obj)).clicked() {
+                                ui_state.dyn_object_type = *obj;
+                                ui_state.dyn_spawning = true;
+                            }
+                        }
+                    });
                 });
         }
 

@@ -106,10 +106,10 @@ impl super::GameScene for MenuScene {
             .movable(false)
             .show(&context, |ui| {
                 let btn_size = [200.0 / scale_factor, 100.0 / scale_factor];
-                if ui.add_sized(btn_size, Button::new("Play")).clicked() {
+                if ui.add_sized(btn_size, Button::new("P L A Y")).clicked() {
                     action = SceneManagerAction::Scene(Scene::Main);
                 }
-                if ui.add_sized(btn_size, Button::new("Exit")).clicked() {
+                if ui.add_sized(btn_size, Button::new("E X I T")).clicked() {
                     action = SceneManagerAction::Exit;
                 }
             });
