@@ -43,6 +43,7 @@ mod perlin;
 mod scenes;
 mod terrain;
 mod time;
+mod ui;
 
 #[cfg(all(feature = "profile-with-tracy-memory", not(feature = "stats_alloc")))]
 #[global_allocator]

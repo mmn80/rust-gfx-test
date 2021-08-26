@@ -5,6 +5,7 @@ use crate::{
     input::{InputResource, KeyboardKey},
     kin_object::KinObjectsState,
     time::TimeState,
+    ui::UiState,
     RenderOptions,
 };
 use distill::loader::handle::Handle;
@@ -19,7 +20,8 @@ use rafx_plugins::{
     assets::font::FontAsset, components::DirectionalLightComponent, features::text::TextResource,
 };
 
-pub(super) struct MainScene {
+pub struct MainScene {
+    ui: UiState,
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
     dyn_objects: DynObjectsState,
@@ -62,6 +64,7 @@ impl MainScene {
             font,
             dyn_objects,
             kin_objects,
+            ui: Default::default(),
         }
     }
 }
@@ -111,8 +114,15 @@ impl super::GameScene for MainScene {
             }
         }
 
-        self.dyn_objects.update(world, resources);
+        self.ui.update(
+            world,
+            resources,
+            &mut self.kin_objects,
+            &mut self.dyn_objects,
+        );
+
         self.kin_objects.update(world, resources);
+        self.dyn_objects.update(world, resources, &mut self.ui);
 
         {
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();
@@ -127,9 +137,9 @@ impl super::GameScene for MainScene {
                 20.0 * scale,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
-            if self.dyn_objects.ui_selected_count > 0 {
+            if self.ui.dyn_selected_count > 0 {
                 text_resource.add_text(
-                    self.dyn_objects.ui_selected_str.clone(),
+                    self.ui.dyn_selected_str.clone(),
                     Vec3::new(200.0 * scale, pos_y, 0.0),
                     &self.font,
                     20.0 * scale,

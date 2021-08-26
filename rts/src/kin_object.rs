@@ -4,13 +4,14 @@ use crate::{
     input::{InputResource, KeyboardKey, MouseButton},
     perlin::PerlinNoise2D,
     terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
+    ui::UiState,
 };
 use building_blocks::{core::prelude::*, storage::prelude::*};
 use egui::{Button, Checkbox};
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
 use rafx::assets::{distill_impl::AssetResource, AssetManager};
-use rafx_plugins::{components::TransformComponent, features::egui::EguiContextResource};
+use rafx_plugins::components::TransformComponent;
 use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -29,12 +30,6 @@ pub struct KinObjectComponent {
 pub struct KinObjectsState {
     pub terrain: TerrainHandle,
     objects: HashMap<KinObjectType, Array3x1<CubeVoxel>>,
-    ui_spawning: bool,
-    ui_object_type: KinObjectType,
-    ui_edit_mode: bool,
-    ui_edit_material: &'static str,
-    ui_terrain_size: u32,
-    ui_terrain_style: TerrainFillStyle,
 }
 
 impl KinObjectsState {
@@ -136,185 +131,170 @@ impl KinObjectsState {
         KinObjectsState {
             terrain: terrain_handle,
             objects,
-            ui_spawning: false,
-            ui_object_type: KinObjectType::Building,
-            ui_edit_mode: false,
-            ui_edit_material: "simple_tile",
-            ui_terrain_size,
-            ui_terrain_style,
         }
     }
 
-    fn list_selector(
+    pub fn update_ui(
+        &mut self,
+        world: &mut World,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
         ui: &mut egui::Ui,
-        list: &Vec<&'static str>,
-        current: &'static str,
-        text: &'static str,
-    ) -> &'static str {
-        let mut idx0 = list.iter().position(|&r| r == current).unwrap();
-        ui.add(egui::Slider::new(&mut idx0, 0..=(list.len() - 1)).text(text));
-        let selected = list[idx0];
-        ui.label(selected);
-        selected
-    }
-
-    pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
+    ) {
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
-        let context = resources.get::<EguiContextResource>().unwrap().context();
 
-        profiling::scope!("egui");
-        egui::Window::new("Kinematics")
-            .default_pos([200., 40.])
-            .default_width(100.)
-            .resizable(false)
-            .show(&context, |ui| {
-                if self.ui_spawning {
-                    ui.label("Click a location on the map to spawn kinematic object");
-                } else {
+        if ui_state.kin_spawning {
+            egui::CollapsingHeader::new("Spawn terrain object")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("Click a location on the map to spawn terrain object");
+                });
+        } else {
+            egui::CollapsingHeader::new("Spawn terrain object")
+                .default_open(true)
+                .show(ui, |ui| {
                     ui.radio_value(
-                        &mut self.ui_object_type,
+                        &mut ui_state.kin_object_type,
                         KinObjectType::Building,
                         "Building",
                     );
-                    ui.radio_value(&mut self.ui_object_type, KinObjectType::Tree, "Tree");
+                    ui.radio_value(&mut ui_state.kin_object_type, KinObjectType::Tree, "Tree");
                     ui.add_space(10.);
                     if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
-                        self.ui_spawning = true;
+                        ui_state.kin_spawning = true;
                     }
+                });
 
-                    ui.add_space(10.);
-                    ui.separator();
-                    let ck = Checkbox::new(&mut self.ui_edit_mode, "Edit mode");
+            egui::CollapsingHeader::new("Edit terrain")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let ck = Checkbox::new(&mut ui_state.kin_edit_mode, "Edit mode active");
                     ui.add(ck);
-                    if self.ui_edit_mode {
+                    if ui_state.kin_edit_mode {
                         for material_name in Terrain::get_default_material_names() {
                             ui.radio_value(
-                                &mut self.ui_edit_material,
+                                &mut ui_state.kin_edit_material,
                                 material_name,
                                 material_name,
                             );
                         }
                     }
+                });
 
-                    ui.add_space(10.);
-                    ui.separator();
-                    ui.collapsing("Reset terrain", |ui| {
-                        let mut size_str = format!("{}", self.ui_terrain_size);
-                        ui.horizontal(|ui| {
-                            ui.label("Size");
-                            ui.text_edit_singleline(&mut size_str);
-                            if let Ok(number) = size_str.parse() {
-                                self.ui_terrain_size = number;
-                            }
-                        });
-                        let mut style_idx = match self.ui_terrain_style {
-                            TerrainFillStyle::FlatBoard { material: _ } => 0,
-                            TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
-                            TerrainFillStyle::PerlinNoise {
-                                params: _,
-                                material: _,
-                            } => 2,
-                        };
-                        ui.radio_value(&mut style_idx, 0, "Flat board");
-                        ui.radio_value(&mut style_idx, 1, "Checkers board");
-                        ui.radio_value(&mut style_idx, 2, "Perlin noise");
-                        let materials = Terrain::get_default_material_names();
-                        if style_idx == 0 {
-                            let material = if let TerrainFillStyle::FlatBoard { material } =
-                                self.ui_terrain_style
-                            {
-                                material
-                            } else {
-                                "simple_tile"
-                            };
-                            let material = Self::list_selector(ui, &materials, material, "mat");
-                            self.ui_terrain_style = TerrainFillStyle::FlatBoard { material };
-                        } else if style_idx == 1 {
-                            let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
-                                self.ui_terrain_style
-                            {
-                                (zero, one)
-                            } else {
-                                ("simple_tile", "black_plastic")
-                            };
-                            let zero = Self::list_selector(ui, &materials, zero, "zero");
-                            let one = Self::list_selector(ui, &materials, one, "one");
-                            self.ui_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
-                        } else if style_idx == 2 {
-                            let (mut params, material) =
-                                if let TerrainFillStyle::PerlinNoise { params, material } =
-                                    self.ui_terrain_style
-                                {
-                                    (params, material)
-                                } else {
-                                    (
-                                        PerlinNoise2D {
-                                            octaves: 6,
-                                            amplitude: 10.0,
-                                            frequency: 1.0,
-                                            persistence: 1.0,
-                                            lacunarity: 2.0,
-                                            scale: (
-                                                self.ui_terrain_size as f64,
-                                                self.ui_terrain_size as f64,
-                                            ),
-                                            bias: 0.,
-                                            seed: 42,
-                                        },
-                                        "simple_tile",
-                                    )
-                                };
-                            let material = Self::list_selector(ui, &materials, material, "mat");
-                            ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
-                            ui.add(
-                                egui::Slider::new(&mut params.amplitude, 0.0..=64.0)
-                                    .text("amplitude"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut params.frequency, 0.0..=4.0)
-                                    .text("frequency"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut params.persistence, 0.0..=2.0)
-                                    .text("persistence"),
-                            );
-                            ui.add(
-                                egui::Slider::new(&mut params.lacunarity, 1.0..=4.0)
-                                    .text("lacunarity"),
-                            );
-                            ui.add(
-                                egui::Slider::new(
-                                    &mut params.bias,
-                                    0.0..=self.ui_terrain_size as f64 + 1.,
-                                )
-                                .text("bias"),
-                            );
-                            ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
-
-                            self.ui_terrain_style =
-                                TerrainFillStyle::PerlinNoise { params, material };
-                        }
-                        if ui
-                            .add_sized([100., 30.], Button::new("Reset terrain"))
-                            .clicked()
-                        {
-                            let mut terrain_resource =
-                                resources.get_mut::<TerrainResource>().unwrap();
-                            let mut storage = terrain_resource.write();
-                            let terrain = storage.get_mut(&self.terrain);
-                            terrain.reset(
-                                world,
-                                Point3i::ZERO,
-                                self.ui_terrain_size,
-                                self.ui_terrain_style.clone(),
-                            );
+            egui::CollapsingHeader::new("Reset terrain")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let mut size_str = format!("{}", ui_state.kin_terrain_size);
+                    ui.horizontal(|ui| {
+                        ui.label("Size");
+                        ui.text_edit_singleline(&mut size_str);
+                        if let Ok(number) = size_str.parse() {
+                            ui_state.kin_terrain_size = number;
                         }
                     });
-                }
-            });
+                    let mut style_idx = match ui_state.kin_terrain_style {
+                        TerrainFillStyle::FlatBoard { material: _ } => 0,
+                        TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
+                        TerrainFillStyle::PerlinNoise {
+                            params: _,
+                            material: _,
+                        } => 2,
+                    };
+                    ui.radio_value(&mut style_idx, 0, "Flat board");
+                    ui.radio_value(&mut style_idx, 1, "Checkers board");
+                    ui.radio_value(&mut style_idx, 2, "Perlin noise");
+                    let materials = Terrain::get_default_material_names();
+                    if style_idx == 0 {
+                        let material = if let TerrainFillStyle::FlatBoard { material } =
+                            ui_state.kin_terrain_style
+                        {
+                            material
+                        } else {
+                            "simple_tile"
+                        };
+                        let material = UiState::list_selector(ui, &materials, material, "mat");
+                        ui_state.kin_terrain_style = TerrainFillStyle::FlatBoard { material };
+                    } else if style_idx == 1 {
+                        let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
+                            ui_state.kin_terrain_style
+                        {
+                            (zero, one)
+                        } else {
+                            ("simple_tile", "black_plastic")
+                        };
+                        let zero = UiState::list_selector(ui, &materials, zero, "zero");
+                        let one = UiState::list_selector(ui, &materials, one, "one");
+                        ui_state.kin_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
+                    } else if style_idx == 2 {
+                        let (mut params, material) =
+                            if let TerrainFillStyle::PerlinNoise { params, material } =
+                                ui_state.kin_terrain_style
+                            {
+                                (params, material)
+                            } else {
+                                (
+                                    PerlinNoise2D {
+                                        octaves: 6,
+                                        amplitude: 10.0,
+                                        frequency: 1.0,
+                                        persistence: 1.0,
+                                        lacunarity: 2.0,
+                                        scale: (
+                                            ui_state.kin_terrain_size as f64,
+                                            ui_state.kin_terrain_size as f64,
+                                        ),
+                                        bias: 0.,
+                                        seed: 42,
+                                    },
+                                    "simple_tile",
+                                )
+                            };
+                        let material = UiState::list_selector(ui, &materials, material, "mat");
+                        ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
+                        ui.add(
+                            egui::Slider::new(&mut params.amplitude, 0.0..=64.0).text("amplitude"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut params.frequency, 0.0..=4.0).text("frequency"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut params.persistence, 0.0..=2.0)
+                                .text("persistence"),
+                        );
+                        ui.add(
+                            egui::Slider::new(&mut params.lacunarity, 1.0..=4.0).text("lacunarity"),
+                        );
+                        ui.add(
+                            egui::Slider::new(
+                                &mut params.bias,
+                                0.0..=ui_state.kin_terrain_size as f64 + 1.,
+                            )
+                            .text("bias"),
+                        );
+                        ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
 
-        if self.ui_spawning || self.ui_edit_mode {
+                        ui_state.kin_terrain_style =
+                            TerrainFillStyle::PerlinNoise { params, material };
+                    }
+                    if ui
+                        .add_sized([100., 30.], Button::new("Reset terrain"))
+                        .clicked()
+                    {
+                        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+                        let mut storage = terrain_resource.write();
+                        let terrain = storage.get_mut(&self.terrain);
+                        terrain.reset(
+                            world,
+                            Point3i::ZERO,
+                            ui_state.kin_terrain_size,
+                            ui_state.kin_terrain_style.clone(),
+                        );
+                    }
+                });
+        }
+
+        if ui_state.kin_spawning || ui_state.kin_edit_mode {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
@@ -323,19 +303,20 @@ impl KinObjectsState {
                     let terrain = storage.get(&self.terrain);
                     let cast_result =
                         camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain);
-                    let default_material =
-                        terrain.voxel_by_material(self.ui_edit_material).unwrap();
+                    let default_material = terrain
+                        .voxel_by_material(ui_state.kin_edit_material)
+                        .unwrap();
                     (cast_result, default_material)
                 };
                 if let Some(result) = cast_result {
-                    if self.ui_spawning {
+                    if ui_state.kin_spawning {
                         self.spawn(
-                            self.ui_object_type,
+                            ui_state.kin_object_type,
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
                             world,
                         );
-                    } else if self.ui_edit_mode {
+                    } else if ui_state.kin_edit_mode {
                         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
                         let mut storage = terrain_resource.write();
                         let terrain = storage.get_mut(&self.terrain);
@@ -346,17 +327,17 @@ impl KinObjectsState {
                         }
                     }
                 }
-                self.ui_spawning = false;
+                ui_state.kin_spawning = false;
             }
         }
+    }
 
-        {
-            profiling::scope!("update render chunks");
-            let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-            let mut storage = terrain_resource.write();
-            let terrain = storage.get_mut(&self.terrain);
-            terrain.update_render_chunks(world, resources);
-        }
+    pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
+        profiling::scope!("update render chunks");
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let mut storage = terrain_resource.write();
+        let terrain = storage.get_mut(&self.terrain);
+        terrain.update_render_chunks(world, resources);
     }
 
     pub fn spawn(

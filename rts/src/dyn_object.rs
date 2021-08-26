@@ -3,6 +3,7 @@ use crate::{
     input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
     terrain::{TerrainHandle, TerrainResource},
     time::TimeState,
+    ui::UiState,
 };
 use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
 use glam::{Quat, Vec2, Vec3, Vec4};
@@ -46,10 +47,6 @@ pub struct DynObjectComponent {
 pub struct DynObjectsState {
     meshes: HashMap<DynObjectType, RenderObjectHandle>,
     terrain: TerrainHandle,
-    ui_spawning: bool,
-    ui_object_type: DynObjectType,
-    pub ui_selected_count: u32,
-    pub ui_selected_str: String,
 }
 
 impl DynObjectsState {
@@ -97,27 +94,181 @@ impl DynObjectsState {
 
         log::info!("Dyn object meshes loaded");
 
-        DynObjectsState {
-            meshes,
-            terrain,
-            ui_spawning: false,
-            ui_object_type: DynObjectType::Container1,
-            ui_selected_count: 0,
-            ui_selected_str: "".to_string(),
-        }
+        DynObjectsState { meshes, terrain }
     }
 
-    pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
+    pub fn update_ui(
+        &mut self,
+        world: &mut World,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+        ui: &mut egui::Ui,
+    ) {
         self.add_debug_draw(resources, world);
 
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
-        let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
 
-        let mut selecting = false;
+        ui_state.dyn_selecting = false;
         if input.is_key_down(KeyboardKey::N) {
-            self.ui_spawning = true;
+            ui_state.dyn_spawning = true;
         }
+
+        if let Some(MouseDragState { .. }) = input.mouse_drag_just_finished(MouseButton::LEFT) {
+            ui_state.dyn_selecting = !ui_state.dyn_spawning;
+        }
+        if ui_state.dyn_selecting {
+            ui_state.dyn_selected_count = 0;
+        }
+
+        if ui_state.dyn_selecting {
+            let mut selected = HashMap::<DynObjectType, u32>::new();
+            let mut query = <Read<DynObjectComponent>>::query();
+            for dyn_object in query.iter(world) {
+                if dyn_object.selected {
+                    ui_state.dyn_selected_count += 1;
+                    let entry = selected.entry(dyn_object.object_type);
+                    entry.and_modify(|e| *e += 1).or_insert(1);
+                }
+            }
+            let detailed = selected
+                .iter()
+                .map(|(ty, count)| format!("{:?}: {}", ty, count))
+                .join(", ");
+            ui_state.dyn_selected_str = format!(
+                "{} dynamic objects selected ({})",
+                ui_state.dyn_selected_count, detailed
+            );
+        }
+
+        {
+            if ui_state.dyn_spawning {
+                egui::CollapsingHeader::new("Spawn dynamic object")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.label("Click a location on the map to spawn dynamic object");
+                    });
+            } else {
+                egui::CollapsingHeader::new("Spawn dynamic object")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.radio_value(
+                            &mut ui_state.dyn_object_type,
+                            DynObjectType::Container1,
+                            "Container1",
+                        );
+                        ui.radio_value(
+                            &mut ui_state.dyn_object_type,
+                            DynObjectType::Container2,
+                            "Container2",
+                        );
+                        ui.radio_value(
+                            &mut ui_state.dyn_object_type,
+                            DynObjectType::BlueIcosphere,
+                            "BlueIcosphere",
+                        );
+                        ui.add_space(10.);
+                        if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
+                            ui_state.dyn_spawning = true;
+                        }
+                    });
+            }
+
+            if !ui_state.dyn_spawning {
+                if let Some(MouseDragState {
+                    begin_position: p0,
+                    end_position: p1,
+                    ..
+                }) = input.mouse_drag_in_progress(MouseButton::LEFT)
+                {
+                    let w = (p1.x as f32 - p0.x as f32).abs();
+                    let h = (p1.y as f32 - p0.y as f32).abs();
+                    let x = p0.x.min(p1.x) as f32;
+                    let y = p0.y.min(p1.y) as f32;
+                    //if w > 30. && h > 30. {
+
+                    let context = resources.get::<EguiContextResource>().unwrap().context();
+                    egui::Window::new("Selection")
+                        .title_bar(false)
+                        .frame(Frame {
+                            margin: egui::Vec2::ZERO,
+                            corner_radius: 4.,
+                            shadow: Shadow::default(),
+                            fill: Color32::TRANSPARENT,
+                            stroke: Stroke {
+                                width: 1.,
+                                color: Color32::GREEN,
+                            },
+                        })
+                        .fixed_pos([x, y])
+                        .fixed_size([w, h])
+                        .show(&context, |ui| {
+                            ui.add_sized(
+                                ui.available_size(),
+                                egui::Label::new("")
+                                    .small()
+                                    .background_color(Color32::TRANSPARENT)
+                                    .text_color(Color32::TRANSPARENT),
+                            );
+                        });
+                    //}
+                }
+            }
+        }
+
+        if ui_state.dyn_spawning {
+            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
+                let cursor_pos = input.mouse_position();
+                let cast_result = {
+                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
+                    let storage = terrain_resource.read();
+                    let terrain = storage.get(&self.terrain);
+                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                };
+
+                if let Some(result) = cast_result {
+                    let p = result.hit;
+                    self.spawn(
+                        ui_state.dyn_object_type,
+                        Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
+                        resources,
+                        world,
+                    );
+                }
+                ui_state.dyn_spawning = false;
+            }
+        } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
+            let mut first = true;
+            let cursor_pos = input.mouse_position();
+            let cast_result = {
+                let terrain_resource = resources.get::<TerrainResource>().unwrap();
+                let storage = terrain_resource.read();
+                let terrain = storage.get(&self.terrain);
+                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+            };
+            if let Some(result) = cast_result {
+                let p = result.hit;
+                let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
+                let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
+                for (transform, dyn_object) in query.iter_mut(world) {
+                    if dyn_object.selected {
+                        if !first {
+                            target.x += transform.scale.x;
+                        }
+                        dyn_object.move_target = Some(target);
+                        target.x += transform.scale.x;
+                        first = false;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn update(&mut self, world: &mut World, resources: &mut Resources, ui_state: &mut UiState) {
+        let camera = resources.get::<RTSCamera>().unwrap();
+        let view_proj = camera.view_proj();
+        let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
+        let input = resources.get::<InputResource>().unwrap();
 
         let (x0, y0, x1, y1) = if let Some(MouseDragState {
             begin_position: p0,
@@ -125,7 +276,6 @@ impl DynObjectsState {
             ..
         }) = input.mouse_drag_just_finished(MouseButton::LEFT)
         {
-            selecting = !self.ui_spawning;
             let window_size = resources
                 .get::<ViewportsResource>()
                 .unwrap()
@@ -139,11 +289,7 @@ impl DynObjectsState {
         } else {
             (0., 0., 0., 0.)
         };
-        if selecting {
-            self.ui_selected_count = 0;
-        }
 
-        let view_proj = camera.view_proj();
         let mut query = <(
             Write<TransformComponent>,
             Read<VisibilityComponent>,
@@ -175,7 +321,7 @@ impl DynObjectsState {
                     dyn_object.speed = 0.;
                 }
             }
-            if selecting {
+            if ui_state.dyn_selecting {
                 let pos_hom: Vec4 = (transform.translation, 1.).into();
                 let pos_view = view_proj * pos_hom;
                 let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
@@ -185,148 +331,6 @@ impl DynObjectsState {
                     && pos_screen.y < y1;
             }
         });
-
-        if selecting {
-            let mut selected = HashMap::<DynObjectType, u32>::new();
-            let mut query = <Read<DynObjectComponent>>::query();
-            for dyn_object in query.iter(world) {
-                if dyn_object.selected {
-                    self.ui_selected_count += 1;
-                    let entry = selected.entry(dyn_object.object_type);
-                    entry.and_modify(|e| *e += 1).or_insert(1);
-                }
-            }
-            let detailed = selected
-                .iter()
-                .map(|(ty, count)| format!("{:?}: {}", ty, count))
-                .join(", ");
-            self.ui_selected_str = format!(
-                "{} dynamic objects selected ({})",
-                self.ui_selected_count, detailed
-            );
-        }
-
-        {
-            let context = resources.get::<EguiContextResource>().unwrap().context();
-
-            profiling::scope!("egui");
-            egui::Window::new("Dynamics")
-                .default_pos([10., 40.])
-                .default_width(100.)
-                .resizable(false)
-                .show(&context, |ui| {
-                    if self.ui_spawning {
-                        ui.label("Click a location on the map to spawn dynamic object");
-                    } else {
-                        ui.radio_value(
-                            &mut self.ui_object_type,
-                            DynObjectType::Container1,
-                            "Container1",
-                        );
-                        ui.radio_value(
-                            &mut self.ui_object_type,
-                            DynObjectType::Container2,
-                            "Container2",
-                        );
-                        ui.radio_value(
-                            &mut self.ui_object_type,
-                            DynObjectType::BlueIcosphere,
-                            "BlueIcosphere",
-                        );
-                        ui.add_space(10.);
-                        if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
-                            self.ui_spawning = true;
-                        }
-                    }
-                });
-
-            if !self.ui_spawning {
-                if let Some(MouseDragState {
-                    begin_position: p0,
-                    end_position: p1,
-                    ..
-                }) = input.mouse_drag_in_progress(MouseButton::LEFT)
-                {
-                    let w = (p1.x as f32 - p0.x as f32).abs();
-                    let h = (p1.y as f32 - p0.y as f32).abs();
-                    let x = p0.x.min(p1.x) as f32;
-                    let y = p0.y.min(p1.y) as f32;
-                    //if w > 30. && h > 30. {
-                    profiling::scope!("egui");
-                    egui::Window::new("Selection")
-                        .title_bar(false)
-                        .frame(Frame {
-                            margin: egui::Vec2::ZERO,
-                            corner_radius: 4.,
-                            shadow: Shadow::default(),
-                            fill: Color32::TRANSPARENT,
-                            stroke: Stroke {
-                                width: 1.,
-                                color: Color32::GREEN,
-                            },
-                        })
-                        .fixed_pos([x, y])
-                        .fixed_size([w, h])
-                        .show(&context, |ui| {
-                            ui.add_sized(
-                                ui.available_size(),
-                                egui::Label::new("")
-                                    .small()
-                                    .background_color(Color32::TRANSPARENT)
-                                    .text_color(Color32::TRANSPARENT),
-                            );
-                        });
-                    //}
-                }
-            }
-        }
-
-        if self.ui_spawning {
-            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
-                let cursor_pos = input.mouse_position();
-                let cast_result = {
-                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
-                    let storage = terrain_resource.read();
-                    let terrain = storage.get(&self.terrain);
-                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
-                };
-
-                if let Some(result) = cast_result {
-                    let p = result.hit;
-                    self.spawn(
-                        self.ui_object_type,
-                        Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
-                        resources,
-                        world,
-                    );
-                }
-                self.ui_spawning = false;
-            }
-        } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
-            let mut first = true;
-            let cursor_pos = input.mouse_position();
-            let cast_result = {
-                let terrain_resource = resources.get::<TerrainResource>().unwrap();
-                let storage = terrain_resource.read();
-                let terrain = storage.get(&self.terrain);
-                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
-            };
-            if let Some(result) = cast_result {
-                let p = result.hit;
-                let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
-                let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
-                for (transform, dyn_object) in query.iter_mut(world) {
-                    if dyn_object.selected {
-                        if !first {
-                            target.x += transform.scale.x;
-                        }
-                        dyn_object.move_target = Some(target);
-                        target.x += transform.scale.x;
-                        first = false;
-                    }
-                }
-            }
-        }
     }
 
     pub fn spawn(
