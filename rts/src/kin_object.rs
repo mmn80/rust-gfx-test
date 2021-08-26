@@ -145,6 +145,19 @@ impl KinObjectsState {
         }
     }
 
+    fn list_selector(
+        ui: &mut egui::Ui,
+        list: &Vec<&'static str>,
+        current: &'static str,
+        text: &'static str,
+    ) -> &'static str {
+        let mut idx0 = list.iter().position(|&r| r == current).unwrap();
+        ui.add(egui::Slider::new(&mut idx0, 0..=(list.len() - 1)).text(text));
+        let selected = list[idx0];
+        ui.label(selected);
+        selected
+    }
+
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
@@ -213,14 +226,9 @@ impl KinObjectsState {
                             {
                                 material
                             } else {
-                                materials[0]
+                                "simple_tile"
                             };
-
-                            let mut idx = materials.iter().position(|&r| r == material).unwrap();
-                            ui.add(egui::Slider::new(&mut idx, 0..=(materials.len() - 1)));
-                            let material = materials[idx];
-                            ui.label(material);
-
+                            let material = Self::list_selector(ui, &materials, material, "mat");
                             self.ui_terrain_style = TerrainFillStyle::FlatBoard { material };
                         } else if style_idx == 1 {
                             let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
@@ -228,19 +236,10 @@ impl KinObjectsState {
                             {
                                 (zero, one)
                             } else {
-                                (materials[0], materials[1])
+                                ("simple_tile", "black_plastic")
                             };
-
-                            let mut idx0 = materials.iter().position(|&r| r == zero).unwrap();
-                            ui.add(egui::Slider::new(&mut idx0, 0..=(materials.len() - 1)));
-                            let zero = materials[idx0];
-                            ui.label(zero);
-
-                            let mut idx1 = materials.iter().position(|&r| r == one).unwrap();
-                            ui.add(egui::Slider::new(&mut idx1, 0..=(materials.len() - 1)));
-                            let one = materials[idx1];
-                            ui.label(one);
-
+                            let zero = Self::list_selector(ui, &materials, zero, "zero");
+                            let one = Self::list_selector(ui, &materials, one, "one");
                             self.ui_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
                         } else if style_idx == 2 {
                             let (mut params, material) =
@@ -253,7 +252,7 @@ impl KinObjectsState {
                                         PerlinNoise2D {
                                             octaves: 6,
                                             amplitude: 10.0,
-                                            frequency: 0.5,
+                                            frequency: 1.0,
                                             persistence: 1.0,
                                             lacunarity: 2.0,
                                             scale: (
@@ -263,15 +262,10 @@ impl KinObjectsState {
                                             bias: 0.,
                                             seed: 42,
                                         },
-                                        materials[0],
+                                        "simple_tile",
                                     )
                                 };
-
-                            let mut idx = materials.iter().position(|&r| r == material).unwrap();
-                            ui.add(egui::Slider::new(&mut idx, 0..=(materials.len() - 1)));
-                            let material = materials[idx];
-                            ui.label(material);
-
+                            let material = Self::list_selector(ui, &materials, material, "mat");
                             ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
                             ui.add(
                                 egui::Slider::new(&mut params.amplitude, 0.0..=64.0)
@@ -282,7 +276,7 @@ impl KinObjectsState {
                                     .text("frequency"),
                             );
                             ui.add(
-                                egui::Slider::new(&mut params.persistence, 0.0..=1.0)
+                                egui::Slider::new(&mut params.persistence, 0.0..=2.0)
                                     .text("persistence"),
                             );
                             ui.add(
