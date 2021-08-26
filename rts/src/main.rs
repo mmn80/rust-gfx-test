@@ -3,7 +3,7 @@
 
 use rts::DemoArgs;
 use structopt::StructOpt;
-use winit::{dpi::LogicalSize, event_loop::EventLoop, window::WindowBuilder};
+use winit::{dpi::PhysicalSize, event_loop::EventLoop, window::WindowBuilder};
 
 pub fn logging_init() {
     #[cfg(not(debug_assertions))]
@@ -50,10 +50,10 @@ fn main() {
     let args = DemoArgs::from_args();
 
     let event_loop = EventLoop::new();
-    let logical_size = LogicalSize::new(900.0, 600.0);
+    let size = PhysicalSize::new(1920.0, 1080.0);
     let window = WindowBuilder::new()
         .with_title("RTS MMO")
-        .with_inner_size(logical_size)
+        .with_inner_size(size)
         //.with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)
         .expect("Failed to create window");
