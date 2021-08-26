@@ -210,7 +210,12 @@ impl DynObjectsState {
                     let terrain_resource = resources.get::<TerrainResource>().unwrap();
                     let storage = terrain_resource.read();
                     let terrain = storage.get(&self.terrain);
-                    camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                    camera.ray_cast_terrain(
+                        cursor_pos.x as u32,
+                        cursor_pos.y as u32,
+                        terrain,
+                        ui_state,
+                    )
                 };
 
                 if let Some(result) = cast_result {
@@ -231,7 +236,7 @@ impl DynObjectsState {
                 let terrain_resource = resources.get::<TerrainResource>().unwrap();
                 let storage = terrain_resource.read();
                 let terrain = storage.get(&self.terrain);
-                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain)
+                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain, ui_state)
             };
             if let Some(result) = cast_result {
                 let p = result.hit;

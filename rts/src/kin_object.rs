@@ -306,8 +306,12 @@ impl KinObjectsState {
                     let terrain_resource = resources.get::<TerrainResource>().unwrap();
                     let storage = terrain_resource.read();
                     let terrain = storage.get(&self.terrain);
-                    let cast_result =
-                        camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain);
+                    let cast_result = camera.ray_cast_terrain(
+                        cursor_pos.x as u32,
+                        cursor_pos.y as u32,
+                        terrain,
+                        ui_state,
+                    );
                     let default_material = terrain
                         .voxel_by_material(ui_state.kin_edit_material)
                         .unwrap();

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use egui::{Align, Color32};
 use legion::{Resources, World};
 use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
@@ -24,6 +25,7 @@ pub struct UiState {
     pub kin_edit_material: &'static str,
     pub kin_terrain_size: u32,
     pub kin_terrain_style: TerrainFillStyle,
+    error: String,
 }
 
 impl Default for UiState {
@@ -42,6 +44,7 @@ impl Default for UiState {
             kin_terrain_style: TerrainFillStyle::FlatBoard {
                 material: "simple_tile",
             },
+            error: "".to_string(),
         }
     }
 }
@@ -150,7 +153,22 @@ impl UiState {
             if let Some(dyn_state) = dyn_state {
                 dyn_state.update_ui(world, resources, self, ui);
             }
+
+            if !self.error.is_empty() {
+                ui.with_layout(egui::Layout::bottom_up(Align::Center), |ui| {
+                    ui.visuals_mut().override_text_color = Some(Color32::RED);
+                    ui.style_mut().body_text_style = egui::TextStyle::Heading;
+                    if ui.selectable_label(false, &self.error).clicked() {
+                        self.error.clear();
+                    }
+                });
+            }
         });
+    }
+
+    pub fn error(&mut self, message: String) {
+        self.error = message.clone();
+        log::error!("{}", message);
     }
 
     pub fn combo_box(

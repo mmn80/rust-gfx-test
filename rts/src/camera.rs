@@ -6,6 +6,7 @@ use crate::{
     input::{InputResource, KeyboardKey},
     terrain::{RayCastResult, Terrain},
     time::TimeState,
+    ui::UiState,
     RenderOptions,
 };
 use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
@@ -126,13 +127,17 @@ impl RTSCamera {
         screen_x: u32,
         screen_y: u32,
         terrain: &Terrain,
+        ui_state: &mut UiState,
     ) -> Option<RayCastResult> {
         let eye = self.eye();
         let ray = self.make_ray(screen_x, screen_y);
         if let Some(result) = terrain.ray_cast(eye, ray) {
             Some(result)
         } else {
-            log::error!("Failed terrain ray cast, start: {}, ray: {}", eye, ray);
+            ui_state.error(format!(
+                "Failed terrain ray cast, start: {}, ray: {}",
+                eye, ray
+            ));
             None
         }
     }
