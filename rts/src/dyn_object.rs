@@ -7,7 +7,6 @@ use crate::{
 };
 use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
 use glam::{Quat, Vec2, Vec3, Vec4};
-use itertools::Itertools;
 use legion::{IntoQuery, Read, Resources, World, Write};
 use rafx::{
     render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},
@@ -113,106 +112,94 @@ impl DynObjectsState {
         if input.is_key_down(KeyboardKey::N) {
             ui_state.dyn_spawning = true;
         }
-
         if let Some(MouseDragState { .. }) = input.mouse_drag_just_finished(MouseButton::LEFT) {
             ui_state.dyn_selecting = !ui_state.dyn_spawning;
         }
-        if ui_state.dyn_selecting {
-            ui_state.dyn_selected_count = 0;
+
+        if ui_state.dyn_spawning {
+            egui::CollapsingHeader::new("Spawn dynamic object")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label("Click a location on the map to spawn dynamic object");
+                });
+        } else if !ui_state.kin_spawning {
+            egui::CollapsingHeader::new("Spawn dynamic object")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.radio_value(
+                        &mut ui_state.dyn_object_type,
+                        DynObjectType::Container1,
+                        "Container1",
+                    );
+                    ui.radio_value(
+                        &mut ui_state.dyn_object_type,
+                        DynObjectType::Container2,
+                        "Container2",
+                    );
+                    ui.radio_value(
+                        &mut ui_state.dyn_object_type,
+                        DynObjectType::BlueIcosphere,
+                        "BlueIcosphere",
+                    );
+                    ui.add_space(10.);
+                    if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
+                        ui_state.dyn_spawning = true;
+                    }
+                });
         }
 
-        if ui_state.dyn_selecting {
-            let mut selected = HashMap::<DynObjectType, u32>::new();
-            let mut query = <Read<DynObjectComponent>>::query();
-            for dyn_object in query.iter(world) {
-                if dyn_object.selected {
-                    ui_state.dyn_selected_count += 1;
-                    let entry = selected.entry(dyn_object.object_type);
-                    entry.and_modify(|e| *e += 1).or_insert(1);
-                }
-            }
-            let detailed = selected
-                .iter()
-                .map(|(ty, count)| format!("{:?}: {}", ty, count))
-                .join(", ");
-            ui_state.dyn_selected_str = format!(
-                "{} dynamic objects selected ({})",
-                ui_state.dyn_selected_count, detailed
-            );
+        if ui_state.dyn_selected_count > 0 {
+            egui::CollapsingHeader::new("Object selection")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label(format!(
+                        "{} dynamic objects selected",
+                        ui_state.dyn_selected_count
+                    ));
+                    for (ty, count) in &ui_state.dyn_selected {
+                        ui.label(format!("- {:?}: {}", ty, count));
+                    }
+                });
         }
 
-        {
-            if ui_state.dyn_spawning {
-                egui::CollapsingHeader::new("Spawn dynamic object")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.label("Click a location on the map to spawn dynamic object");
-                    });
-            } else if !ui_state.kin_spawning {
-                egui::CollapsingHeader::new("Spawn dynamic object")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.radio_value(
-                            &mut ui_state.dyn_object_type,
-                            DynObjectType::Container1,
-                            "Container1",
-                        );
-                        ui.radio_value(
-                            &mut ui_state.dyn_object_type,
-                            DynObjectType::Container2,
-                            "Container2",
-                        );
-                        ui.radio_value(
-                            &mut ui_state.dyn_object_type,
-                            DynObjectType::BlueIcosphere,
-                            "BlueIcosphere",
-                        );
-                        ui.add_space(10.);
-                        if ui.add_sized([100., 30.], Button::new("Spawn")).clicked() {
-                            ui_state.dyn_spawning = true;
-                        }
-                    });
-            }
+        if !ui_state.dyn_spawning && !ui_state.kin_spawning {
+            if let Some(MouseDragState {
+                begin_position: p0,
+                end_position: p1,
+                ..
+            }) = input.mouse_drag_in_progress(MouseButton::LEFT)
+            {
+                let w = (p1.x as f32 - p0.x as f32).abs();
+                let h = (p1.y as f32 - p0.y as f32).abs();
+                let x = p0.x.min(p1.x) as f32;
+                let y = p0.y.min(p1.y) as f32;
+                //if w > 30. && h > 30. {
 
-            if !ui_state.dyn_spawning && !ui_state.kin_spawning {
-                if let Some(MouseDragState {
-                    begin_position: p0,
-                    end_position: p1,
-                    ..
-                }) = input.mouse_drag_in_progress(MouseButton::LEFT)
-                {
-                    let w = (p1.x as f32 - p0.x as f32).abs();
-                    let h = (p1.y as f32 - p0.y as f32).abs();
-                    let x = p0.x.min(p1.x) as f32;
-                    let y = p0.y.min(p1.y) as f32;
-                    //if w > 30. && h > 30. {
-
-                    let context = resources.get::<EguiContextResource>().unwrap().context();
-                    egui::Window::new("Selection")
-                        .title_bar(false)
-                        .frame(Frame {
-                            margin: egui::Vec2::ZERO,
-                            corner_radius: 4.,
-                            shadow: Shadow::default(),
-                            fill: Color32::TRANSPARENT,
-                            stroke: Stroke {
-                                width: 1.,
-                                color: Color32::GREEN,
-                            },
-                        })
-                        .fixed_pos([x, y])
-                        .fixed_size([w, h])
-                        .show(&context, |ui| {
-                            ui.add_sized(
-                                ui.available_size(),
-                                egui::Label::new("")
-                                    .small()
-                                    .background_color(Color32::TRANSPARENT)
-                                    .text_color(Color32::TRANSPARENT),
-                            );
-                        });
-                    //}
-                }
+                let context = resources.get::<EguiContextResource>().unwrap().context();
+                egui::Window::new("Selection")
+                    .title_bar(false)
+                    .frame(Frame {
+                        margin: egui::Vec2::ZERO,
+                        corner_radius: 4.,
+                        shadow: Shadow::default(),
+                        fill: Color32::TRANSPARENT,
+                        stroke: Stroke {
+                            width: 1.,
+                            color: Color32::GREEN,
+                        },
+                    })
+                    .fixed_pos([x, y])
+                    .fixed_size([w, h])
+                    .show(&context, |ui| {
+                        ui.add_sized(
+                            ui.available_size(),
+                            egui::Label::new("")
+                                .small()
+                                .background_color(Color32::TRANSPARENT)
+                                .text_color(Color32::TRANSPARENT),
+                        );
+                    });
+                //}
             }
         }
 
@@ -331,6 +318,19 @@ impl DynObjectsState {
                     && pos_screen.y < y1;
             }
         });
+
+        if ui_state.dyn_selecting {
+            ui_state.dyn_selected_count = 0;
+            ui_state.dyn_selected.clear();
+            let mut query = <Read<DynObjectComponent>>::query();
+            for dyn_object in query.iter(world) {
+                if dyn_object.selected {
+                    ui_state.dyn_selected_count += 1;
+                    let entry = ui_state.dyn_selected.entry(dyn_object.object_type);
+                    entry.and_modify(|e| *e += 1).or_insert(1);
+                }
+            }
+        }
     }
 
     pub fn spawn(

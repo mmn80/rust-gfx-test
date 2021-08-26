@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use legion::{Resources, World};
 use rafx_plugins::features::egui::EguiContextResource;
 
@@ -12,7 +14,7 @@ pub struct UiState {
     pub dyn_object_type: DynObjectType,
     pub dyn_selecting: bool,
     pub dyn_selected_count: u32,
-    pub dyn_selected_str: String,
+    pub dyn_selected: HashMap<DynObjectType, u32>,
     pub kin_spawning: bool,
     pub kin_object_type: KinObjectType,
     pub kin_edit_mode: bool,
@@ -28,7 +30,7 @@ impl Default for UiState {
             dyn_object_type: DynObjectType::Container1,
             dyn_selecting: false,
             dyn_selected_count: 0,
-            dyn_selected_str: "".to_string(),
+            dyn_selected: Default::default(),
             kin_spawning: false,
             kin_object_type: KinObjectType::Building,
             kin_edit_mode: false,

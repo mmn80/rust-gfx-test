@@ -132,20 +132,11 @@ impl super::GameScene for MainScene {
             let pos_y = viewports_resource.main_window_size.height as f32 - 30. * scale;
             text_resource.add_text(
                 format!("camera: {:.2}m", camera.look_at_dist),
-                Vec3::new(10.0, pos_y, 0.0),
+                Vec3::new(300.0, pos_y, 0.0),
                 &self.font,
                 20.0 * scale,
                 glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
             );
-            if self.ui.dyn_selected_count > 0 {
-                text_resource.add_text(
-                    self.ui.dyn_selected_str.clone(),
-                    Vec3::new(200.0 * scale, pos_y, 0.0),
-                    &self.font,
-                    20.0 * scale,
-                    glam::Vec4::new(0.5, 1.0, 0.5, 1.0),
-                );
-            }
         }
 
         {
