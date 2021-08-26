@@ -1,12 +1,13 @@
-use super::*;
 use glam::{Quat, Vec3};
-use rafx::framework::render_features::render_features_prelude::*;
 use rafx::framework::{
-    BufferResource, DescriptorSetArc, ImageViewResource, MaterialPassResource, ResourceArc,
+    render_features::render_features_prelude::*, BufferResource, DescriptorSetArc,
+    ImageViewResource, MaterialPassResource, ResourceArc,
 };
 use rafx_plugins::components::{
     DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
 };
+
+use super::*;
 
 pub struct DynMeshRenderFeatureTypes;
 

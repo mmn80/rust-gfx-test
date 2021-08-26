@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crossbeam_channel::{Receiver, Sender};
 use rafx::{
     api::{
@@ -6,7 +8,6 @@ use rafx::{
     },
     assets::buffer_upload::enqueue_load_buffer,
 };
-use std::sync::atomic::{AtomicU64, Ordering};
 
 pub enum BufferUploadResult {
     UploadError(BufferUploadId),

@@ -1,13 +1,3 @@
-use super::{Scene, SceneManagerAction};
-use crate::{
-    camera::RTSCamera,
-    dyn_object::DynObjectsState,
-    input::{InputResource, KeyboardKey},
-    kin_object::KinObjectsState,
-    time::TimeState,
-    ui::UiState,
-    RenderOptions,
-};
 use distill::loader::handle::Handle;
 use glam::Vec3;
 use legion::{IntoQuery, Resources, World, Write};
@@ -18,6 +8,17 @@ use rafx::{
 };
 use rafx_plugins::{
     assets::font::FontAsset, components::DirectionalLightComponent, features::text::TextResource,
+};
+
+use super::{Scene, SceneManagerAction};
+use crate::{
+    camera::RTSCamera,
+    dyn_object::DynObjectsState,
+    input::{InputResource, KeyboardKey},
+    kin_object::KinObjectsState,
+    time::TimeState,
+    ui::UiState,
+    RenderOptions,
 };
 
 pub struct MainScene {

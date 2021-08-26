@@ -1,13 +1,17 @@
-use rafx::render_feature_write_job_prelude::*;
+use std::marker::PhantomData;
+
+use rafx::{
+    api::{
+        RafxIndexBufferBinding, RafxPrimitiveTopology, RafxVertexAttributeRate,
+        RafxVertexBufferBinding,
+    },
+    framework::{MaterialPassResource, ResourceArc, VertexDataLayout, VertexDataSetLayout},
+    render_feature_write_job_prelude::*,
+};
+use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::phases::{DepthPrepassRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase};
-use rafx::api::RafxPrimitiveTopology;
-use rafx::api::{RafxIndexBufferBinding, RafxVertexAttributeRate, RafxVertexBufferBinding};
-use rafx::framework::{MaterialPassResource, ResourceArc};
-use rafx::framework::{VertexDataLayout, VertexDataSetLayout};
-use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
 
 /// Vertex format for vertices sent to the GPU
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]

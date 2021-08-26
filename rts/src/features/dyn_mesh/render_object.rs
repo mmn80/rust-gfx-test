@@ -1,5 +1,6 @@
-use super::{DynMeshHandle, DynMeshRenderFeature};
 use rafx::render_features::RenderObjectSet;
+
+use super::{DynMeshHandle, DynMeshRenderFeature};
 
 #[derive(Clone)]
 pub struct DynMeshRenderObject {

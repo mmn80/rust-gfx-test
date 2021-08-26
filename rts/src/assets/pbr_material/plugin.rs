@@ -1,9 +1,10 @@
-use super::{PbrMaterialAssetType, PbrMaterialImporter};
 use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     distill::daemon::AssetDaemon,
     renderer::RendererAssetPlugin,
 };
+
+use super::{PbrMaterialAssetType, PbrMaterialImporter};
 
 pub struct PbrMaterialAssetTypeRendererPlugin;
 

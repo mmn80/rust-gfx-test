@@ -1,11 +1,9 @@
-use crate::{
-    assets::pbr_material::PbrMaterialAsset,
-    features::dyn_mesh::{
-        DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
-        DynMeshResource,
-    },
-    perlin::PerlinNoise2D,
+use std::{
+    cmp::{max, min},
+    collections::HashMap,
+    sync::Arc,
 };
+
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
 use building_blocks::{
     core::prelude::*,
@@ -31,18 +29,25 @@ use rafx::{
         geometry::{AxisAlignedBoundingBox, BoundingSphere},
         VisibleBounds,
     },
-    render_feature_extract_job_predule::*,
+    render_features::{
+        render_features_prelude::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+        RenderObjectHandle,
+    },
     renderer::ViewportsResource,
-    visibility::{CullModel, VisibilityObjectArc},
+    visibility::{CullModel, ObjectId, VisibilityObjectArc, VisibilityRegion},
 };
 use rafx_plugins::{
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::mesh::MeshVertex,
 };
-use std::{
-    cmp::{max, min},
-    collections::HashMap,
-    sync::Arc,
+
+use crate::{
+    assets::pbr_material::PbrMaterialAsset,
+    features::dyn_mesh::{
+        DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
+        DynMeshResource,
+    },
+    perlin::PerlinNoise2D,
 };
 
 pub struct RenderChunkTaskMetrics {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use distill::loader::handle::Handle;
 use rafx::{
     api::{RafxError, RafxResult},
@@ -8,7 +10,6 @@ use rafx::{
 };
 use rafx_plugins::assets::mesh::MeshMaterialDataShaderParam;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use type_uuid::*;
 
 #[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]

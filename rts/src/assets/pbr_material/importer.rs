@@ -1,4 +1,5 @@
-use crate::assets::pbr_material::{PbrMaterialAssetData, PbrMaterialSource};
+use std::io::Read;
+
 use distill::{
     core::AssetUuid,
     importer::{ImportOp, ImportedAsset, Importer, ImporterValue},
@@ -8,8 +9,9 @@ use distill::{
 use rafx::assets::{ImageAsset, MaterialInstanceAssetData, MaterialInstanceSlotAssignment};
 use rafx_plugins::assets::mesh::MeshMaterialDataShaderParam;
 use serde::{Deserialize, Serialize};
-use std::io::Read;
 use type_uuid::*;
+
+use crate::assets::pbr_material::{PbrMaterialAssetData, PbrMaterialSource};
 
 #[derive(TypeUuid, Serialize, Deserialize, Default, Clone, Debug)]
 #[uuid = "6b5e8cc4-9a8e-45e2-9e25-7f1ab02f4ca0"]

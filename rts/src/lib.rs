@@ -1,10 +1,6 @@
 // There's a decent amount of code that's just for example and isn't called
 #![allow(dead_code)]
 
-use crate::{
-    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshResource,
-    input::InputResource, scenes::SceneManager, time::TimeState,
-};
 use legion::*;
 use rafx::{
     api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},
@@ -18,14 +14,18 @@ use rafx_plugins::{
     phases,
     pipelines::basic::{BasicPipelineRenderOptions, TonemapperType},
 };
-use scenes::SceneManagerAction;
 use structopt::StructOpt;
 use time::PeriodicEvent;
-use ui::UiState;
 use winit::{
     event::Event,
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window},
+};
+
+use crate::{
+    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshResource,
+    input::InputResource, scenes::SceneManager, scenes::SceneManagerAction, time::TimeState,
+    ui::UiState,
 };
 
 mod assets;

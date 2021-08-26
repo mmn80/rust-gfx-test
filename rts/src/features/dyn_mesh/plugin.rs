@@ -1,11 +1,12 @@
+use distill::loader::handle::Handle;
+use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
+use rafx_plugins::features::mesh::ShadowMapResource;
+
 use super::*;
 use crate::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, TransparentRenderPhase,
     WireframeRenderPhase,
 };
-use distill::loader::handle::Handle;
-use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
-use rafx_plugins::features::mesh::ShadowMapResource;
 
 pub struct DynMeshStaticResources {
     pub depth_material: Handle<MaterialAsset>,

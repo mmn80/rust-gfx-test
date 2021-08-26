@@ -1,8 +1,7 @@
-use super::ButtonState;
-use super::KeyboardKey;
-
 use winit::event as we;
 use winit::event::{DeviceEvent, VirtualKeyCode};
+
+use super::{ButtonState, KeyboardKey};
 
 impl From<we::VirtualKeyCode> for KeyboardKey {
     fn from(kc: VirtualKeyCode) -> Self {
@@ -244,10 +243,7 @@ impl Into<super::MouseScrollDelta> for WinitMouseScrollDelta {
 }
 
 /// Call when winit sends an event
-pub fn handle_winit_event<T>(
-    event: &winit::event::Event<T>,
-    input_state: &mut super::InputState,
-) {
+pub fn handle_winit_event<T>(event: &winit::event::Event<T>, input_state: &mut super::InputState) {
     use winit::event::Event;
     use winit::event::WindowEvent;
 

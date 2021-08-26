@@ -1,16 +1,14 @@
-use crate::{
-    camera::RTSCamera,
-    input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
-    terrain::{TerrainHandle, TerrainResource},
-    time::TimeState,
-    ui::UiState,
-};
+use std::collections::HashMap;
+
 use egui::{epaint::Shadow, Button, Color32, Frame, Stroke};
 use glam::{Quat, Vec2, Vec3, Vec4};
 use legion::{IntoQuery, Read, Resources, World, Write};
 use rafx::{
-    render_feature_extract_job_predule::{ObjectId, RenderObjectHandle, VisibilityRegion},
-    render_feature_renderer_prelude::{AssetManager, AssetResource},
+    assets::{distill_impl::AssetResource, AssetManager},
+    framework::{
+        render_features::RenderObjectHandle,
+        visibility::{ObjectId, VisibilityRegion},
+    },
     renderer::ViewportsResource,
     visibility::CullModel,
 };
@@ -24,7 +22,14 @@ use rafx_plugins::{
     },
 };
 use rand::{thread_rng, Rng};
-use std::collections::HashMap;
+
+use crate::{
+    camera::RTSCamera,
+    input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
+    terrain::{TerrainHandle, TerrainResource},
+    time::TimeState,
+    ui::UiState,
+};
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum DynObjectType {

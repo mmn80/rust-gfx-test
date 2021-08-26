@@ -1,3 +1,12 @@
+use std::collections::HashMap;
+
+use building_blocks::{core::prelude::*, storage::prelude::*};
+use egui::{Button, Checkbox};
+use glam::{Quat, Vec3};
+use legion::{Resources, World};
+use rafx::assets::{distill_impl::AssetResource, AssetManager};
+use rafx_plugins::components::TransformComponent;
+
 use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
@@ -6,13 +15,6 @@ use crate::{
     terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
     ui::UiState,
 };
-use building_blocks::{core::prelude::*, storage::prelude::*};
-use egui::{Button, Checkbox};
-use glam::{Quat, Vec3};
-use legion::{Resources, World};
-use rafx::assets::{distill_impl::AssetResource, AssetManager};
-use rafx_plugins::components::TransformComponent;
-use std::collections::HashMap;
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum KinObjectType {

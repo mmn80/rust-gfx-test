@@ -1,13 +1,10 @@
-use super::*;
 use glam::Mat4;
-use rafx::api::{RafxBufferDef, RafxDeviceContext, RafxMemoryUsage, RafxResourceType};
-use rafx::base::resource_map::ReadBorrow;
-use rafx::framework::{MaterialPassResource, ResourceArc, ResourceContext};
-use rafx::render_feature_prepare_job_predule::*;
-use rafx::renderer::InvalidResources;
-use rafx_plugins::shaders::{
-    depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
-    mesh_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
+use rafx::{
+    api::{RafxBufferDef, RafxDeviceContext, RafxMemoryUsage, RafxResourceType},
+    base::resource_map::ReadBorrow,
+    framework::{MaterialPassResource, ResourceArc, ResourceContext},
+    render_feature_prepare_job_predule::*,
+    renderer::InvalidResources,
 };
 use rafx_plugins::{
     components::{
@@ -17,7 +14,13 @@ use rafx_plugins::{
     phases::{
         DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
     },
+    shaders::{
+        depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
+        mesh_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
+    },
 };
+
+use super::*;
 
 const PER_VIEW_DESCRIPTOR_SET_INDEX: u32 =
     rafx_plugins::shaders::mesh_textured_frag::PER_VIEW_DATA_DESCRIPTOR_SET_INDEX as u32;

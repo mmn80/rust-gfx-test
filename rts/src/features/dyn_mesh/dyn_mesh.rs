@@ -1,22 +1,26 @@
-pub use super::buffer_upload::BufferUploaderConfig;
-use super::buffer_upload::{BufferUploadId, BufferUploadResult, BufferUploader};
+use std::sync::Arc;
+
 use crossbeam_channel::{Receiver, Sender};
 use fnv::FnvHashMap;
 use rafx::{
     api::{RafxBuffer, RafxDeviceContext, RafxError, RafxIndexType, RafxQueue, RafxResourceType},
-    assets::MaterialInstanceAsset,
+    assets::{AssetManager, MaterialInstanceAsset},
     base::slab::{DropSlab, GenericDropSlabKey},
     framework::{BufferResource, DescriptorSetArc, MaterialPassResource, ResourceArc},
     rafx_visibility::VisibleBounds,
-    render_feature_extract_job_predule::*,
-    render_feature_renderer_prelude::AssetManager,
-    render_feature_write_job_prelude::RafxResult,
+    render_features::{
+        render_features_prelude::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+        RenderPhase, RenderPhaseIndex, RenderView,
+    },
+    RafxResult,
 };
 use rafx_plugins::{
     features::mesh::MeshUntexturedRenderFeatureFlag,
     phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
 };
-use std::sync::Arc;
+
+pub use super::buffer_upload::BufferUploaderConfig;
+use super::buffer_upload::{BufferUploadId, BufferUploadResult, BufferUploader};
 
 #[derive(Clone)]
 pub struct DynMeshDataPart {

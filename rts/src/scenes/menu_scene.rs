@@ -1,10 +1,3 @@
-use super::SceneManagerAction;
-use crate::{
-    camera::RTSCamera,
-    input::{InputResource, KeyboardKey},
-    scenes::Scene,
-    ui::UiState,
-};
 use egui::{Align2, Button};
 use legion::{Resources, World};
 use rafx::{
@@ -19,6 +12,14 @@ use rafx::{
 use rafx_plugins::{
     features::egui::{EguiContextResource, EguiRenderFeature},
     phases::UiRenderPhase,
+};
+
+use super::SceneManagerAction;
+use crate::{
+    camera::RTSCamera,
+    input::{InputResource, KeyboardKey},
+    scenes::Scene,
+    ui::UiState,
 };
 
 pub(super) struct MenuScene {
