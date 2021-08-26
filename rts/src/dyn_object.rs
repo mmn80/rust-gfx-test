@@ -148,7 +148,7 @@ impl DynObjectsState {
                     .show(ui, |ui| {
                         ui.label("Click a location on the map to spawn dynamic object");
                     });
-            } else {
+            } else if !ui_state.kin_spawning {
                 egui::CollapsingHeader::new("Spawn dynamic object")
                     .default_open(true)
                     .show(ui, |ui| {
@@ -174,7 +174,7 @@ impl DynObjectsState {
                     });
             }
 
-            if !ui_state.dyn_spawning {
+            if !ui_state.dyn_spawning && !ui_state.kin_spawning {
                 if let Some(MouseDragState {
                     begin_position: p0,
                     end_position: p1,

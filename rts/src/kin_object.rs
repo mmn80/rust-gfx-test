@@ -150,7 +150,7 @@ impl KinObjectsState {
                 .show(ui, |ui| {
                     ui.label("Click a location on the map to spawn terrain object");
                 });
-        } else {
+        } else if !ui_state.dyn_spawning {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
@@ -172,6 +172,7 @@ impl KinObjectsState {
                     let ck = Checkbox::new(&mut ui_state.kin_edit_mode, "Edit mode active");
                     ui.add(ck);
                     if ui_state.kin_edit_mode {
+                        ui.label("Build material:");
                         for material_name in Terrain::get_default_material_names() {
                             ui.radio_value(
                                 &mut ui_state.kin_edit_material,
@@ -213,7 +214,7 @@ impl KinObjectsState {
                         } else {
                             "simple_tile"
                         };
-                        let material = UiState::list_selector(ui, &materials, material, "mat");
+                        let material = UiState::combo_box(ui, &materials, material, "mat");
                         ui_state.kin_terrain_style = TerrainFillStyle::FlatBoard { material };
                     } else if style_idx == 1 {
                         let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
@@ -223,8 +224,8 @@ impl KinObjectsState {
                         } else {
                             ("simple_tile", "black_plastic")
                         };
-                        let zero = UiState::list_selector(ui, &materials, zero, "zero");
-                        let one = UiState::list_selector(ui, &materials, one, "one");
+                        let zero = UiState::combo_box(ui, &materials, zero, "zero");
+                        let one = UiState::combo_box(ui, &materials, one, "one");
                         ui_state.kin_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
                     } else if style_idx == 2 {
                         let (mut params, material) =
@@ -250,7 +251,7 @@ impl KinObjectsState {
                                     "simple_tile",
                                 )
                             };
-                        let material = UiState::list_selector(ui, &materials, material, "mat");
+                        let material = UiState::combo_box(ui, &materials, material, "mat");
                         ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
                         ui.add(
                             egui::Slider::new(&mut params.amplitude, 0.0..=64.0).text("amplitude"),

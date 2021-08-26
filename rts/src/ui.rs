@@ -57,16 +57,21 @@ impl UiState {
         });
     }
 
-    pub fn list_selector(
+    pub fn combo_box(
         ui: &mut egui::Ui,
         list: &Vec<&'static str>,
         current: &'static str,
-        text: &'static str,
+        label: &'static str,
     ) -> &'static str {
-        let mut idx0 = list.iter().position(|&r| r == current).unwrap();
-        ui.add(egui::Slider::new(&mut idx0, 0..=(list.len() - 1)).text(text));
-        let selected = list[idx0];
-        ui.label(selected);
-        selected
+        let mut result = current;
+        egui::ComboBox::from_label(label)
+            .selected_text(current)
+            .width(150.0)
+            .show_ui(ui, |ui| {
+                for elem in list {
+                    ui.selectable_value(&mut result, elem, elem);
+                }
+            });
+        result
     }
 }
