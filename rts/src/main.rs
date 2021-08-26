@@ -52,7 +52,7 @@ fn main() {
     let event_loop = EventLoop::new();
     let size = PhysicalSize::new(1920.0, 1080.0);
     let window = WindowBuilder::new()
-        .with_title("RTS MMO")
+        .with_title("VoxRTS")
         .with_inner_size(size)
         //.with_fullscreen(Some(Fullscreen::Borderless(None)))
         .build(&event_loop)

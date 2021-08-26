@@ -14,16 +14,14 @@ use rafx::{
     visibility::VisibilityRegion,
 };
 use rafx_plugins::{
-    features::{
-        egui::{EguiContextResource, WinitEguiManager},
-        mesh::MeshRenderOptions,
-    },
+    features::{egui::WinitEguiManager, mesh::MeshRenderOptions},
     phases,
     pipelines::basic::{BasicPipelineRenderOptions, TonemapperType},
 };
 use scenes::SceneManagerAction;
 use structopt::StructOpt;
 use time::PeriodicEvent;
+use ui::UiState;
 use winit::{
     event::Event,
     event_loop::{ControlFlow, EventLoop},
@@ -240,6 +238,7 @@ impl DemoArgs {
 }
 
 struct DemoApp {
+    ui_state: UiState,
     scene_manager: SceneManager,
     resources: Resources,
     world: World,
@@ -278,6 +277,7 @@ impl DemoApp {
         let print_time_event = crate::time::PeriodicEvent::default();
 
         Ok(DemoApp {
+            ui_state: Default::default(),
             scene_manager,
             resources,
             world,
@@ -368,19 +368,23 @@ impl DemoApp {
 
         {
             profiling::scope!("update scene");
-            self.scene_manager.scene_action = self
-                .scene_manager
-                .update_scene(&mut self.world, &mut self.resources);
+            self.scene_manager.scene_action = self.scene_manager.update_scene(
+                &mut self.world,
+                &mut self.resources,
+                &mut self.ui_state,
+            );
             if self.scene_manager.scene_action == SceneManagerAction::Exit {
                 control_flow = ControlFlow::Exit
             }
         }
 
-        self.egui_debug_draw();
-
         {
             let render_options = self.resources.get::<RenderOptions>().unwrap();
-
+            let mut render_config_resource =
+                self.resources.get_mut::<RendererConfigResource>().unwrap();
+            render_config_resource
+                .visibility_config
+                .enable_visibility_update = render_options.enable_visibility_update;
             let mut basic_pipeline_render_options = self
                 .resources
                 .get_mut::<BasicPipelineRenderOptions>()
@@ -490,102 +494,6 @@ impl DemoApp {
         }
 
         Ok(control_flow)
-    }
-
-    fn egui_debug_draw(&mut self) {
-        let ctx = self
-            .resources
-            .get::<EguiContextResource>()
-            .unwrap()
-            .context();
-        let time_state = self.resources.get::<TimeState>().unwrap();
-        let mut debug_ui_state = self.resources.get_mut::<DebugUiState>().unwrap();
-        let mut render_options = self.resources.get_mut::<RenderOptions>().unwrap();
-        let asset_manager = self.resources.get::<AssetResource>().unwrap();
-
-        egui::TopPanel::top("top_panel").show(&ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                egui::menu::menu(ui, "Windows", |ui| {
-                    ui.checkbox(&mut debug_ui_state.show_render_options, "Render Options");
-
-                    ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset List");
-
-                    #[cfg(feature = "profile-with-puffin")]
-                    if ui
-                        .checkbox(&mut debug_ui_state.show_profiler, "Profiler")
-                        .changed()
-                    {
-                        log::info!(
-                            "Setting puffin profiler enabled: {:?}",
-                            debug_ui_state.show_profiler
-                        );
-                        profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
-                    }
-                });
-
-                ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                    ui.label(format!("Frame: {}", time_state.update_count()));
-                    ui.separator();
-                    ui.label(format!(
-                        "FPS: {:.1}",
-                        time_state.updates_per_second_smoothed()
-                    ));
-                });
-            })
-        });
-
-        if debug_ui_state.show_render_options {
-            egui::Window::new("Render Options")
-                .open(&mut debug_ui_state.show_render_options)
-                .show(&ctx, |ui| {
-                    render_options.ui(ui);
-                });
-        }
-
-        if debug_ui_state.show_asset_list {
-            egui::Window::new("Asset List")
-                .open(&mut debug_ui_state.show_asset_list)
-                .show(&ctx, |ui| {
-                    egui::ScrollArea::auto_sized().show(ui, |ui| {
-                        let loader = asset_manager.loader();
-                        let mut asset_info = loader
-                            .get_active_loads()
-                            .into_iter()
-                            .map(|item| loader.get_load_info(item))
-                            .collect::<Vec<_>>();
-                        asset_info.sort_by(|x, y| {
-                            x.as_ref()
-                                .map(|x| &x.path)
-                                .cmp(&y.as_ref().map(|y| &y.path))
-                        });
-                        for info in asset_info {
-                            if let Some(info) = info {
-                                let id = info.asset_id;
-                                ui.label(format!(
-                                    "{}:{} .. {}",
-                                    info.file_name.unwrap_or_else(|| "???".to_string()),
-                                    info.asset_name.unwrap_or_else(|| format!("{}", id)),
-                                    info.refs
-                                ));
-                            } else {
-                                ui.label("NO INFO");
-                            }
-                        }
-                    });
-                });
-        }
-
-        #[cfg(feature = "profile-with-puffin")]
-        if debug_ui_state.show_profiler {
-            profiling::scope!("puffin profiler");
-            puffin_egui::profiler_window(&ctx);
-        }
-
-        let mut render_config_resource =
-            self.resources.get_mut::<RendererConfigResource>().unwrap();
-        render_config_resource
-            .visibility_config
-            .enable_visibility_update = render_options.enable_visibility_update;
     }
 
     fn process_input(&mut self, event: &Event<()>, window: &Window) -> bool {

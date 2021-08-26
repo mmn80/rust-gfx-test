@@ -13,6 +13,8 @@ use menu_scene::MenuScene;
 mod main_scene;
 use main_scene::MainScene;
 
+use crate::ui::UiState;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
     Menu,
@@ -42,7 +44,12 @@ pub enum SceneManagerAction {
 }
 
 pub trait GameScene {
-    fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction;
+    fn update(
+        &mut self,
+        world: &mut World,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+    ) -> SceneManagerAction;
 
     fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
 }
@@ -77,9 +84,10 @@ impl SceneManager {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
+        ui_state: &mut UiState,
     ) -> SceneManagerAction {
         if let Some(scene) = &mut self.scene {
-            scene.update(world, resources)
+            scene.update(world, resources, ui_state)
         } else {
             SceneManagerAction::None
         }

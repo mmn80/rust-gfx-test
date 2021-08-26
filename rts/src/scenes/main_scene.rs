@@ -21,7 +21,6 @@ use rafx_plugins::{
 };
 
 pub struct MainScene {
-    ui: UiState,
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
     dyn_objects: DynObjectsState,
@@ -64,13 +63,17 @@ impl MainScene {
             font,
             dyn_objects,
             kin_objects,
-            ui: Default::default(),
         }
     }
 }
 
 impl super::GameScene for MainScene {
-    fn update(&mut self, world: &mut World, resources: &mut Resources) -> SceneManagerAction {
+    fn update(
+        &mut self,
+        world: &mut World,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+    ) -> SceneManagerAction {
         //super::add_light_debug_draw(&resources, &world);
 
         {
@@ -114,15 +117,15 @@ impl super::GameScene for MainScene {
             }
         }
 
-        self.ui.update(
+        ui_state.update(
             world,
             resources,
-            &mut self.kin_objects,
-            &mut self.dyn_objects,
+            Some(&mut self.kin_objects),
+            Some(&mut self.dyn_objects),
         );
 
         self.kin_objects.update(world, resources);
-        self.dyn_objects.update(world, resources, &mut self.ui);
+        self.dyn_objects.update(world, resources, ui_state);
 
         {
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();

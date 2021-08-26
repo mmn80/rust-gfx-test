@@ -3,6 +3,7 @@ use crate::{
     camera::RTSCamera,
     input::{InputResource, KeyboardKey},
     scenes::Scene,
+    ui::UiState,
 };
 use egui::{Align2, Button};
 use legion::{Resources, World};
@@ -85,7 +86,14 @@ impl MenuScene {
 }
 
 impl super::GameScene for MenuScene {
-    fn update(&mut self, _world: &mut World, resources: &mut Resources) -> SceneManagerAction {
+    fn update(
+        &mut self,
+        world: &mut World,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+    ) -> SceneManagerAction {
+        ui_state.update(world, resources, None, None);
+
         let mut action = SceneManagerAction::None;
 
         let context = resources.get::<EguiContextResource>().unwrap().context();

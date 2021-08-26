@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
 use legion::{Resources, World};
+use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
 
 use crate::{
     dyn_object::{DynObjectType, DynObjectsState},
     kin_object::{KinObjectType, KinObjectsState},
     terrain::TerrainFillStyle,
+    time::TimeState,
+    DebugUiState, RenderOptions,
 };
 
 pub struct UiState {
@@ -48,14 +51,105 @@ impl UiState {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
-        kin_state: &mut KinObjectsState,
-        dyn_state: &mut DynObjectsState,
+        kin_state: Option<&mut KinObjectsState>,
+        dyn_state: Option<&mut DynObjectsState>,
     ) {
         let context = resources.get::<EguiContextResource>().unwrap().context();
         profiling::scope!("egui");
         egui::SidePanel::left("ui_panel", 250.0).show(&context, |ui| {
-            kin_state.update_ui(world, resources, self, ui);
-            dyn_state.update_ui(world, resources, self, ui);
+            {
+                let time_state = resources.get::<TimeState>().unwrap();
+                let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
+                let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
+                let asset_manager = resources.get::<AssetResource>().unwrap();
+
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                        ui.label(format!("Frame: {}", time_state.update_count()));
+                        ui.separator();
+                        ui.label(format!(
+                            "FPS: {:.1}",
+                            time_state.updates_per_second_smoothed()
+                        ));
+                    });
+                });
+
+                egui::CollapsingHeader::new("Options")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.checkbox(&mut debug_ui_state.show_render_options, "Render options");
+                        ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset list");
+
+                        #[cfg(feature = "profile-with-puffin")]
+                        if ui
+                            .checkbox(&mut debug_ui_state.show_profiler, "Profiler")
+                            .changed()
+                        {
+                            log::info!(
+                                "Setting puffin profiler enabled: {:?}",
+                                debug_ui_state.show_profiler
+                            );
+                            profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
+                        }
+                    });
+
+                if debug_ui_state.show_render_options {
+                    egui::CollapsingHeader::new("Render options")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            render_options.ui(ui);
+                        });
+                }
+
+                if debug_ui_state.show_asset_list {
+                    egui::CollapsingHeader::new("Asset list")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            egui::ScrollArea::from_max_height(400.).show(ui, |ui| {
+                                let loader = asset_manager.loader();
+                                let mut asset_info = loader
+                                    .get_active_loads()
+                                    .into_iter()
+                                    .map(|item| loader.get_load_info(item))
+                                    .collect::<Vec<_>>();
+                                asset_info.sort_by(|x, y| {
+                                    x.as_ref()
+                                        .map(|x| &x.path)
+                                        .cmp(&y.as_ref().map(|y| &y.path))
+                                });
+                                for info in asset_info {
+                                    if let Some(info) = info {
+                                        let id = info.asset_id;
+                                        let _res = ui.selectable_label(
+                                            false,
+                                            format!(
+                                                "{}:{} .. {}",
+                                                info.file_name.unwrap_or_else(|| "???".to_string()),
+                                                info.asset_name
+                                                    .unwrap_or_else(|| format!("{}", id)),
+                                                info.refs
+                                            ),
+                                        );
+                                    } else {
+                                        ui.label("NO INFO");
+                                    }
+                                }
+                            });
+                        });
+                }
+
+                #[cfg(feature = "profile-with-puffin")]
+                if debug_ui_state.show_profiler {
+                    profiling::scope!("puffin profiler");
+                    puffin_egui::profiler_window(&context);
+                }
+            }
+            if let Some(kin_state) = kin_state {
+                kin_state.update_ui(world, resources, self, ui);
+            }
+            if let Some(dyn_state) = dyn_state {
+                dyn_state.update_ui(world, resources, self, ui);
+            }
         });
     }
 

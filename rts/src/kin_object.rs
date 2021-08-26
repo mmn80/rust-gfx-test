@@ -205,6 +205,9 @@ impl KinObjectsState {
                     ui.radio_value(&mut style_idx, 0, "Flat board");
                     ui.radio_value(&mut style_idx, 1, "Checkers board");
                     ui.radio_value(&mut style_idx, 2, "Perlin noise");
+
+                    ui.add_space(10.);
+
                     let materials = Terrain::get_default_material_names();
                     if style_idx == 0 {
                         let material = if let TerrainFillStyle::FlatBoard { material } =
@@ -278,6 +281,7 @@ impl KinObjectsState {
                         ui_state.kin_terrain_style =
                             TerrainFillStyle::PerlinNoise { params, material };
                     }
+                    ui.add_space(10.);
                     if ui
                         .add_sized([100., 30.], Button::new("Reset terrain"))
                         .clicked()
