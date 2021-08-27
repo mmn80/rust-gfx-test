@@ -711,7 +711,7 @@ impl Terrain {
                                     &[MeshVertex {
                                         position: positions[i],
                                         normal: normals[i],
-                                        tangent: [tangent.x, tangent.y, tangent.z, -1.],
+                                        tangent: [tangent.x, tangent.y, tangent.z, 1.],
                                         tex_coord: uvs[i],
                                     }],
                                     4,

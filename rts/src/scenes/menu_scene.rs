@@ -93,7 +93,7 @@ impl super::GameScene for MenuScene {
         resources: &mut Resources,
         ui_state: &mut UiState,
     ) -> SceneManagerAction {
-        ui_state.update(world, resources, None, None);
+        ui_state.update(world, resources, None, None, None);
 
         let mut action = SceneManagerAction::None;
 

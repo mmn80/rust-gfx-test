@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use egui::{Align, Color32};
+use glam::Vec4;
 use legion::{Resources, World};
 use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
@@ -8,12 +9,16 @@ use rafx_plugins::features::egui::EguiContextResource;
 use crate::{
     dyn_object::{DynObjectType, DynObjectsState},
     kin_object::{KinObjectType, KinObjectsState},
+    scenes::MainState,
     terrain::TerrainFillStyle,
     time::TimeState,
     DebugUiState, RenderOptions,
 };
 
 pub struct UiState {
+    pub main_light_rotates: bool,
+    pub main_light_pitch: f32,
+    pub main_light_color: Vec4,
     pub dyn_spawning: bool,
     pub dyn_object_type: DynObjectType,
     pub dyn_selecting: bool,
@@ -31,6 +36,9 @@ pub struct UiState {
 impl Default for UiState {
     fn default() -> Self {
         Self {
+            main_light_rotates: true,
+            main_light_pitch: 225.0,
+            main_light_color: Vec4::ONE,
             dyn_spawning: false,
             dyn_object_type: DynObjectType::Container1,
             dyn_selecting: false,
@@ -54,6 +62,7 @@ impl UiState {
         &mut self,
         world: &mut World,
         resources: &mut Resources,
+        main_state: Option<&mut MainState>,
         kin_state: Option<&mut KinObjectsState>,
         dyn_state: Option<&mut DynObjectsState>,
     ) {
@@ -146,6 +155,10 @@ impl UiState {
                     profiling::scope!("puffin profiler");
                     puffin_egui::profiler_window(&context);
                 }
+            }
+
+            if let Some(main_state) = main_state {
+                main_state.update_ui(world, resources, self, ui);
             }
             if let Some(kin_state) = kin_state {
                 kin_state.update_ui(world, resources, self, ui);

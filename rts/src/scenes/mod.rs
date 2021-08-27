@@ -12,6 +12,7 @@ mod menu_scene;
 use menu_scene::MenuScene;
 mod main_scene;
 use main_scene::MainScene;
+pub use main_scene::MainState;
 
 use crate::ui::UiState;
 
@@ -133,40 +134,4 @@ fn add_light_debug_draw(resources: &Resources, world: &World) {
             10,
         );
     }
-}
-
-fn add_directional_light(
-    _resources: &Resources,
-    world: &mut World,
-    light_component: DirectionalLightComponent,
-) {
-    world.extend(vec![(light_component,)]);
-}
-
-fn add_spot_light(
-    _resources: &Resources,
-    world: &mut World,
-    position: Vec3,
-    light_component: SpotLightComponent,
-) {
-    let position_component = TransformComponent {
-        translation: position,
-        ..Default::default()
-    };
-
-    world.extend(vec![(position_component, light_component)]);
-}
-
-fn add_point_light(
-    _resources: &Resources,
-    world: &mut World,
-    position: Vec3,
-    light_component: PointLightComponent,
-) {
-    let position_component = TransformComponent {
-        translation: position,
-        ..Default::default()
-    };
-
-    world.extend(vec![(position_component, light_component)]);
 }

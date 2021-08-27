@@ -1,6 +1,6 @@
 use distill::loader::handle::Handle;
-use glam::Vec3;
-use legion::{IntoQuery, Resources, World, Write};
+use glam::{Quat, Vec3, Vec4};
+use legion::{Entity, Resources, World};
 use rafx::{
     assets::distill_impl::AssetResource,
     renderer::ViewportsResource,
@@ -21,9 +21,53 @@ use crate::{
     RenderOptions,
 };
 
+pub struct MainState {}
+
+impl MainState {
+    pub fn update_ui(
+        &mut self,
+        _world: &mut World,
+        _resources: &mut Resources,
+        ui_state: &mut UiState,
+        ui: &mut egui::Ui,
+    ) {
+        egui::CollapsingHeader::new("Directional light")
+            .default_open(true)
+            .show(ui, |ui| {
+                let ck = egui::Checkbox::new(&mut ui_state.main_light_rotates, "Auto rotates");
+                ui.add(ck);
+                if !ui_state.main_light_rotates {
+                    ui.add(
+                        egui::Slider::new(&mut ui_state.main_light_pitch, 180.0..=360.)
+                            .text("pitch"),
+                    );
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Color (rgb):");
+                    let mut r_str = format!("{}", (ui_state.main_light_color.x * 256.) as u8);
+                    ui.add(egui::TextEdit::singleline(&mut r_str).desired_width(30.));
+                    let mut g_str = format!("{}", (ui_state.main_light_color.y * 256.) as u8);
+                    ui.add(egui::TextEdit::singleline(&mut g_str).desired_width(30.));
+                    let mut b_str = format!("{}", (ui_state.main_light_color.z * 256.) as u8);
+                    ui.add(egui::TextEdit::singleline(&mut b_str).desired_width(30.));
+                    if let (Ok(r), Ok(g), Ok(b)) = (
+                        r_str.parse::<u8>(),
+                        g_str.parse::<u8>(),
+                        b_str.parse::<u8>(),
+                    ) {
+                        ui_state.main_light_color =
+                            Vec4::new(r as f32 / 256., g as f32 / 256., b as f32 / 256., 1.);
+                    }
+                });
+            });
+    }
+}
+
 pub struct MainScene {
     main_view_frustum: ViewFrustumArc,
     font: Handle<FontAsset>,
+    main_state: MainState,
+    main_light: Entity,
     dyn_objects: DynObjectsState,
     kin_objects: KinObjectsState,
 }
@@ -39,21 +83,15 @@ impl MainScene {
         };
 
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        {
-            let light_from = Vec3::new(-5.0, 5.0, 5.0);
-            let light_to = Vec3::ZERO;
-            let light_direction = (light_to - light_from).normalize();
-            super::add_directional_light(
-                resources,
-                world,
-                DirectionalLightComponent {
-                    direction: light_direction,
-                    intensity: 5.0,
-                    color: [1.0, 1.0, 1.0, 1.0].into(),
-                    view_frustum: visibility_region.register_view_frustum(),
-                },
-            );
-        }
+        let light_from = Vec3::new(0.0, 5.0, 4.0);
+        let light_to = Vec3::ZERO;
+        let light_direction = (light_to - light_from).normalize();
+        let main_light = world.push((DirectionalLightComponent {
+            direction: light_direction,
+            intensity: 5.0,
+            color: [1.0, 1.0, 1.0, 1.0].into(),
+            view_frustum: visibility_region.register_view_frustum(),
+        },));
 
         let main_view_frustum = visibility_region.register_view_frustum();
         let kin_objects = KinObjectsState::new(resources, world);
@@ -62,6 +100,8 @@ impl MainScene {
         MainScene {
             main_view_frustum,
             font,
+            main_state: MainState {},
+            main_light,
             dyn_objects,
             kin_objects,
         }
@@ -94,33 +134,43 @@ impl super::GameScene for MainScene {
         }
 
         {
-            let time_state = resources.get::<TimeState>().unwrap();
-            let mut query = <Write<DirectionalLightComponent>>::query();
-            for mut light in query.iter_mut(world) {
-                const LIGHT_XY_DISTANCE: f32 = 50.0;
-                const LIGHT_Z: f32 = 50.0;
-                const LIGHT_ROTATE_SPEED: f32 = 0.2;
-                const LIGHT_LOOP_OFFSET: f32 = 2.0;
-                let loop_time = time_state.total_time().as_secs_f32();
-                let light_from = Vec3::new(
-                    LIGHT_XY_DISTANCE
-                        * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
-                    LIGHT_XY_DISTANCE
-                        * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
-                    LIGHT_Z,
-                    //LIGHT_Z// * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET).abs(),
-                    //0.2
-                    //2.0
-                );
-                let light_to = Vec3::default();
+            if let Some(mut entry) = world.entry(self.main_light) {
+                if let Ok(light) = entry.get_component_mut::<DirectionalLightComponent>() {
+                    if ui_state.main_light_rotates {
+                        let time_state = resources.get::<TimeState>().unwrap();
+                        const LIGHT_XY_DISTANCE: f32 = 50.0;
+                        const LIGHT_Z: f32 = 50.0;
+                        const LIGHT_ROTATE_SPEED: f32 = 0.2;
+                        const LIGHT_LOOP_OFFSET: f32 = 2.0;
+                        let loop_time = time_state.total_time().as_secs_f32();
+                        let light_from = Vec3::new(
+                            LIGHT_XY_DISTANCE
+                                * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
+                            LIGHT_XY_DISTANCE
+                                * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
+                            LIGHT_Z,
+                            //LIGHT_Z// * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET).abs(),
+                            //0.2
+                            //2.0
+                        );
+                        let light_to = Vec3::default();
 
-                light.direction = (light_to - light_from).normalize();
+                        light.direction = (light_to - light_from).normalize();
+                    } else {
+                        let q = Quat::from_rotation_x(
+                            ui_state.main_light_pitch * std::f32::consts::PI / 180.,
+                        );
+                        light.direction = q.mul_vec3(Vec3::Y);
+                    }
+                    light.color = ui_state.main_light_color;
+                }
             }
         }
 
         ui_state.update(
             world,
             resources,
+            Some(&mut self.main_state),
             Some(&mut self.kin_objects),
             Some(&mut self.dyn_objects),
         );
