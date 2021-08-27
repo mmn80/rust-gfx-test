@@ -297,6 +297,7 @@ impl Terrain {
             "curly_tile",
             "simple_tile",
             "black_plastic",
+            "old_bronze",
         ]
     }
 
