@@ -668,7 +668,7 @@ impl Terrain {
                     let indices_offset = all_indices.len();
                     for group in quads.quad_groups.iter() {
                         let face = &group.face;
-                        let normals = &face.quad_mesh_normals();
+                        let normal = face.mesh_normal().0;
                         let tangent = {
                             let face_normal_axis = face.permutation.axes()[0];
                             let flip_u = if face.n_sign < 0 {
@@ -676,12 +676,12 @@ impl Terrain {
                             } else {
                                 RIGHT_HANDED_Y_UP_CONFIG.u_flip_face == face_normal_axis
                             };
-                            let flip = if flip_u { -1. } else { 1. };
+                            let flipped_u = if flip_u { -face.u } else { face.u };
                             [
-                                flip * face.u.x() as f32,
-                                flip * face.u.y() as f32,
-                                flip * face.u.z() as f32,
-                                1.,
+                                flipped_u.x() as f32,
+                                flipped_u.y() as f32,
+                                flipped_u.z() as f32,
+                                1., // right handed
                             ]
                         };
                         for quad in group.quads.iter() {
@@ -698,7 +698,7 @@ impl Terrain {
                                 all_vertices.push(
                                     &[MeshVertex {
                                         position: positions[i],
-                                        normal: normals[i],
+                                        normal,
                                         tangent,
                                         tex_coord: uvs[i],
                                     }],

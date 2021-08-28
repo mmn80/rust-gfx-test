@@ -308,7 +308,7 @@ impl KinObjectsState {
                 });
         }
 
-        if ui_state.kin_spawning || ui_state.kin_edit_mode {
+        if ui_state.kin_spawning || (ui_state.kin_edit_mode && !ui_state.dyn_spawning) {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
