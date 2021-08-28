@@ -16,7 +16,7 @@ use building_blocks::{
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use fnv::FnvHashMap;
-use glam::{Quat, Vec2, Vec3};
+use glam::{Quat, Vec3};
 use legion::{Entity, Resources, World};
 use rafx::{
     api::RafxIndexType,
@@ -667,51 +667,39 @@ impl Terrain {
                     let vertex_offset = all_vertices.len();
                     let indices_offset = all_indices.len();
                     for group in quads.quad_groups.iter() {
+                        let face = &group.face;
+                        let normals = &face.quad_mesh_normals();
+                        let tangent = {
+                            let face_normal_axis = face.permutation.axes()[0];
+                            let flip_u = if face.n_sign < 0 {
+                                RIGHT_HANDED_Y_UP_CONFIG.u_flip_face != face_normal_axis
+                            } else {
+                                RIGHT_HANDED_Y_UP_CONFIG.u_flip_face == face_normal_axis
+                            };
+                            let flip = if flip_u { -1. } else { 1. };
+                            [
+                                flip * face.u.x() as f32,
+                                flip * face.u.y() as f32,
+                                flip * face.u.z() as f32,
+                                1.,
+                            ]
+                        };
                         for quad in group.quads.iter() {
-                            let face = &group.face;
                             let mut positions: Vec<[f32; 3]> = Vec::new();
                             positions.extend_from_slice(&face.quad_mesh_positions(quad, 1.0));
-                            let normals = &face.quad_mesh_normals();
                             let mut uvs: Vec<[f32; 2]> = Vec::new();
                             uvs.extend_from_slice(&face.tex_coords(
                                 RIGHT_HANDED_Y_UP_CONFIG.u_flip_face,
-                                true,
+                                false,
                                 quad,
                             ));
                             let indices_u32 = &face.quad_mesh_indices(vertices_num);
-                            let tangent = {
-                                let (ind0, ind1, ind2) = (
-                                    (indices_u32[0] - vertices_num) as usize,
-                                    (indices_u32[1] - vertices_num) as usize,
-                                    (indices_u32[2] - vertices_num) as usize,
-                                );
-                                let (pos0, pos1, pos2) = (
-                                    Vec3::from_slice_unaligned(&positions[ind0]),
-                                    Vec3::from_slice_unaligned(&positions[ind1]),
-                                    Vec3::from_slice_unaligned(&positions[ind2]),
-                                );
-                                let (uv0, uv1, uv2) = (
-                                    Vec2::from_slice_unaligned(&uvs[ind0]),
-                                    Vec2::from_slice_unaligned(&uvs[ind1]),
-                                    Vec2::from_slice_unaligned(&uvs[ind2]),
-                                );
-                                let delta_pos1 = pos1 - pos0;
-                                let delta_pos2 = pos2 - pos0;
-                                let delta_uv1 = uv1 - uv0;
-                                let delta_uv2 = uv2 - uv0;
-                                let r =
-                                    1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-                                let tangent =
-                                    (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
-                                tangent.normalize()
-                            };
-
                             for i in 0..4 {
                                 all_vertices.push(
                                     &[MeshVertex {
                                         position: positions[i],
                                         normal: normals[i],
-                                        tangent: [tangent.x, tangent.y, tangent.z, 1.],
+                                        tangent,
                                         tex_coord: uvs[i],
                                     }],
                                     4,
