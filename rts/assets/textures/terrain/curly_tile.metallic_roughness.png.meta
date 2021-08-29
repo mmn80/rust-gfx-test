@@ -1,5 +1,9 @@
 (
     version: 2,
-    importer_options: (),
+    importer_options: (
+        format: None,
+        color_space: Some(Linear),
+        mip_generation: None,
+    ),
     importer_state: (Some("8f6a0797-4e54-48b8-92a2-df216e65d8e3")),
 )
