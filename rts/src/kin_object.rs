@@ -4,7 +4,7 @@ use building_blocks::{core::prelude::*, storage::prelude::*};
 use egui::{Button, Checkbox};
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
-use rafx::assets::{distill_impl::AssetResource, AssetManager};
+use rafx::assets::distill_impl::AssetResource;
 use rafx_plugins::components::TransformComponent;
 
 use crate::{
@@ -45,8 +45,8 @@ pub struct KinObjectsState {
 
 impl KinObjectsState {
     pub fn new(resources: &Resources, world: &mut World) -> Self {
-        let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
-        let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
+        // let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+        let asset_resource = resources.get::<AssetResource>().unwrap();
 
         log::info!("Loading terrain materials...");
 
@@ -56,16 +56,10 @@ impl KinObjectsState {
             .map(|name| {
                 let path = format!("materials/terrain/{}.pbrmaterial", *name);
                 let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
-                asset_manager
-                    .wait_for_asset_to_load(&material_handle, &mut asset_resource, "")
-                    .unwrap();
-                (
-                    *name,
-                    asset_manager
-                        .committed_asset(&material_handle)
-                        .unwrap()
-                        .clone(),
-                )
+                // asset_manager
+                //     .wait_for_asset_to_load(&material_handle, &mut asset_resource, "")
+                //     .unwrap();
+                (*name, material_handle.clone())
             })
             .collect();
 

@@ -15,12 +15,13 @@ use building_blocks::{
     storage::{prelude::*, ChunkHashMap3},
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use distill::loader::handle::Handle;
 use fnv::FnvHashMap;
 use glam::{Quat, Vec3};
 use legion::{Entity, Resources, World};
 use rafx::{
     api::RafxIndexType,
-    assets::push_buffer::PushBuffer,
+    assets::{push_buffer::PushBuffer, AssetManager},
     base::{
         slab::{DropSlab, GenericDropSlabKey},
         Instant,
@@ -269,7 +270,7 @@ impl TerrainRenderChunk {
 pub type TerrainVoxels = ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>;
 
 pub struct Terrain {
-    materials: Vec<PbrMaterialAsset>,
+    materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: HashMap<String, u16>,
     pub voxels: TerrainVoxels,
     task_pool: TaskPool,
@@ -301,7 +302,7 @@ impl Terrain {
         ]
     }
 
-    pub fn material_by_name(&self, name: &'static str) -> Option<PbrMaterialAsset> {
+    pub fn material_by_name(&self, name: &'static str) -> Option<Handle<PbrMaterialAsset>> {
         self.material_names
             .get(name)
             .and_then(|idx| Some(self.materials[*idx as usize].clone()))
@@ -490,43 +491,54 @@ impl Terrain {
                     extract_time,
                 });
                 self.initialized = true;
-            }
 
-            for (key, padded_chunk) in to_render {
-                let render_tx = self.render_tx.clone();
-                let config = self.materials.clone();
-                let padded_extent = padded_chunk.extent().clone();
-                let task = self.task_pool.spawn(async move {
-                    let quads_start = Instant::now();
-                    let mut buffer = GreedyQuadsBuffer::new(
-                        padded_extent,
-                        RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
-                    );
-                    greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
-                    let quads_duration = Instant::now() - quads_start;
-                    let mesh_start = Instant::now();
-                    let (mesh, failed) = if buffer.num_quads() == 0 {
-                        (None, false)
-                    } else {
-                        let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &config);
-                        let failed = mesh.is_none();
-                        (mesh, failed)
-                    };
-                    let mesh_duration = Instant::now() - mesh_start;
-                    let results = RenderChunkTaskResults {
-                        key: key.clone(),
-                        mesh,
-                        metrics: RenderChunkTaskMetrics {
-                            quads_time: quads_duration.as_micros() as u32,
-                            mesh_time: mesh_duration.as_micros() as u32,
-                            results_time: 0,
-                            failed,
-                        },
-                    };
-                    let _result = render_tx.send(results);
-                });
-                if let Some(chunk) = self.render_chunks.get_mut(&key) {
-                    chunk.render_task = Some(task);
+                let asset_manager = resources.get::<AssetManager>().unwrap();
+                let materials: Vec<_> = self
+                    .materials
+                    .iter()
+                    .map(|h| {
+                        asset_manager
+                            .committed_asset(h)
+                            .and_then(|m| Some(m.clone()))
+                    })
+                    .collect();
+
+                for (key, padded_chunk) in to_render {
+                    let render_tx = self.render_tx.clone();
+                    let materials = materials.clone();
+                    let padded_extent = padded_chunk.extent().clone();
+                    let task = self.task_pool.spawn(async move {
+                        let quads_start = Instant::now();
+                        let mut buffer = GreedyQuadsBuffer::new(
+                            padded_extent,
+                            RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
+                        );
+                        greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
+                        let quads_duration = Instant::now() - quads_start;
+                        let mesh_start = Instant::now();
+                        let (mesh, failed) = if buffer.num_quads() == 0 {
+                            (None, false)
+                        } else {
+                            let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &materials);
+                            let failed = mesh.is_none();
+                            (mesh, failed)
+                        };
+                        let mesh_duration = Instant::now() - mesh_start;
+                        let results = RenderChunkTaskResults {
+                            key: key.clone(),
+                            mesh,
+                            metrics: RenderChunkTaskMetrics {
+                                quads_time: quads_duration.as_micros() as u32,
+                                mesh_time: mesh_duration.as_micros() as u32,
+                                results_time: 0,
+                                failed,
+                            },
+                        };
+                        let _result = render_tx.send(results);
+                    });
+                    if let Some(chunk) = self.render_chunks.get_mut(&key) {
+                        chunk.render_task = Some(task);
+                    }
                 }
             }
         }
@@ -627,7 +639,7 @@ impl Terrain {
     fn make_dyn_mesh_data(
         voxels: &Array3x1<CubeVoxel>,
         quads: &GreedyQuadsBuffer,
-        materials: &Vec<PbrMaterialAsset>,
+        materials: &Vec<Option<PbrMaterialAsset>>,
     ) -> Option<DynMeshData> {
         let mut quad_parts: FnvHashMap<_, _> = Default::default();
         for (idx, group) in quads.quad_groups.iter().enumerate() {
@@ -657,7 +669,7 @@ impl Terrain {
         for (mat, quads) in quad_parts.iter() {
             let mesh_part = {
                 let pbr_material = materials.get(*mat as usize);
-                if let Some(pbr_material) = pbr_material {
+                if let Some(Some(pbr_material)) = pbr_material {
                     let mut vertices_num = 0;
                     let index_type = if quads.num_quads() * 6 >= 0xFFFF {
                         RafxIndexType::Uint32
@@ -927,7 +939,7 @@ impl TerrainResource {
     pub fn new_terrain(
         &mut self,
         world: &mut World,
-        materials: Vec<(&'static str, PbrMaterialAsset)>,
+        materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
         size: u32,
         style: TerrainFillStyle,
