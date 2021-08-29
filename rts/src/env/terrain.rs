@@ -421,6 +421,7 @@ impl Terrain {
         log::info!("Terrain reset");
     }
 
+    #[profiling::function]
     pub fn update_render_chunks(&mut self, world: &mut World, resources: &Resources) {
         let viewports_resource = resources.get::<ViewportsResource>().unwrap();
         let eye = viewports_resource
@@ -432,183 +433,210 @@ impl Terrain {
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
-        let current_jobs = self
-            .render_chunks
-            .iter()
-            .filter(|(_key, chunk)| chunk.render_task.is_some())
-            .count();
-        if !self.initialized || current_jobs < MAX_RENDER_CHUNK_JOBS {
-            let extract_start = Instant::now();
-            let mut changed_keys: Vec<_> = self
-                .render_chunks
-                .iter()
-                .filter(|(key, chunk)| {
-                    (key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                        && (key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                        && chunk.render_task.is_none()
-                        && chunk.rendered_version < chunk.source_version
-                })
-                .map(|(key, _chunk)| key.clone())
-                .collect();
-            changed_keys.sort_unstable_by_key(|key| {
-                max(
-                    (key.minimum.x() - eye.x as i32).abs(),
-                    (key.minimum.y() - eye.y as i32).abs(),
-                )
-            });
-            let to_render: Vec<(_, Array3x1<CubeVoxel>)> = changed_keys
-                .iter()
-                .take(if self.initialized {
-                    min(
-                        MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
-                        MAX_RENDER_CHUNK_JOBS - current_jobs,
-                    )
-                } else {
-                    MAX_RENDER_CHUNK_JOBS_INIT
-                })
-                .map(|key| {
-                    let padded_chunk_extent = padded_greedy_quads_chunk_extent(
-                        &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
-                    );
-                    let mut padded_chunk = Array3x1::fill(padded_chunk_extent, CubeVoxel(0));
-                    copy_extent(
-                        &padded_chunk_extent,
-                        &self.voxels.lod_view(0),
-                        &mut padded_chunk,
-                    );
-                    (key.clone(), padded_chunk)
-                })
-                .collect();
-            if to_render.len() > 0 {
-                let extract_time = (Instant::now() - extract_start).as_micros() as u32;
-                log::debug!(
-                    "Starting {} greedy mesh jobs (data extraction took {}µs)",
-                    to_render.len(),
-                    extract_time
-                );
-                self.metrics.extract.push(RenderChunkExtractMetrics {
-                    tasks: to_render.len() as u32,
-                    extract_time,
-                });
-                self.initialized = true;
+        {
+            profiling::scope!("start jobs");
 
-                let asset_manager = resources.get::<AssetManager>().unwrap();
-                let materials: Vec<_> = self
-                    .materials
+            let current_jobs = {
+                profiling::scope!("count current");
+
+                let current_jobs = self
+                    .render_chunks
                     .iter()
-                    .map(|h| {
-                        asset_manager
-                            .committed_asset(h)
-                            .and_then(|m| Some(m.clone()))
-                    })
-                    .collect();
+                    .filter(|(_key, chunk)| chunk.render_task.is_some())
+                    .count();
+                current_jobs
+            };
+            if !self.initialized || current_jobs < MAX_RENDER_CHUNK_JOBS {
+                let extract_start = Instant::now();
+                let to_render = {
+                    profiling::scope!("extract");
 
-                for (key, padded_chunk) in to_render {
-                    let render_tx = self.render_tx.clone();
-                    let materials = materials.clone();
-                    let padded_extent = padded_chunk.extent().clone();
-                    let task = self.task_pool.spawn(async move {
-                        let quads_start = Instant::now();
-                        let mut buffer = GreedyQuadsBuffer::new(
-                            padded_extent,
-                            RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
-                        );
-                        greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
-                        let quads_duration = Instant::now() - quads_start;
-                        let mesh_start = Instant::now();
-                        let (mesh, failed) = if buffer.num_quads() == 0 {
-                            (None, false)
-                        } else {
-                            let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &materials);
-                            let failed = mesh.is_none();
-                            (mesh, failed)
-                        };
-                        let mesh_duration = Instant::now() - mesh_start;
-                        let results = RenderChunkTaskResults {
-                            key: key.clone(),
-                            mesh,
-                            metrics: RenderChunkTaskMetrics {
-                                quads_time: quads_duration.as_micros() as u32,
-                                mesh_time: mesh_duration.as_micros() as u32,
-                                results_time: 0,
-                                failed,
-                            },
-                        };
-                        let _result = render_tx.send(results);
+                    let mut changed_keys: Vec<_> = self
+                        .render_chunks
+                        .iter()
+                        .filter(|(key, chunk)| {
+                            (key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                                && (key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                                && chunk.render_task.is_none()
+                                && chunk.rendered_version < chunk.source_version
+                        })
+                        .map(|(key, _chunk)| key.clone())
+                        .collect();
+                    changed_keys.sort_unstable_by_key(|key| {
+                        max(
+                            (key.minimum.x() - eye.x as i32).abs(),
+                            (key.minimum.y() - eye.y as i32).abs(),
+                        )
                     });
-                    if let Some(chunk) = self.render_chunks.get_mut(&key) {
-                        chunk.render_task = Some(task);
+                    let to_render: Vec<(_, Array3x1<CubeVoxel>)> = changed_keys
+                        .iter()
+                        .take(if self.initialized {
+                            min(
+                                MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
+                                MAX_RENDER_CHUNK_JOBS - current_jobs,
+                            )
+                        } else {
+                            MAX_RENDER_CHUNK_JOBS_INIT
+                        })
+                        .map(|key| {
+                            let padded_chunk_extent = padded_greedy_quads_chunk_extent(
+                                &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
+                            );
+                            let mut padded_chunk =
+                                Array3x1::fill(padded_chunk_extent, CubeVoxel(0));
+                            copy_extent(
+                                &padded_chunk_extent,
+                                &self.voxels.lod_view(0),
+                                &mut padded_chunk,
+                            );
+                            (key.clone(), padded_chunk)
+                        })
+                        .collect();
+                    to_render
+                };
+
+                {
+                    profiling::scope!("spawn");
+
+                    if to_render.len() > 0 {
+                        let extract_time = (Instant::now() - extract_start).as_micros() as u32;
+                        log::debug!(
+                            "Starting {} greedy mesh jobs (data extraction took {}µs)",
+                            to_render.len(),
+                            extract_time
+                        );
+                        self.metrics.extract.push(RenderChunkExtractMetrics {
+                            tasks: to_render.len() as u32,
+                            extract_time,
+                        });
+                        self.initialized = true;
+
+                        let asset_manager = resources.get::<AssetManager>().unwrap();
+                        let materials: Vec<_> = self
+                            .materials
+                            .iter()
+                            .map(|h| {
+                                asset_manager
+                                    .committed_asset(h)
+                                    .and_then(|m| Some(m.clone()))
+                            })
+                            .collect();
+
+                        for (key, padded_chunk) in to_render {
+                            let render_tx = self.render_tx.clone();
+                            let materials = materials.clone();
+                            let padded_extent = padded_chunk.extent().clone();
+                            let task = self.task_pool.spawn(async move {
+                                let quads_start = Instant::now();
+                                let mut buffer = GreedyQuadsBuffer::new(
+                                    padded_extent,
+                                    RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
+                                );
+                                greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
+                                let quads_duration = Instant::now() - quads_start;
+                                let mesh_start = Instant::now();
+                                let (mesh, failed) = if buffer.num_quads() == 0 {
+                                    (None, false)
+                                } else {
+                                    let mesh = Self::make_dyn_mesh_data(
+                                        &padded_chunk,
+                                        &buffer,
+                                        &materials,
+                                    );
+                                    let failed = mesh.is_none();
+                                    (mesh, failed)
+                                };
+                                let mesh_duration = Instant::now() - mesh_start;
+                                let results = RenderChunkTaskResults {
+                                    key: key.clone(),
+                                    mesh,
+                                    metrics: RenderChunkTaskMetrics {
+                                        quads_time: quads_duration.as_micros() as u32,
+                                        mesh_time: mesh_duration.as_micros() as u32,
+                                        results_time: 0,
+                                        failed,
+                                    },
+                                };
+                                let _result = render_tx.send(results);
+                            });
+                            if let Some(chunk) = self.render_chunks.get_mut(&key) {
+                                chunk.render_task = Some(task);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // process render job results
-        for result in self.render_rx.try_iter() {
-            let results_start = Instant::now();
-            let mut metrics = result.metrics;
+        {
+            profiling::scope!("process results");
 
-            if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
-                chunk.render_task = None;
-                chunk.rendered_version += 1;
+            for result in self.render_rx.try_iter() {
+                let results_start = Instant::now();
+                let mut metrics = result.metrics;
 
-                // log::info!("Dyn mesh built. {}", result.mesh.clone());
+                if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
+                    chunk.render_task = None;
+                    chunk.rendered_version += 1;
 
-                if let Some(mesh) = result.mesh {
-                    let visible_bounds = mesh.visible_bounds.clone();
-                    if let Some(handle) = &chunk.dyn_mesh_handle {
-                        if let Err(error) = dyn_mesh_resource.update_dyn_mesh(&handle, mesh) {
-                            log::error!("{}", error);
+                    // log::info!("Dyn mesh built. {}", result.mesh.clone());
+
+                    if let Some(mesh) = result.mesh {
+                        let visible_bounds = mesh.visible_bounds.clone();
+                        if let Some(handle) = &chunk.dyn_mesh_handle {
+                            if let Err(error) = dyn_mesh_resource.update_dyn_mesh(&handle, mesh) {
+                                log::error!("{}", error);
+                            }
+                        } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(mesh) {
+                            chunk.dyn_mesh_handle = Some(handle.clone());
+
+                            let transform_component = TransformComponent {
+                                translation: Vec3::ZERO,
+                                scale: Vec3::ONE,
+                                rotation: Quat::IDENTITY,
+                            };
+
+                            let render_object_handle = dyn_mesh_render_objects
+                                .register_render_object(DynMeshRenderObject { mesh: handle });
+                            let mesh_component = MeshComponent {
+                                render_object_handle: render_object_handle.clone(),
+                            };
+
+                            let entity = world.push((transform_component, mesh_component));
+                            chunk.entity = Some(entity);
+
+                            let visibility_object_handle = {
+                                let handle = visibility_region.register_static_object(
+                                    ObjectId::from(entity),
+                                    CullModel::VisibleBounds(visible_bounds),
+                                );
+                                let pos = result.key.minimum;
+                                handle.set_transform(
+                                    Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
+                                    Quat::IDENTITY,
+                                    Vec3::ONE,
+                                );
+                                handle.add_render_object(&render_object_handle);
+                                handle
+                            };
+                            let mut entry = world.entry(entity).unwrap();
+                            entry.add_component(VisibilityComponent {
+                                visibility_object_handle: visibility_object_handle.clone(),
+                            });
+
+                            chunk.visibility_object_handle = Some(visibility_object_handle);
+                            chunk.render_object_handle = Some(render_object_handle);
                         }
-                    } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(mesh) {
-                        chunk.dyn_mesh_handle = Some(handle.clone());
-
-                        let transform_component = TransformComponent {
-                            translation: Vec3::ZERO,
-                            scale: Vec3::ONE,
-                            rotation: Quat::IDENTITY,
-                        };
-
-                        let render_object_handle = dyn_mesh_render_objects
-                            .register_render_object(DynMeshRenderObject { mesh: handle });
-                        let mesh_component = MeshComponent {
-                            render_object_handle: render_object_handle.clone(),
-                        };
-
-                        let entity = world.push((transform_component, mesh_component));
-                        chunk.entity = Some(entity);
-
-                        let visibility_object_handle = {
-                            let handle = visibility_region.register_static_object(
-                                ObjectId::from(entity),
-                                CullModel::VisibleBounds(visible_bounds),
-                            );
-                            let pos = result.key.minimum;
-                            handle.set_transform(
-                                Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
-                                Quat::IDENTITY,
-                                Vec3::ONE,
-                            );
-                            handle.add_render_object(&render_object_handle);
-                            handle
-                        };
-                        let mut entry = world.entry(entity).unwrap();
-                        entry.add_component(VisibilityComponent {
-                            visibility_object_handle: visibility_object_handle.clone(),
-                        });
-
-                        chunk.visibility_object_handle = Some(visibility_object_handle);
-                        chunk.render_object_handle = Some(render_object_handle);
+                    } else {
+                        chunk.clear(world);
                     }
                 } else {
-                    chunk.clear(world);
-                }
-            } else {
-                metrics.failed = true;
-            };
+                    metrics.failed = true;
+                };
 
-            metrics.results_time = (Instant::now() - results_start).as_micros() as u32;
-            self.metrics.tasks.push(metrics);
+                metrics.results_time = (Instant::now() - results_start).as_micros() as u32;
+                self.metrics.tasks.push(metrics);
+            }
         }
 
         self.check_reset_metrics(5.0, true);
@@ -636,6 +664,7 @@ impl Terrain {
         }
     }
 
+    #[profiling::function]
     fn make_dyn_mesh_data(
         voxels: &Array3x1<CubeVoxel>,
         quads: &GreedyQuadsBuffer,

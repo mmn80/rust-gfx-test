@@ -280,6 +280,7 @@ impl DynMeshStorage {
         ))
     }
 
+    #[profiling::function]
     pub fn process_upload_results(&mut self, asset_manager: &mut AssetManager) {
         for upload_result in self.vertex_rx.try_iter().collect::<Vec<_>>() {
             let (upload_id, buffer) = match upload_result {
@@ -497,6 +498,7 @@ impl DynMeshResource {
         );
     }
 
+    #[profiling::function]
     pub fn update(&mut self, asset_manager: &mut AssetManager) {
         let mut storage = self.write();
         if let Some(ref mut upload) = storage.uploader {
@@ -505,6 +507,7 @@ impl DynMeshResource {
         storage.process_upload_results(asset_manager);
     }
 
+    #[profiling::function]
     pub fn add_dyn_mesh(&mut self, mesh_data: DynMeshData) -> RafxResult<DynMeshHandle> {
         let handle = {
             let mut storage = self.write();
@@ -514,6 +517,7 @@ impl DynMeshResource {
         handle
     }
 
+    #[profiling::function]
     pub fn update_dyn_mesh(
         &mut self,
         handle: &DynMeshHandle,

@@ -344,8 +344,8 @@ impl EnvObjectsState {
         }
     }
 
+    #[profiling::function]
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
-        profiling::scope!("update render chunks");
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);

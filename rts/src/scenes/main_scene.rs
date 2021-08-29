@@ -68,8 +68,8 @@ pub struct MainScene {
     font: Handle<FontAsset>,
     main_state: MainState,
     main_light: Entity,
-    dyn_objects: UnitsState,
-    kin_objects: EnvObjectsState,
+    units: UnitsState,
+    env_objects: EnvObjectsState,
 }
 
 impl MainScene {
@@ -102,8 +102,8 @@ impl MainScene {
             font,
             main_state: MainState {},
             main_light,
-            dyn_objects,
-            kin_objects,
+            units: dyn_objects,
+            env_objects: kin_objects,
         }
     }
 }
@@ -171,12 +171,12 @@ impl super::GameScene for MainScene {
             world,
             resources,
             Some(&mut self.main_state),
-            Some(&mut self.kin_objects),
-            Some(&mut self.dyn_objects),
+            Some(&mut self.env_objects),
+            Some(&mut self.units),
         );
 
-        self.kin_objects.update(world, resources);
-        self.dyn_objects.update(world, resources, ui_state);
+        self.env_objects.update(world, resources);
+        self.units.update(world, resources, ui_state);
 
         {
             let viewports_resource = resources.get::<ViewportsResource>().unwrap();

@@ -57,6 +57,7 @@ impl Default for UiState {
 }
 
 impl UiState {
+    #[profiling::function]
     pub fn update(
         &mut self,
         world: &mut World,

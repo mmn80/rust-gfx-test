@@ -461,6 +461,7 @@ impl BufferUploader {
         }
     }
 
+    #[profiling::function]
     pub fn update(&mut self) -> RafxResult<()> {
         self.upload_queue.update()?;
 

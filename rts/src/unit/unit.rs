@@ -283,6 +283,7 @@ impl UnitsState {
         }
     }
 
+    #[profiling::function]
     pub fn update(&mut self, world: &mut World, resources: &mut Resources, ui_state: &mut UiState) {
         let camera = resources.get::<RTSCamera>().unwrap();
         let view_proj = camera.view_proj();
