@@ -25,10 +25,10 @@ use rand::{thread_rng, Rng};
 
 use crate::{
     camera::RTSCamera,
-    input::{InputResource, KeyboardKey, MouseButton, MouseDragState},
+    input::{InputResource, MouseButton, MouseDragState},
     terrain::{TerrainHandle, TerrainResource},
     time::TimeState,
-    ui::UiState,
+    ui::{SpawnMode, UiState},
 };
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -124,9 +124,6 @@ impl DynObjectsState {
         let camera = resources.get::<RTSCamera>().unwrap();
 
         ui_state.dyn_selecting = false;
-        if input.is_key_down(KeyboardKey::N) {
-            ui_state.dyn_spawning = true;
-        }
         if let Some(MouseDragState { .. }) = input.mouse_drag_just_finished(MouseButton::LEFT) {
             ui_state.dyn_selecting = !ui_state.dyn_spawning;
         }
@@ -135,12 +132,14 @@ impl DynObjectsState {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
+                    ui_state.dyn_spawn_mode.ui(ui, &mut ui_state.dyn_spawning);
                     ui.label("Click a location on the map to spawn dynamic object");
                 });
         } else if !ui_state.kin_spawning {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
+                    ui_state.dyn_spawn_mode.ui(ui, &mut ui_state.dyn_spawning);
                     ui.horizontal_wrapped(|ui| {
                         for (obj, _) in &self.meshes {
                             if ui.selectable_label(false, format!("{}", obj)).clicked() {
@@ -231,7 +230,9 @@ impl DynObjectsState {
                         world,
                     );
                 }
-                ui_state.dyn_spawning = false;
+                if ui_state.dyn_spawn_mode == SpawnMode::OneShot {
+                    ui_state.dyn_spawning = false;
+                }
             }
         } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
             let mut first = true;

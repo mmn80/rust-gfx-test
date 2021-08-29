@@ -13,7 +13,7 @@ use crate::{
     input::{InputResource, KeyboardKey, MouseButton},
     perlin::PerlinNoise2D,
     terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
-    ui::UiState,
+    ui::{SpawnMode, UiState},
 };
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -45,7 +45,6 @@ pub struct KinObjectsState {
 
 impl KinObjectsState {
     pub fn new(resources: &Resources, world: &mut World) -> Self {
-        // let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let asset_resource = resources.get::<AssetResource>().unwrap();
 
         log::info!("Loading terrain materials...");
@@ -56,9 +55,6 @@ impl KinObjectsState {
             .map(|name| {
                 let path = format!("materials/terrain/{}.pbrmaterial", *name);
                 let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
-                // asset_manager
-                //     .wait_for_asset_to_load(&material_handle, &mut asset_resource, "")
-                //     .unwrap();
                 (*name, material_handle.clone())
             })
             .collect();
@@ -153,12 +149,14 @@ impl KinObjectsState {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
+                    ui_state.kin_spawn_mode.ui(ui, &mut ui_state.kin_spawning);
                     ui.label("Click a location on the map to spawn terrain object");
                 });
         } else if !ui_state.dyn_spawning {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
+                    ui_state.kin_spawn_mode.ui(ui, &mut ui_state.kin_spawning);
                     ui.horizontal_wrapped(|ui| {
                         for (obj, _) in &self.objects {
                             if ui.selectable_label(false, format!("{}", obj)).clicked() {
@@ -339,7 +337,9 @@ impl KinObjectsState {
                         }
                     }
                 }
-                ui_state.kin_spawning = false;
+                if ui_state.kin_spawn_mode == SpawnMode::OneShot {
+                    ui_state.kin_spawning = false;
+                }
             }
         }
     }

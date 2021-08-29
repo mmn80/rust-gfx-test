@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use egui::{Align, Color32};
+use egui::{Align, Checkbox, Color32};
 use glam::Vec4;
 use legion::{Resources, World};
 use rafx::render_feature_renderer_prelude::AssetResource;
@@ -15,16 +15,40 @@ use crate::{
     DebugUiState, RenderOptions,
 };
 
+#[derive(PartialEq, Eq, Clone)]
+pub enum SpawnMode {
+    OneShot,
+    MultiShot,
+}
+
+impl SpawnMode {
+    pub fn ui(&mut self, ui: &mut egui::Ui, spawning: &mut bool) {
+        let mut multi_spawn = *self == SpawnMode::MultiShot;
+        let ck = Checkbox::new(&mut multi_spawn, "Multi spawn mode");
+        let changed = ui.add(ck).changed();
+        if !multi_spawn && changed {
+            *spawning = false;
+        }
+        *self = if multi_spawn {
+            SpawnMode::MultiShot
+        } else {
+            SpawnMode::OneShot
+        }
+    }
+}
+
 pub struct UiState {
     pub main_light_rotates: bool,
     pub main_light_pitch: f32,
     pub main_light_color: Vec4,
     pub dyn_spawning: bool,
+    pub dyn_spawn_mode: SpawnMode,
     pub dyn_object_type: DynObjectType,
     pub dyn_selecting: bool,
     pub dyn_selected_count: u32,
     pub dyn_selected: HashMap<DynObjectType, u32>,
     pub kin_spawning: bool,
+    pub kin_spawn_mode: SpawnMode,
     pub kin_object_type: KinObjectType,
     pub kin_edit_mode: bool,
     pub kin_edit_material: &'static str,
@@ -40,11 +64,13 @@ impl Default for UiState {
             main_light_pitch: 225.0,
             main_light_color: Vec4::ONE,
             dyn_spawning: false,
+            dyn_spawn_mode: SpawnMode::OneShot,
             dyn_object_type: DynObjectType::Container1,
             dyn_selecting: false,
             dyn_selected_count: 0,
             dyn_selected: Default::default(),
             kin_spawning: false,
+            kin_spawn_mode: SpawnMode::OneShot,
             kin_object_type: KinObjectType::Building,
             kin_edit_mode: false,
             kin_edit_material: "simple_tile",
