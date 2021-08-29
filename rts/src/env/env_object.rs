@@ -10,40 +10,42 @@ use rafx_plugins::components::TransformComponent;
 use crate::{
     assets::pbr_material::PbrMaterialAsset,
     camera::RTSCamera,
+    env::{
+        perlin::PerlinNoise2D,
+        terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
+    },
     input::{InputResource, KeyboardKey, MouseButton},
-    perlin::PerlinNoise2D,
-    terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
     ui::{SpawnMode, UiState},
 };
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum KinObjectType {
+pub enum EnvObjectType {
     Building,
     Tree,
 }
 
-impl Display for KinObjectType {
+impl Display for EnvObjectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            KinObjectType::Building => write!(f, "Building"),
-            KinObjectType::Tree => write!(f, "Tree"),
+            EnvObjectType::Building => write!(f, "Building"),
+            EnvObjectType::Tree => write!(f, "Tree"),
         }
     }
 }
 
 #[derive(Clone)]
-pub struct KinObjectComponent {
-    pub object_type: KinObjectType,
+pub struct EnvObjectComponent {
+    pub object_type: EnvObjectType,
     pub health: f32,
     pub selected: bool,
 }
 
-pub struct KinObjectsState {
+pub struct EnvObjectsState {
     pub terrain: TerrainHandle,
-    objects: HashMap<KinObjectType, Array3x1<CubeVoxel>>,
+    objects: HashMap<EnvObjectType, Array3x1<CubeVoxel>>,
 }
 
-impl KinObjectsState {
+impl EnvObjectsState {
     pub fn new(resources: &Resources, world: &mut World) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
 
@@ -63,7 +65,7 @@ impl KinObjectsState {
 
         let ui_terrain_size: u32 = 4096;
         let ui_terrain_style = TerrainFillStyle::FlatBoard {
-            material: "simple_tile",
+            material: "basic_tile",
         };
         let terrain_handle = {
             let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
@@ -80,10 +82,8 @@ impl KinObjectsState {
         let terrain = storage.get(&terrain_handle);
 
         let empty = 0.into();
-        let dimond_tile = terrain.voxel_by_material("diamond-inlay-tile").unwrap();
-        let round_tile = terrain
-            .voxel_by_material("round-pattern-wallpaper")
-            .unwrap();
+        let dimond_tile = terrain.voxel_by_material("diamond_inlay_tile").unwrap();
+        let round_tile = terrain.voxel_by_material("round_tile").unwrap();
         let curly_tile = terrain.voxel_by_material("curly_tile").unwrap();
         let black_plastic = terrain.voxel_by_material("black_plastic").unwrap();
 
@@ -105,7 +105,7 @@ impl KinObjectsState {
             &Extent3i::from_min_and_shape(PointN([1, 1, 7]), PointN([6, 6, 1])),
             round_tile,
         );
-        objects.insert(KinObjectType::Building, building);
+        objects.insert(EnvObjectType::Building, building);
 
         let mut tree = Array3x1::<CubeVoxel>::fill(
             Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 9])),
@@ -127,9 +127,9 @@ impl KinObjectsState {
             &Extent3i::from_min_and_shape(PointN([0, 0, 8]), PointN([1, 1, 1])),
             curly_tile,
         );
-        objects.insert(KinObjectType::Tree, tree);
+        objects.insert(EnvObjectType::Tree, tree);
 
-        KinObjectsState {
+        EnvObjectsState {
             terrain: terrain_handle,
             objects,
         }
@@ -145,23 +145,23 @@ impl KinObjectsState {
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
 
-        if ui_state.kin_spawning {
+        if ui_state.env.spawning {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui_state.kin_spawn_mode.ui(ui, &mut ui_state.kin_spawning);
+                    ui_state.env.spawn_mode.ui(ui, &mut ui_state.env.spawning);
                     ui.label("Click a location on the map to spawn terrain object");
                 });
-        } else if !ui_state.dyn_spawning {
+        } else if !ui_state.unit.spawning {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui_state.kin_spawn_mode.ui(ui, &mut ui_state.kin_spawning);
+                    ui_state.env.spawn_mode.ui(ui, &mut ui_state.env.spawning);
                     ui.horizontal_wrapped(|ui| {
                         for (obj, _) in &self.objects {
                             if ui.selectable_label(false, format!("{}", obj)).clicked() {
-                                ui_state.kin_object_type = *obj;
-                                ui_state.kin_spawning = true;
+                                ui_state.env.object_type = *obj;
+                                ui_state.env.spawning = true;
                             }
                         }
                     });
@@ -170,13 +170,13 @@ impl KinObjectsState {
             egui::CollapsingHeader::new("Edit terrain")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let ck = Checkbox::new(&mut ui_state.kin_edit_mode, "Edit mode active");
+                    let ck = Checkbox::new(&mut ui_state.env.edit_mode, "Edit mode active");
                     ui.add(ck);
-                    if ui_state.kin_edit_mode {
+                    if ui_state.env.edit_mode {
                         ui.label("Build material:");
                         for material_name in Terrain::get_default_material_names() {
                             ui.radio_value(
-                                &mut ui_state.kin_edit_material,
+                                &mut ui_state.env.edit_material,
                                 material_name,
                                 material_name,
                             );
@@ -187,15 +187,15 @@ impl KinObjectsState {
             egui::CollapsingHeader::new("Reset terrain")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut size_str = format!("{}", ui_state.kin_terrain_size);
+                    let mut size_str = format!("{}", ui_state.env.terrain_size);
                     ui.horizontal(|ui| {
                         ui.label("Size");
                         ui.text_edit_singleline(&mut size_str);
                         if let Ok(number) = size_str.parse() {
-                            ui_state.kin_terrain_size = number;
+                            ui_state.env.terrain_size = number;
                         }
                     });
-                    let mut style_idx = match ui_state.kin_terrain_style {
+                    let mut style_idx = match ui_state.env.terrain_style {
                         TerrainFillStyle::FlatBoard { material: _ } => 0,
                         TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
                         TerrainFillStyle::PerlinNoise {
@@ -212,29 +212,29 @@ impl KinObjectsState {
                     let materials = Terrain::get_default_material_names();
                     if style_idx == 0 {
                         let material = if let TerrainFillStyle::FlatBoard { material } =
-                            ui_state.kin_terrain_style
+                            ui_state.env.terrain_style
                         {
                             material
                         } else {
-                            "simple_tile"
+                            "basic_tile"
                         };
                         let material = UiState::combo_box(ui, &materials, material, "mat");
-                        ui_state.kin_terrain_style = TerrainFillStyle::FlatBoard { material };
+                        ui_state.env.terrain_style = TerrainFillStyle::FlatBoard { material };
                     } else if style_idx == 1 {
                         let (zero, one) = if let TerrainFillStyle::CheckersBoard { zero, one } =
-                            ui_state.kin_terrain_style
+                            ui_state.env.terrain_style
                         {
                             (zero, one)
                         } else {
-                            ("simple_tile", "black_plastic")
+                            ("basic_tile", "black_plastic")
                         };
                         let zero = UiState::combo_box(ui, &materials, zero, "zero");
                         let one = UiState::combo_box(ui, &materials, one, "one");
-                        ui_state.kin_terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
+                        ui_state.env.terrain_style = TerrainFillStyle::CheckersBoard { zero, one };
                     } else if style_idx == 2 {
                         let (mut params, material) =
                             if let TerrainFillStyle::PerlinNoise { params, material } =
-                                ui_state.kin_terrain_style
+                                ui_state.env.terrain_style
                             {
                                 (params, material)
                             } else {
@@ -246,13 +246,13 @@ impl KinObjectsState {
                                         persistence: 1.0,
                                         lacunarity: 2.0,
                                         scale: (
-                                            ui_state.kin_terrain_size as f64,
-                                            ui_state.kin_terrain_size as f64,
+                                            ui_state.env.terrain_size as f64,
+                                            ui_state.env.terrain_size as f64,
                                         ),
                                         bias: 0.,
                                         seed: 42,
                                     },
-                                    "simple_tile",
+                                    "basic_tile",
                                 )
                             };
                         let material = UiState::combo_box(ui, &materials, material, "mat");
@@ -273,13 +273,13 @@ impl KinObjectsState {
                         ui.add(
                             egui::Slider::new(
                                 &mut params.bias,
-                                0.0..=ui_state.kin_terrain_size as f64 + 1.,
+                                0.0..=ui_state.env.terrain_size as f64 + 1.,
                             )
                             .text("bias"),
                         );
                         ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
 
-                        ui_state.kin_terrain_style =
+                        ui_state.env.terrain_style =
                             TerrainFillStyle::PerlinNoise { params, material };
                     }
                     ui.add_space(10.);
@@ -293,14 +293,14 @@ impl KinObjectsState {
                         terrain.reset(
                             world,
                             Point3i::ZERO,
-                            ui_state.kin_terrain_size,
-                            ui_state.kin_terrain_style.clone(),
+                            ui_state.env.terrain_size,
+                            ui_state.env.terrain_style.clone(),
                         );
                     }
                 });
         }
 
-        if ui_state.kin_spawning || (ui_state.kin_edit_mode && !ui_state.dyn_spawning) {
+        if ui_state.env.spawning || (ui_state.env.edit_mode && !ui_state.unit.spawning) {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
@@ -314,19 +314,19 @@ impl KinObjectsState {
                         ui_state,
                     );
                     let default_material = terrain
-                        .voxel_by_material(ui_state.kin_edit_material)
+                        .voxel_by_material(ui_state.env.edit_material)
                         .unwrap();
                     (cast_result, default_material)
                 };
                 if let Some(result) = cast_result {
-                    if ui_state.kin_spawning {
+                    if ui_state.env.spawning {
                         self.spawn(
-                            ui_state.kin_object_type,
+                            ui_state.env.object_type,
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
                             world,
                         );
-                    } else if ui_state.kin_edit_mode {
+                    } else if ui_state.env.edit_mode {
                         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
                         let mut storage = terrain_resource.write();
                         let terrain = storage.get_mut(&self.terrain);
@@ -337,8 +337,8 @@ impl KinObjectsState {
                         }
                     }
                 }
-                if ui_state.kin_spawn_mode == SpawnMode::OneShot {
-                    ui_state.kin_spawning = false;
+                if ui_state.env.spawn_mode == SpawnMode::OneShot {
+                    ui_state.env.spawning = false;
                 }
             }
         }
@@ -354,7 +354,7 @@ impl KinObjectsState {
 
     pub fn spawn(
         &self,
-        object_type: KinObjectType,
+        object_type: EnvObjectType,
         position: Point3i,
         resources: &Resources,
         world: &mut World,
@@ -372,7 +372,7 @@ impl KinObjectsState {
         };
 
         // kin object component
-        let kin_object_component = KinObjectComponent {
+        let kin_object_component = EnvObjectComponent {
             object_type,
             health: 1.,
             selected: false,

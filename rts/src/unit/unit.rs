@@ -25,32 +25,32 @@ use rand::{thread_rng, Rng};
 
 use crate::{
     camera::RTSCamera,
+    env::terrain::{TerrainHandle, TerrainResource},
     input::{InputResource, MouseButton, MouseDragState},
-    terrain::{TerrainHandle, TerrainResource},
     time::TimeState,
     ui::{SpawnMode, UiState},
 };
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum DynObjectType {
+pub enum UnitType {
     Container1,
     Container2,
     BlueIcosphere,
 }
 
-impl Display for DynObjectType {
+impl Display for UnitType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            DynObjectType::Container1 => write!(f, "Container 1"),
-            DynObjectType::Container2 => write!(f, "Container 2"),
-            DynObjectType::BlueIcosphere => write!(f, "Blue icosphere"),
+            UnitType::Container1 => write!(f, "Container 1"),
+            UnitType::Container2 => write!(f, "Container 2"),
+            UnitType::BlueIcosphere => write!(f, "Blue icosphere"),
         }
     }
 }
 
 #[derive(Clone)]
-pub struct DynObjectComponent {
-    pub object_type: DynObjectType,
+pub struct UnitComponent {
+    pub object_type: UnitType,
     pub health: f32,
     pub aim: Vec3,
     pub speed: f32,
@@ -58,12 +58,34 @@ pub struct DynObjectComponent {
     pub selected: bool,
 }
 
-pub struct DynObjectsState {
-    meshes: HashMap<DynObjectType, RenderObjectHandle>,
+pub struct UnitUiState {
+    pub spawning: bool,
+    pub spawn_mode: SpawnMode,
+    pub object_type: UnitType,
+    pub selecting: bool,
+    pub selected_count: u32,
+    pub selected: HashMap<UnitType, u32>,
+}
+
+impl Default for UnitUiState {
+    fn default() -> Self {
+        Self {
+            spawning: false,
+            spawn_mode: SpawnMode::OneShot,
+            object_type: UnitType::Container1,
+            selecting: false,
+            selected_count: 0,
+            selected: Default::default(),
+        }
+    }
+}
+
+pub struct UnitsState {
+    meshes: HashMap<UnitType, RenderObjectHandle>,
     terrain: TerrainHandle,
 }
 
-impl DynObjectsState {
+impl UnitsState {
     pub fn new(resources: &Resources, terrain: TerrainHandle) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
@@ -88,19 +110,19 @@ impl DynObjectsState {
 
         let mut meshes = HashMap::new();
         meshes.insert(
-            DynObjectType::Container1,
+            UnitType::Container1,
             mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: container_1_asset,
             }),
         );
         meshes.insert(
-            DynObjectType::Container2,
+            UnitType::Container2,
             mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: container_2_asset,
             }),
         );
         meshes.insert(
-            DynObjectType::BlueIcosphere,
+            UnitType::BlueIcosphere,
             mesh_render_objects.register_render_object(MeshRenderObject {
                 mesh: blue_icosphere_asset,
             }),
@@ -108,7 +130,7 @@ impl DynObjectsState {
 
         log::info!("Dyn object meshes loaded");
 
-        DynObjectsState { meshes, terrain }
+        UnitsState { meshes, terrain }
     }
 
     pub fn update_ui(
@@ -123,49 +145,49 @@ impl DynObjectsState {
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
 
-        ui_state.dyn_selecting = false;
+        ui_state.unit.selecting = false;
         if let Some(MouseDragState { .. }) = input.mouse_drag_just_finished(MouseButton::LEFT) {
-            ui_state.dyn_selecting = !ui_state.dyn_spawning;
+            ui_state.unit.selecting = !ui_state.unit.spawning;
         }
 
-        if ui_state.dyn_spawning {
+        if ui_state.unit.spawning {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui_state.dyn_spawn_mode.ui(ui, &mut ui_state.dyn_spawning);
+                    ui_state.unit.spawn_mode.ui(ui, &mut ui_state.unit.spawning);
                     ui.label("Click a location on the map to spawn dynamic object");
                 });
-        } else if !ui_state.kin_spawning {
+        } else if !ui_state.env.spawning {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui_state.dyn_spawn_mode.ui(ui, &mut ui_state.dyn_spawning);
+                    ui_state.unit.spawn_mode.ui(ui, &mut ui_state.unit.spawning);
                     ui.horizontal_wrapped(|ui| {
                         for (obj, _) in &self.meshes {
                             if ui.selectable_label(false, format!("{}", obj)).clicked() {
-                                ui_state.dyn_object_type = *obj;
-                                ui_state.dyn_spawning = true;
+                                ui_state.unit.object_type = *obj;
+                                ui_state.unit.spawning = true;
                             }
                         }
                     });
                 });
         }
 
-        if ui_state.dyn_selected_count > 0 {
+        if ui_state.unit.selected_count > 0 {
             egui::CollapsingHeader::new("Object selection")
                 .default_open(true)
                 .show(ui, |ui| {
                     ui.label(format!(
                         "{} dynamic objects selected",
-                        ui_state.dyn_selected_count
+                        ui_state.unit.selected_count
                     ));
-                    for (ty, count) in &ui_state.dyn_selected {
+                    for (ty, count) in &ui_state.unit.selected {
                         ui.label(format!("- {:?}: {}", ty, count));
                     }
                 });
         }
 
-        if !ui_state.dyn_spawning && !ui_state.kin_spawning {
+        if !ui_state.unit.spawning && !ui_state.env.spawning {
             if let Some(MouseDragState {
                 begin_position: p0,
                 end_position: p1,
@@ -206,7 +228,7 @@ impl DynObjectsState {
             }
         }
 
-        if ui_state.dyn_spawning {
+        if ui_state.unit.spawning {
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let cast_result = {
@@ -224,14 +246,14 @@ impl DynObjectsState {
                 if let Some(result) = cast_result {
                     let p = result.hit;
                     self.spawn(
-                        ui_state.dyn_object_type,
+                        ui_state.unit.object_type,
                         Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
                         resources,
                         world,
                     );
                 }
-                if ui_state.dyn_spawn_mode == SpawnMode::OneShot {
-                    ui_state.dyn_spawning = false;
+                if ui_state.unit.spawn_mode == SpawnMode::OneShot {
+                    ui_state.unit.spawning = false;
                 }
             }
         } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
@@ -246,7 +268,7 @@ impl DynObjectsState {
             if let Some(result) = cast_result {
                 let p = result.hit;
                 let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
-                let mut query = <(Read<TransformComponent>, Write<DynObjectComponent>)>::query();
+                let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
                 for (transform, dyn_object) in query.iter_mut(world) {
                     if dyn_object.selected {
                         if !first {
@@ -290,7 +312,7 @@ impl DynObjectsState {
         let mut query = <(
             Write<TransformComponent>,
             Read<VisibilityComponent>,
-            Write<DynObjectComponent>,
+            Write<UnitComponent>,
         )>::query();
         query.par_for_each_mut(world, |(transform, visibility, dyn_object)| {
             if let Some(target) = dyn_object.move_target {
@@ -318,7 +340,7 @@ impl DynObjectsState {
                     dyn_object.speed = 0.;
                 }
             }
-            if ui_state.dyn_selecting {
+            if ui_state.unit.selecting {
                 let pos_hom: Vec4 = (transform.translation, 1.).into();
                 let pos_view = view_proj * pos_hom;
                 let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
@@ -329,14 +351,14 @@ impl DynObjectsState {
             }
         });
 
-        if ui_state.dyn_selecting {
-            ui_state.dyn_selected_count = 0;
-            ui_state.dyn_selected.clear();
-            let mut query = <Read<DynObjectComponent>>::query();
+        if ui_state.unit.selecting {
+            ui_state.unit.selected_count = 0;
+            ui_state.unit.selected.clear();
+            let mut query = <Read<UnitComponent>>::query();
             for dyn_object in query.iter(world) {
                 if dyn_object.selected {
-                    ui_state.dyn_selected_count += 1;
-                    let entry = ui_state.dyn_selected.entry(dyn_object.object_type);
+                    ui_state.unit.selected_count += 1;
+                    let entry = ui_state.unit.selected.entry(dyn_object.object_type);
                     entry.and_modify(|e| *e += 1).or_insert(1);
                 }
             }
@@ -345,7 +367,7 @@ impl DynObjectsState {
 
     pub fn spawn(
         &self,
-        object_type: DynObjectType,
+        object_type: UnitType,
         position: Vec3,
         resources: &Resources,
         world: &mut World,
@@ -369,7 +391,7 @@ impl DynObjectsState {
         };
 
         // dyn object component
-        let dyn_object_component = DynObjectComponent {
+        let dyn_object_component = UnitComponent {
             object_type,
             health: 1.,
             aim: Vec3::new(1., 0., 0.),
@@ -419,7 +441,7 @@ impl DynObjectsState {
         let normal_col = Vec4::new(1., 0., 0., 1.);
         let selected_col = Vec4::new(0., 1., 0., 1.);
 
-        let mut query = <(Read<TransformComponent>, Read<DynObjectComponent>)>::query();
+        let mut query = <(Read<TransformComponent>, Read<UnitComponent>)>::query();
         for (transform, dyn_object) in query.iter(world) {
             let color = if dyn_object.selected {
                 selected_col

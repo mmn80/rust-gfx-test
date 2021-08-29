@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use egui::{Align, Checkbox, Color32};
 use glam::Vec4;
 use legion::{Resources, World};
@@ -7,11 +5,10 @@ use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
 
 use crate::{
-    dyn_object::{DynObjectType, DynObjectsState},
-    kin_object::{KinObjectType, KinObjectsState},
+    env::{env_object::EnvObjectsState, EnvUiState},
     scenes::MainState,
-    terrain::TerrainFillStyle,
     time::TimeState,
+    unit::unit::{UnitUiState, UnitsState},
     DebugUiState, RenderOptions,
 };
 
@@ -41,19 +38,8 @@ pub struct UiState {
     pub main_light_rotates: bool,
     pub main_light_pitch: f32,
     pub main_light_color: Vec4,
-    pub dyn_spawning: bool,
-    pub dyn_spawn_mode: SpawnMode,
-    pub dyn_object_type: DynObjectType,
-    pub dyn_selecting: bool,
-    pub dyn_selected_count: u32,
-    pub dyn_selected: HashMap<DynObjectType, u32>,
-    pub kin_spawning: bool,
-    pub kin_spawn_mode: SpawnMode,
-    pub kin_object_type: KinObjectType,
-    pub kin_edit_mode: bool,
-    pub kin_edit_material: &'static str,
-    pub kin_terrain_size: u32,
-    pub kin_terrain_style: TerrainFillStyle,
+    pub unit: UnitUiState,
+    pub env: EnvUiState,
     error: String,
 }
 
@@ -63,21 +49,8 @@ impl Default for UiState {
             main_light_rotates: true,
             main_light_pitch: 225.0,
             main_light_color: Vec4::ONE,
-            dyn_spawning: false,
-            dyn_spawn_mode: SpawnMode::OneShot,
-            dyn_object_type: DynObjectType::Container1,
-            dyn_selecting: false,
-            dyn_selected_count: 0,
-            dyn_selected: Default::default(),
-            kin_spawning: false,
-            kin_spawn_mode: SpawnMode::OneShot,
-            kin_object_type: KinObjectType::Building,
-            kin_edit_mode: false,
-            kin_edit_material: "simple_tile",
-            kin_terrain_size: 4096,
-            kin_terrain_style: TerrainFillStyle::FlatBoard {
-                material: "simple_tile",
-            },
+            unit: Default::default(),
+            env: Default::default(),
             error: "".to_string(),
         }
     }
@@ -89,8 +62,8 @@ impl UiState {
         world: &mut World,
         resources: &mut Resources,
         main_state: Option<&mut MainState>,
-        kin_state: Option<&mut KinObjectsState>,
-        dyn_state: Option<&mut DynObjectsState>,
+        kin_state: Option<&mut EnvObjectsState>,
+        dyn_state: Option<&mut UnitsState>,
     ) {
         let context = resources.get::<EguiContextResource>().unwrap().context();
         profiling::scope!("egui");

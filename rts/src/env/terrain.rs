@@ -44,11 +44,11 @@ use rafx_plugins::{
 
 use crate::{
     assets::pbr_material::PbrMaterialAsset,
+    env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
         DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
         DynMeshResource,
     },
-    perlin::PerlinNoise2D,
 };
 
 pub struct RenderChunkTaskMetrics {
@@ -292,13 +292,13 @@ impl Terrain {
             "flat_red",
             "flat_green",
             "flat_blue",
-            "metal",
-            "round-pattern-wallpaper",
-            "diamond-inlay-tile",
-            "curly_tile",
-            "simple_tile",
-            "black_plastic",
+            "blue_metal",
             "old_bronze",
+            "basic_tile",
+            "round_tile",
+            "diamond_inlay_tile",
+            "black_plastic",
+            "curly_tile",
         ]
     }
 

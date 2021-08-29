@@ -1,9 +1,5 @@
-use crate::{
-    assets::pbr_material::PbrMaterialAssetTypeRendererPlugin,
-    camera::RTSCamera,
-    features::dyn_mesh::{BufferUploaderConfig, DynMeshRendererPlugin, DynMeshResource},
-    terrain::TerrainResource,
-};
+use std::sync::Arc;
+
 use legion::Resources;
 use rafx::{
     api::{RafxApi, RafxDeviceContext, RafxResult, RafxSwapchainHelper},
@@ -26,9 +22,14 @@ use rafx_plugins::{
     },
     pipelines::basic::{BasicPipelineRendererPlugin, BasicRenderGraphGenerator},
 };
-
 use raw_window_handle::HasRawWindowHandle;
-use std::sync::Arc;
+
+use crate::{
+    assets::pbr_material::PbrMaterialAssetTypeRendererPlugin,
+    camera::RTSCamera,
+    env::terrain::TerrainResource,
+    features::dyn_mesh::{BufferUploaderConfig, DynMeshRendererPlugin, DynMeshResource},
+};
 
 pub fn rendering_init(
     resources: &mut Resources,

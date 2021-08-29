@@ -1,5 +1,5 @@
 (
-    name: "flat metal",
+    name: "blue metal",
     base_color_factor: (0.4, 0.5, 1.0, 1.0),
     emissive_factor: (0.0, 0.0, 0.0),
     metallic_factor: 0.8,

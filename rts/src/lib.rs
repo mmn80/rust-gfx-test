@@ -32,16 +32,14 @@ mod assets;
 mod camera;
 pub mod daemon_args;
 mod demo_renderer_thread_pool;
-mod dyn_object;
+mod env;
 mod features;
 mod init;
 mod input;
-mod kin_object;
-mod perlin;
 mod scenes;
-mod terrain;
 mod time;
 mod ui;
+mod unit;
 
 #[cfg(all(feature = "profile-with-tracy-memory", not(feature = "stats_alloc")))]
 #[global_allocator]

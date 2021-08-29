@@ -27,12 +27,12 @@ use rafx_plugins::{
 };
 
 use crate::{
+    env::terrain::{RayCastResult, Terrain},
     features::dyn_mesh::{
         DynMeshNoShadowsRenderFeatureFlag, DynMeshRenderFeature, DynMeshUnlitRenderFeatureFlag,
         DynMeshUntexturedRenderFeatureFlag, DynMeshWireframeRenderFeatureFlag,
     },
     input::{InputResource, KeyboardKey},
-    terrain::{RayCastResult, Terrain},
     time::TimeState,
     ui::UiState,
     RenderOptions,
