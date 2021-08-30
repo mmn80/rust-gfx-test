@@ -140,6 +140,7 @@ impl InProgressTransfer {
         }
     }
 
+    #[profiling::function]
     pub fn poll(&mut self) -> InProgressTransferPollResult {
         loop {
             if let Some(mut inner) = self.take_inner() {
@@ -282,12 +283,15 @@ impl UploadQueue {
     }
 
     fn start_new_transfer(&mut self) -> RafxResult<bool> {
-        let mut transfer = RafxTransferUpload::new(
-            &self.device_context,
-            &self.transfer_queue,
-            &self.graphics_queue,
-            self.config.max_bytes_per_transfer as u64,
-        )?;
+        let mut transfer = {
+            profiling::scope!("create transfer upload");
+            RafxTransferUpload::new(
+                &self.device_context,
+                &self.transfer_queue,
+                &self.graphics_queue,
+                self.config.max_bytes_per_transfer as u64,
+            )?
+        };
 
         let in_flight_uploads = self.start_new_uploads(&mut transfer)?;
 
@@ -390,6 +394,7 @@ impl UploadQueue {
         }
     }
 
+    #[profiling::function]
     fn update_existing_transfers(&mut self) {
         // iterate backwards so we can use swap_remove
         for i in (0..self.transfers_in_progress.len()).rev() {
