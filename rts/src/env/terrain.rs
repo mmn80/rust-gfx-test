@@ -287,6 +287,7 @@ const MAX_RENDER_CHUNK_JOBS: usize = 16;
 const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 4;
 const MAX_RENDER_CHUNK_JOBS_INIT: usize = 65536;
 const MAX_DISTANCE_FROM_CAMERA: i32 = 256;
+const SUPER_CHUNK_SIZE: i32 = 256;
 
 impl Terrain {
     pub fn get_default_material_names() -> Vec<&'static str> {
@@ -318,23 +319,20 @@ impl Terrain {
 
     fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
         let c = chunk.minimum;
-        let p = c / 16;
-        PointN([
-            if c.x() < 0 { p.x() - 1 } else { p.x() },
-            if c.y() < 0 { p.y() - 1 } else { p.y() },
-            if c.z() < 0 { p.z() - 1 } else { p.z() },
-        ])
-    }
-
-    fn get_super_chunk(&mut self, chunk: &ChunkKey3) -> &mut HashSet<ChunkKey3> {
-        let super_chunk_key = Self::get_super_chunk_key(chunk);
-        self.super_chunks
-            .entry(super_chunk_key)
-            .or_insert(HashSet::new())
+        let p = c / SUPER_CHUNK_SIZE;
+        SUPER_CHUNK_SIZE
+            * PointN([
+                if c.x() < 0 { p.x() - 1 } else { p.x() },
+                if c.y() < 0 { p.y() - 1 } else { p.y() },
+                if c.z() < 0 { p.z() - 1 } else { p.z() },
+            ])
     }
 
     pub fn set_chunk_dirty(&mut self, key: ChunkKey3) -> bool {
-        self.get_super_chunk(&key).insert(key);
+        self.super_chunks
+            .entry(Self::get_super_chunk_key(&key))
+            .or_insert(HashSet::new())
+            .insert(key);
         let chunk = self
             .render_chunks
             .entry(key)
@@ -462,19 +460,23 @@ impl Terrain {
             .unwrap_or_default();
 
         let mut changed_keys = vec![];
-        for (_key, chunk_set) in self.super_chunks.iter().filter(|(key, _chunk)| {
-            let center = PointN([key.x() + 8, key.y() + 8, key.z() + 8]);
-            (center.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA + 8
-                && (center.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA + 8
-        }) {
-            for chunk_key in chunk_set {
-                let chunk = self.render_chunks.get(chunk_key).unwrap();
-                if chunk.render_task.is_none()
-                    && chunk.rendered_version < chunk.source_version
-                    && (chunk_key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                    && (chunk_key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                {
-                    changed_keys.push(chunk_key.clone());
+        let half = SUPER_CHUNK_SIZE / 2;
+        for (key, chunk_set) in self.super_chunks.iter() {
+            let center = *key + Point3i::fill(half);
+            if (center.x() - eye.x as i32).abs() <= MAX_DISTANCE_FROM_CAMERA + half
+                && (center.y() - eye.y as i32).abs() <= MAX_DISTANCE_FROM_CAMERA + half
+            {
+                for chunk_key in chunk_set {
+                    if (chunk_key.minimum.x() - eye.x as i32).abs() <= MAX_DISTANCE_FROM_CAMERA
+                        && (chunk_key.minimum.y() - eye.y as i32).abs() <= MAX_DISTANCE_FROM_CAMERA
+                    {
+                        let chunk = self.render_chunks.get(chunk_key).unwrap();
+                        if chunk.render_task.is_none()
+                            && chunk.rendered_version < chunk.source_version
+                        {
+                            changed_keys.push(chunk_key.clone());
+                        }
+                    }
                 }
             }
         }
@@ -659,13 +661,12 @@ impl Terrain {
         }
 
         for chunk in cleared_chunks {
-            let is_empty = {
-                let super_chunk = self.get_super_chunk(&chunk);
+            let super_key = Self::get_super_chunk_key(&chunk);
+            if let Some(super_chunk) = self.super_chunks.get_mut(&super_key) {
                 super_chunk.remove(&chunk);
-                super_chunk.is_empty()
-            };
-            if is_empty {
-                self.super_chunks.remove(&Self::get_super_chunk_key(&chunk));
+                if super_chunk.is_empty() {
+                    self.super_chunks.remove(&super_key);
+                }
             }
         }
     }
