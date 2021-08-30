@@ -1,6 +1,6 @@
 use std::{
     cmp::{max, min},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
@@ -276,6 +276,7 @@ pub struct Terrain {
     task_pool: TaskPool,
     active_tasks: usize,
     render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
+    super_chunks: HashMap<Point3i, HashSet<ChunkKey3>>,
     render_tx: Sender<RenderChunkTaskResults>,
     render_rx: Receiver<RenderChunkTaskResults>,
     metrics: RenderChunkMetrics,
@@ -315,13 +316,31 @@ impl Terrain {
             .and_then(|idx| Some(CubeVoxel(*idx + 1)))
     }
 
-    pub fn set_chunk_dirty(&mut self, chunk: ChunkKey3) -> bool {
-        let entry = self
+    fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
+        let c = chunk.minimum;
+        let p = c / 16;
+        PointN([
+            if c.x() < 0 { p.x() - 1 } else { p.x() },
+            if c.y() < 0 { p.y() - 1 } else { p.y() },
+            if c.z() < 0 { p.z() - 1 } else { p.z() },
+        ])
+    }
+
+    fn get_super_chunk(&mut self, chunk: &ChunkKey3) -> &mut HashSet<ChunkKey3> {
+        let super_chunk_key = Self::get_super_chunk_key(chunk);
+        self.super_chunks
+            .entry(super_chunk_key)
+            .or_insert(HashSet::new())
+    }
+
+    pub fn set_chunk_dirty(&mut self, key: ChunkKey3) -> bool {
+        self.get_super_chunk(&key).insert(key);
+        let chunk = self
             .render_chunks
-            .entry(chunk)
+            .entry(key)
             .or_insert(TerrainRenderChunk::new());
-        if entry.source_version == entry.rendered_version {
-            entry.source_version += 1;
+        if chunk.source_version == chunk.rendered_version {
+            chunk.source_version += 1;
             false
         } else {
             true
@@ -346,6 +365,7 @@ impl Terrain {
     }
 
     pub fn reset_chunks(&mut self, world: &mut World) {
+        self.super_chunks.clear();
         for chunk in self.render_chunks.values_mut() {
             chunk.clear(world);
         }
@@ -441,23 +461,30 @@ impl Terrain {
             .and_then(|view| Some(view.eye_position))
             .unwrap_or_default();
 
-        let mut changed_keys: Vec<_> = self
-            .render_chunks
-            .iter()
-            .filter(|(key, chunk)| {
-                (key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                    && (key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
-                    && chunk.render_task.is_none()
+        let mut changed_keys = vec![];
+        for (_key, chunk_set) in self.super_chunks.iter().filter(|(key, _chunk)| {
+            let center = PointN([key.x() + 8, key.y() + 8, key.z() + 8]);
+            (center.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA + 8
+                && (center.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA + 8
+        }) {
+            for chunk_key in chunk_set {
+                let chunk = self.render_chunks.get(chunk_key).unwrap();
+                if chunk.render_task.is_none()
                     && chunk.rendered_version < chunk.source_version
-            })
-            .map(|(key, _chunk)| key.clone())
-            .collect();
+                    && (chunk_key.minimum.x() - eye.x as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                    && (chunk_key.minimum.y() - eye.y as i32).abs() < MAX_DISTANCE_FROM_CAMERA
+                {
+                    changed_keys.push(chunk_key.clone());
+                }
+            }
+        }
         changed_keys.sort_unstable_by_key(|key| {
             max(
                 (key.minimum.x() - eye.x as i32).abs(),
                 (key.minimum.y() - eye.y as i32).abs(),
             )
         });
+
         changed_keys
             .iter()
             .take(if self.initialized {
@@ -561,6 +588,7 @@ impl Terrain {
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
+        let mut cleared_chunks = vec![];
         for result in self.render_rx.try_iter() {
             let results_start = Instant::now();
             let mut metrics = result.metrics;
@@ -620,6 +648,7 @@ impl Terrain {
                     }
                 } else {
                     chunk.clear(world);
+                    cleared_chunks.push(result.key.clone());
                 }
             } else {
                 metrics.failed = true;
@@ -627,6 +656,17 @@ impl Terrain {
 
             metrics.results_time = (Instant::now() - results_start).as_micros() as u32;
             self.metrics.tasks.push(metrics);
+        }
+
+        for chunk in cleared_chunks {
+            let is_empty = {
+                let super_chunk = self.get_super_chunk(&chunk);
+                super_chunk.remove(&chunk);
+                super_chunk.is_empty()
+            };
+            if is_empty {
+                self.super_chunks.remove(&Self::get_super_chunk_key(&chunk));
+            }
         }
     }
 
@@ -979,6 +1019,7 @@ impl TerrainResource {
                 task_pool: TaskPoolBuilder::new().build(),
                 active_tasks: 0,
                 render_chunks: HashMap::new(),
+                super_chunks: HashMap::new(),
                 render_tx,
                 render_rx,
                 metrics: Default::default(),
