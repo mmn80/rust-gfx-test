@@ -458,17 +458,18 @@ impl Terrain {
             .as_ref()
             .and_then(|view| Some(view.eye_position))
             .unwrap_or_default();
+        let eye = PointN([eye.x as i32, eye.y as i32, eye.z as i32]);
 
         let mut changed_keys = vec![];
-        let half = SUPER_CHUNK_SIZE / 2;
+        let super_center = Point3i::fill(SUPER_CHUNK_SIZE / 2);
         for (key, chunk_set) in self.super_chunks.iter() {
-            let center = *key + Point3i::fill(half);
-            if (center.x() - eye.x as i32).abs() <= MAX_DISTANCE_FROM_CAMERA + half
-                && (center.y() - eye.y as i32).abs() <= MAX_DISTANCE_FROM_CAMERA + half
+            let center = *key + super_center;
+            if (center.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA + SUPER_CHUNK_SIZE
+                && (center.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA + SUPER_CHUNK_SIZE
             {
                 for chunk_key in chunk_set {
-                    if (chunk_key.minimum.x() - eye.x as i32).abs() <= MAX_DISTANCE_FROM_CAMERA
-                        && (chunk_key.minimum.y() - eye.y as i32).abs() <= MAX_DISTANCE_FROM_CAMERA
+                    if (chunk_key.minimum.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA
+                        && (chunk_key.minimum.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA
                     {
                         let chunk = self.render_chunks.get(chunk_key).unwrap();
                         if chunk.render_task.is_none()
@@ -482,8 +483,8 @@ impl Terrain {
         }
         changed_keys.sort_unstable_by_key(|key| {
             max(
-                (key.minimum.x() - eye.x as i32).abs(),
-                (key.minimum.y() - eye.y as i32).abs(),
+                (key.minimum.x() - eye.x()).abs(),
+                (key.minimum.y() - eye.y()).abs(),
             )
         });
 
