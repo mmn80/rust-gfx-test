@@ -212,6 +212,10 @@ impl TerrainVoxel {
     pub fn empty() -> Self {
         Self(0)
     }
+
+    pub fn from_material_index(material: u16) -> Self {
+        Self(material)
+    }
 }
 
 impl MergeVoxel for TerrainVoxel {

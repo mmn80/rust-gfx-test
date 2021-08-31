@@ -25,7 +25,9 @@ use rafx_plugins::{
 use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
-    assets::pbr_material::PbrMaterialAssetTypeRendererPlugin,
+    assets::{
+        env_tile::EnvTileAssetTypeRendererPlugin, pbr_material::PbrMaterialAssetTypeRendererPlugin,
+    },
     camera::RTSCamera,
     env::terrain::TerrainResource,
     features::dyn_mesh::{BufferUploaderConfig, DynMeshRendererPlugin, DynMeshResource},
@@ -70,6 +72,7 @@ pub fn rendering_init(
     let mut renderer_builder = RendererBuilder::default();
     renderer_builder = renderer_builder
         .add_asset(Arc::new(PbrMaterialAssetTypeRendererPlugin))
+        .add_asset(Arc::new(EnvTileAssetTypeRendererPlugin))
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))
