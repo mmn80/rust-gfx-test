@@ -81,7 +81,7 @@ impl EnvObjectsState {
         let storage = terrain_resource.read();
         let terrain = storage.get(&terrain_handle);
 
-        let empty_tile = Default::default();
+        let empty_tile = TerrainVoxel::empty();
         let dimond_tile = terrain.voxel_by_material("diamond_inlay_tile").unwrap();
         let round_tile = terrain.voxel_by_material("round_tile").unwrap();
         let curly_tile = terrain.voxel_by_material("curly_tile").unwrap();

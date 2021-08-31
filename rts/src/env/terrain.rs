@@ -208,6 +208,12 @@ pub struct TerrainChunkTaskResults {
 #[derive(Clone, Copy, Default)]
 pub struct TerrainVoxel(u16);
 
+impl TerrainVoxel {
+    pub fn empty() -> Self {
+        Self(0)
+    }
+}
+
 impl MergeVoxel for TerrainVoxel {
     type VoxelValue = u16;
 
@@ -343,7 +349,7 @@ impl Terrain {
     }
 
     pub fn clear_voxel(&mut self, point: Point3i) {
-        self.update_voxel(point, TerrainVoxel(0));
+        self.update_voxel(point, TerrainVoxel::empty());
     }
 
     pub fn reset_chunks(&mut self, world: &mut World) {
@@ -485,7 +491,7 @@ impl Terrain {
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                     &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
-                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, TerrainVoxel(0));
+                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, TerrainVoxel::empty());
                 copy_extent(
                     &padded_chunk_extent,
                     &self.voxels.lod_view(0),
