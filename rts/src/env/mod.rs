@@ -10,6 +10,7 @@ pub struct EnvUiState {
     pub spawn_mode: SpawnMode,
     pub spawn_tile: String,
     pub edit_tile: Option<String>,
+    pub edit_new_tile: bool,
     pub edit_mode: bool,
     pub edit_material: &'static str,
     pub terrain_size: u32,
@@ -21,8 +22,9 @@ impl Default for EnvUiState {
         Self {
             spawning: false,
             spawn_mode: SpawnMode::OneShot,
-            spawn_tile: "building".to_string(),
+            spawn_tile: "Bilding".to_string(),
             edit_tile: None,
+            edit_new_tile: false,
             edit_mode: false,
             edit_material: "basic_tile",
             terrain_size: 4096,

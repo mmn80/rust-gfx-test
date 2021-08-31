@@ -56,11 +56,12 @@ impl EnvObjectsState {
 
         log::info!("Loading terrain tiles...");
 
-        let tile_names = vec!["building", "tree"];
+        let tile_names = vec!["Building", "Tree", "Bronze statue"];
         let tiles: HashMap<String, Handle<EnvTileAsset>> = tile_names
             .iter()
             .map(|name| {
-                let path = format!("tiles/{}.tile", *name);
+                let file_name = name.to_lowercase().replace(" ", "_");
+                let path = format!("tiles/{}.tile", file_name);
                 let tile_handle = asset_resource.load_asset_path::<EnvTileAsset, _>(path);
                 (String::from(*name), tile_handle.clone())
             })
@@ -120,11 +121,19 @@ impl EnvObjectsState {
                 .show(ui, |ui| {
                     let mut editing_finished = false;
                     let mut editing_failed = false;
-                    if let Some(tile) = &ui_state.env.edit_tile {
-                        ui.label(format!("Editing tile: {}", tile));
+                    if let Some(tile) = ui_state.env.edit_tile.clone() {
+                        if ui_state.env.edit_new_tile {
+                            let mut tile = tile.clone();
+                            ui.label("New tile's name:");
+                            ui.text_edit_singleline(&mut tile);
+                            ui_state.env.edit_tile = Some(tile);
+                        } else {
+                            ui.label(format!("Editing tile: {}", tile));
+                        }
                         ui.horizontal_wrapped(|ui| {
                             if ui.add_sized([100., 30.], Button::new("Save")).clicked() {
-                                editing_failed = self.save_edited_tile(tile, resources).is_none();
+                                editing_failed = tile.is_empty()
+                                    || self.save_edited_tile(&tile, resources).is_none();
                                 editing_finished = !editing_failed;
                             }
                             if ui.add_sized([100., 30.], Button::new("Quit")).clicked() {
@@ -136,13 +145,21 @@ impl EnvObjectsState {
                             for (name, _) in &self.tiles {
                                 if ui.selectable_label(false, format!("{}", name)).clicked() {
                                     ui_state.env.edit_tile = Some(String::from(name));
+                                    ui_state.env.edit_mode = true;
                                     self.start_edit_tile(name, resources, world);
                                 }
+                            }
+                            if ui.selectable_label(false, "+").clicked() {
+                                ui_state.env.edit_tile = Some("".to_string());
+                                ui_state.env.edit_new_tile = true;
+                                ui_state.env.edit_mode = true;
+                                self.start_edit_tile("", resources, world);
                             }
                         });
                     };
                     if editing_finished {
                         ui_state.env.edit_tile = None;
+                        ui_state.env.edit_new_tile = false;
                         self.reset_terrain(resources, world, ui_state);
                     }
                     if editing_failed {
@@ -399,7 +416,9 @@ impl EnvObjectsState {
             );
         }
 
-        self.spawn(tile_name.to_string(), Point3i::ZERO, resources, world);
+        if !tile_name.is_empty() {
+            self.spawn(tile_name.to_string(), Point3i::ZERO, resources, world);
+        }
     }
 
     pub fn save_edited_tile(&self, tile: &str, resources: &mut Resources) -> Option<()> {
