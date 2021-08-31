@@ -12,7 +12,7 @@ use crate::{
     camera::RTSCamera,
     env::{
         perlin::PerlinNoise2D,
-        terrain::{CubeVoxel, Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
+        terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource, TerrainVoxel},
     },
     input::{InputResource, KeyboardKey, MouseButton},
     ui::{SpawnMode, UiState},
@@ -42,7 +42,7 @@ pub struct EnvObjectComponent {
 
 pub struct EnvObjectsState {
     pub terrain: TerrainHandle,
-    objects: HashMap<EnvObjectType, Array3x1<CubeVoxel>>,
+    objects: HashMap<EnvObjectType, Array3x1<TerrainVoxel>>,
 }
 
 impl EnvObjectsState {
@@ -81,7 +81,7 @@ impl EnvObjectsState {
         let storage = terrain_resource.read();
         let terrain = storage.get(&terrain_handle);
 
-        let empty = 0.into();
+        let empty_tile = Default::default();
         let dimond_tile = terrain.voxel_by_material("diamond_inlay_tile").unwrap();
         let round_tile = terrain.voxel_by_material("round_tile").unwrap();
         let curly_tile = terrain.voxel_by_material("curly_tile").unwrap();
@@ -89,9 +89,9 @@ impl EnvObjectsState {
 
         let mut objects = HashMap::new();
 
-        let mut building = Array3x1::<CubeVoxel>::fill(
+        let mut building = Array3x1::<TerrainVoxel>::fill(
             Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 8])),
-            empty,
+            empty_tile,
         );
         building.fill_extent(
             &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 4])),
@@ -107,9 +107,9 @@ impl EnvObjectsState {
         );
         objects.insert(EnvObjectType::Building, building);
 
-        let mut tree = Array3x1::<CubeVoxel>::fill(
+        let mut tree = Array3x1::<TerrainVoxel>::fill(
             Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 9])),
-            empty,
+            empty_tile,
         );
         tree.fill_extent(
             &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 4])),
@@ -349,7 +349,7 @@ impl EnvObjectsState {
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);
-        terrain.update_render_chunks(world, resources);
+        terrain.update_chunks(world, resources);
     }
 
     pub fn spawn(

@@ -51,14 +51,14 @@ use crate::{
     },
 };
 
-pub struct RenderChunkTaskMetrics {
+pub struct TerrainChunkTaskMetrics {
     pub quads_time: u32,   // µs
     pub mesh_time: u32,    // µs
     pub results_time: u32, // µs
     pub failed: bool,
 }
 
-pub struct RenderChunkExtractMetrics {
+pub struct TerrainChunkExtractMetrics {
     pub tasks: u32,
     pub extract_time: u32, // µs
 }
@@ -111,14 +111,14 @@ impl SingleDistributionMetrics {
     }
 }
 
-pub struct RenderChunkDistributionMetrics {
+pub struct TerrainChunkDistributionMetrics {
     pub extract_time: SingleDistributionMetrics,
     pub quads_time: SingleDistributionMetrics,
     pub mesh_time: SingleDistributionMetrics,
     pub results_time: SingleDistributionMetrics,
 }
 
-impl RenderChunkDistributionMetrics {
+impl TerrainChunkDistributionMetrics {
     pub fn info_log(&self) {
         self.extract_time.info_log("extract");
         self.quads_time.info_log("quads");
@@ -127,13 +127,13 @@ impl RenderChunkDistributionMetrics {
     }
 }
 
-pub struct RenderChunkMetrics {
+pub struct TerrainChunkMetrics {
     pub start: Instant,
-    pub tasks: Vec<RenderChunkTaskMetrics>,
-    pub extract: Vec<RenderChunkExtractMetrics>,
+    pub tasks: Vec<TerrainChunkTaskMetrics>,
+    pub extract: Vec<TerrainChunkExtractMetrics>,
 }
 
-impl Default for RenderChunkMetrics {
+impl Default for TerrainChunkMetrics {
     fn default() -> Self {
         Self {
             start: Instant::now(),
@@ -143,12 +143,12 @@ impl Default for RenderChunkMetrics {
     }
 }
 
-impl RenderChunkMetrics {
+impl TerrainChunkMetrics {
     pub fn is_empty(&self) -> bool {
         self.extract.is_empty() && self.tasks.is_empty()
     }
 
-    pub fn get_distribution_metrics(&self) -> RenderChunkDistributionMetrics {
+    pub fn get_distribution_metrics(&self) -> TerrainChunkDistributionMetrics {
         let extract_total = self.extract.iter().map(|m| m.tasks as usize).sum();
         let extract_time = SingleDistributionMetrics {
             samples: extract_total,
@@ -190,7 +190,7 @@ impl RenderChunkMetrics {
                 .collect(),
         );
 
-        RenderChunkDistributionMetrics {
+        TerrainChunkDistributionMetrics {
             extract_time,
             quads_time,
             mesh_time,
@@ -199,22 +199,16 @@ impl RenderChunkMetrics {
     }
 }
 
-pub struct RenderChunkTaskResults {
+pub struct TerrainChunkTaskResults {
     pub key: ChunkKey3,
     pub mesh: Option<DynMeshData>,
-    pub metrics: RenderChunkTaskMetrics,
+    pub metrics: TerrainChunkTaskMetrics,
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct CubeVoxel(u16);
+pub struct TerrainVoxel(u16);
 
-impl From<u16> for CubeVoxel {
-    fn from(id: u16) -> Self {
-        CubeVoxel(id)
-    }
-}
-
-impl MergeVoxel for CubeVoxel {
+impl MergeVoxel for TerrainVoxel {
     type VoxelValue = u16;
 
     fn voxel_merge_value(&self) -> Self::VoxelValue {
@@ -222,36 +216,36 @@ impl MergeVoxel for CubeVoxel {
     }
 }
 
-impl IsOpaque for CubeVoxel {
+impl IsOpaque for TerrainVoxel {
     fn is_opaque(&self) -> bool {
         true
     }
 }
 
-impl IsEmpty for CubeVoxel {
+impl IsEmpty for TerrainVoxel {
     fn is_empty(&self) -> bool {
         self.0 == 0
     }
 }
 
-pub struct TerrainRenderChunk {
+struct TerrainChunk {
     pub entity: Option<Entity>,
     pub dyn_mesh_handle: Option<DynMeshHandle>,
     pub render_object_handle: Option<RenderObjectHandle>,
     pub visibility_object_handle: Option<VisibilityObjectArc>,
     pub dirty: bool,
-    pub render_task: Option<Task<()>>,
+    pub builder: Option<Task<()>>,
 }
 
-impl TerrainRenderChunk {
+impl TerrainChunk {
     pub fn new() -> Self {
-        TerrainRenderChunk {
+        TerrainChunk {
             entity: None,
             dyn_mesh_handle: None,
             render_object_handle: None,
             visibility_object_handle: None,
             dirty: false,
-            render_task: None,
+            builder: None,
         }
     }
 
@@ -265,19 +259,19 @@ impl TerrainRenderChunk {
     }
 }
 
-pub type TerrainVoxels = ChunkHashMap3<CubeVoxel, ChunkMapBuilder3x1<CubeVoxel>>;
+pub type TerrainVoxels = ChunkHashMap3<TerrainVoxel, ChunkMapBuilder3x1<TerrainVoxel>>;
 
 pub struct Terrain {
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: HashMap<String, u16>,
     pub voxels: TerrainVoxels,
     task_pool: TaskPool,
-    active_tasks: usize,
-    render_chunks: HashMap<ChunkKey3, TerrainRenderChunk>,
+    active_builders: usize,
+    chunks: HashMap<ChunkKey3, TerrainChunk>,
     super_chunks: HashMap<Point3i, HashSet<ChunkKey3>>,
-    render_tx: Sender<RenderChunkTaskResults>,
-    render_rx: Receiver<RenderChunkTaskResults>,
-    metrics: RenderChunkMetrics,
+    builder_tx: Sender<TerrainChunkTaskResults>,
+    builder_rx: Receiver<TerrainChunkTaskResults>,
+    metrics: TerrainChunkMetrics,
     initialized: bool,
 }
 
@@ -309,10 +303,10 @@ impl Terrain {
             .and_then(|idx| Some(self.materials[*idx as usize].clone()))
     }
 
-    pub fn voxel_by_material(&self, material_name: &'static str) -> Option<CubeVoxel> {
+    pub fn voxel_by_material(&self, material_name: &'static str) -> Option<TerrainVoxel> {
         self.material_names
             .get(material_name)
-            .and_then(|idx| Some(CubeVoxel(*idx + 1)))
+            .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
     }
 
     fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
@@ -331,15 +325,12 @@ impl Terrain {
             .entry(Self::get_super_chunk_key(&key))
             .or_insert(HashSet::new())
             .insert(key);
-        let chunk = self
-            .render_chunks
-            .entry(key)
-            .or_insert(TerrainRenderChunk::new());
+        let chunk = self.chunks.entry(key).or_insert(TerrainChunk::new());
         chunk.dirty = true;
     }
 
-    pub fn update_voxel(&mut self, point: Point3i, voxel: CubeVoxel) {
-        let vox_ref: &mut CubeVoxel = self.voxels.get_mut_point(0, point);
+    pub fn update_voxel(&mut self, point: Point3i, voxel: TerrainVoxel) {
+        let vox_ref: &mut TerrainVoxel = self.voxels.get_mut_point(0, point);
         *vox_ref = voxel;
         let keys = self
             .voxels
@@ -352,15 +343,16 @@ impl Terrain {
     }
 
     pub fn clear_voxel(&mut self, point: Point3i) {
-        self.update_voxel(point, 0.into());
+        self.update_voxel(point, TerrainVoxel(0));
     }
 
     pub fn reset_chunks(&mut self, world: &mut World) {
+        self.active_builders = 0;
         self.super_chunks.clear();
-        for chunk in self.render_chunks.values_mut() {
+        for chunk in self.chunks.values_mut() {
             chunk.clear(world);
         }
-        self.render_chunks.clear();
+        self.chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);
         let mut occupied = vec![];
         self.voxels.visit_occupied_chunks(0, &full_extent, |chunk| {
@@ -378,7 +370,7 @@ impl Terrain {
         style: TerrainFillStyle,
     ) -> TerrainVoxels {
         let chunk_shape = Point3i::fill(16);
-        let ambient_value = CubeVoxel::default();
+        let ambient_value = TerrainVoxel::default();
         let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
         let mut voxels = builder.build_with_hash_map_storage();
         let mut lod0 = voxels.lod_view_mut(0);
@@ -387,12 +379,12 @@ impl Terrain {
         let base_extent = Extent3i::from_min_and_shape(base_min, PointN([size, size, 1]));
         match style {
             TerrainFillStyle::FlatBoard { material } => {
-                let voxel = CubeVoxel(materials[material] + 1);
+                let voxel = TerrainVoxel(materials[material] + 1);
                 lod0.fill_extent(&base_extent, voxel);
             }
             TerrainFillStyle::CheckersBoard { zero, one } => {
-                let zero_voxel = CubeVoxel(materials[zero] + 1);
-                let one_voxel = CubeVoxel(materials[one] + 1);
+                let zero_voxel = TerrainVoxel(materials[zero] + 1);
+                let one_voxel = TerrainVoxel(materials[one] + 1);
                 for p in base_extent.iter_points() {
                     let px = p.x() % 2;
                     let py = p.y() % 2;
@@ -407,7 +399,7 @@ impl Terrain {
                 }
             }
             TerrainFillStyle::PerlinNoise { params, material } => {
-                let voxel = CubeVoxel(materials[material] + 1);
+                let voxel = TerrainVoxel(materials[material] + 1);
                 for p in base_extent.iter_points() {
                     let noise = params.get_noise(p.x() as f64, p.y() as f64) as i32;
                     let top = PointN([p.x(), p.y(), noise - 8]);
@@ -434,17 +426,17 @@ impl Terrain {
     }
 
     #[profiling::function]
-    pub fn update_render_chunks(&mut self, world: &mut World, resources: &Resources) {
-        self.start_render_jobs(resources);
+    pub fn update_chunks(&mut self, world: &mut World, resources: &Resources) {
+        self.start_mesh_jobs(resources);
         self.process_job_results(world, resources);
         self.check_reset_metrics(5.0, true);
     }
 
     #[profiling::function]
-    fn extract_render_jobs_inputs(
+    fn extract_mesh_voxels(
         &mut self,
         resources: &Resources,
-    ) -> Vec<(ChunkKey<[i32; 3]>, Array3x1<CubeVoxel>)> {
+    ) -> Vec<(ChunkKey<[i32; 3]>, Array3x1<TerrainVoxel>)> {
         let viewports_resource = resources.get::<ViewportsResource>().unwrap();
         let eye = viewports_resource
             .main_view_meta
@@ -464,8 +456,8 @@ impl Terrain {
                     if (chunk_key.minimum.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA
                         && (chunk_key.minimum.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA
                     {
-                        let chunk = self.render_chunks.get(chunk_key).unwrap();
-                        if chunk.render_task.is_none() && chunk.dirty {
+                        let chunk = self.chunks.get(chunk_key).unwrap();
+                        if chunk.builder.is_none() && chunk.dirty {
                             changed_keys.push(chunk_key.clone());
                         }
                     }
@@ -484,7 +476,7 @@ impl Terrain {
             .take(if self.initialized {
                 min(
                     MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
-                    MAX_RENDER_CHUNK_JOBS - self.active_tasks,
+                    MAX_RENDER_CHUNK_JOBS - self.active_builders,
                 )
             } else {
                 MAX_RENDER_CHUNK_JOBS_INIT
@@ -493,7 +485,7 @@ impl Terrain {
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                     &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
-                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, CubeVoxel(0));
+                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, TerrainVoxel(0));
                 copy_extent(
                     &padded_chunk_extent,
                     &self.voxels.lod_view(0),
@@ -505,10 +497,10 @@ impl Terrain {
     }
 
     #[profiling::function]
-    fn start_render_jobs(&mut self, resources: &Resources) {
-        if !self.initialized || self.active_tasks < MAX_RENDER_CHUNK_JOBS {
+    fn start_mesh_jobs(&mut self, resources: &Resources) {
+        if !self.initialized || self.active_builders < MAX_RENDER_CHUNK_JOBS {
             let extract_start = Instant::now();
-            let to_render = self.extract_render_jobs_inputs(resources);
+            let to_render = self.extract_mesh_voxels(resources);
 
             if to_render.len() > 0 {
                 let extract_time = (Instant::now() - extract_start).as_micros() as u32;
@@ -517,7 +509,7 @@ impl Terrain {
                     to_render.len(),
                     extract_time
                 );
-                self.metrics.extract.push(RenderChunkExtractMetrics {
+                self.metrics.extract.push(TerrainChunkExtractMetrics {
                     tasks: to_render.len() as u32,
                     extract_time,
                 });
@@ -535,7 +527,7 @@ impl Terrain {
                     .collect();
 
                 for (key, padded_chunk) in to_render {
-                    let render_tx = self.render_tx.clone();
+                    let builder_tx = self.builder_tx.clone();
                     let materials = materials.clone();
                     let padded_extent = padded_chunk.extent().clone();
                     let task = self.task_pool.spawn(async move {
@@ -555,22 +547,22 @@ impl Terrain {
                             (mesh, failed)
                         };
                         let mesh_duration = Instant::now() - mesh_start;
-                        let results = RenderChunkTaskResults {
+                        let results = TerrainChunkTaskResults {
                             key: key.clone(),
                             mesh,
-                            metrics: RenderChunkTaskMetrics {
+                            metrics: TerrainChunkTaskMetrics {
                                 quads_time: quads_duration.as_micros() as u32,
                                 mesh_time: mesh_duration.as_micros() as u32,
                                 results_time: 0,
                                 failed,
                             },
                         };
-                        let _result = render_tx.send(results);
+                        let _result = builder_tx.send(results);
                     });
-                    if let Some(chunk) = self.render_chunks.get_mut(&key) {
-                        chunk.render_task = Some(task);
+                    if let Some(chunk) = self.chunks.get_mut(&key) {
+                        chunk.builder = Some(task);
                         chunk.dirty = false;
-                        self.active_tasks += 1;
+                        self.active_builders += 1;
                     }
                 }
             }
@@ -584,13 +576,13 @@ impl Terrain {
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
         let mut cleared_chunks = vec![];
-        for result in self.render_rx.try_iter() {
+        for result in self.builder_rx.try_iter() {
             let results_start = Instant::now();
             let mut metrics = result.metrics;
 
-            if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
-                chunk.render_task = None;
-                self.active_tasks -= 1;
+            if let Some(chunk) = self.chunks.get_mut(&result.key) {
+                chunk.builder = None;
+                self.active_builders -= 1;
 
                 // log::info!("Dyn mesh built. {}", result.mesh.clone());
 
@@ -667,7 +659,7 @@ impl Terrain {
         &mut self,
         interval_secs: f64,
         info_log: bool,
-    ) -> Option<RenderChunkDistributionMetrics> {
+    ) -> Option<TerrainChunkDistributionMetrics> {
         if self.metrics.is_empty() {
             self.metrics.start = Instant::now();
             return None;
@@ -687,7 +679,7 @@ impl Terrain {
 
     #[profiling::function]
     fn make_dyn_mesh_data(
-        voxels: &Array3x1<CubeVoxel>,
+        voxels: &Array3x1<TerrainVoxel>,
         quads: &GreedyQuadsBuffer,
         materials: &Vec<Option<PbrMaterialAsset>>,
     ) -> Option<DynMeshData> {
@@ -868,9 +860,9 @@ pub struct RayCastResult {
     pub before_hit: Point3i,
 }
 
-pub struct PerMaterialGreedyQuadsBuffer {
+struct PerMaterialGreedyQuadsBuffer {
     pub quad_groups: [QuadGroup; 6],
-    pub material: CubeVoxel,
+    pub material: TerrainVoxel,
 }
 
 impl PerMaterialGreedyQuadsBuffer {
@@ -885,7 +877,7 @@ impl PerMaterialGreedyQuadsBuffer {
 }
 
 impl PerMaterialGreedyQuadsBuffer {
-    pub fn new(material: CubeVoxel) -> Self {
+    pub fn new(material: TerrainVoxel) -> Self {
         PerMaterialGreedyQuadsBuffer {
             quad_groups: RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
             material,
@@ -1010,11 +1002,11 @@ impl TerrainResource {
                 material_names,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
-                active_tasks: 0,
-                render_chunks: HashMap::new(),
+                active_builders: 0,
+                chunks: HashMap::new(),
                 super_chunks: HashMap::new(),
-                render_tx,
-                render_rx,
+                builder_tx: render_tx,
+                builder_rx: render_rx,
                 metrics: Default::default(),
                 initialized: false,
             }
