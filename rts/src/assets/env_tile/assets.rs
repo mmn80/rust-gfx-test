@@ -38,6 +38,13 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
         _asset_manager: &mut AssetManager,
         asset_data: EnvTileAssetData,
     ) -> RafxResult<EnvTileAsset> {
+        if asset_data.palette.len() > 256 {
+            return Err(RafxError::StringError(format!(
+                "Pallete has {} materials but only 256 are supported.",
+                asset_data.palette.len()
+            )));
+        }
+
         let x_max = asset_data
             .voxels
             .iter()
@@ -57,10 +64,12 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
             .max()
             .unwrap_or_default() as i32;
         let z_max = asset_data.voxels.len() as i32;
+
         let mut voxels = Array3x1::<TerrainVoxel>::fill(
             Extent3i::from_min_and_shape(Point3i::ZERO, PointN([x_max, y_max, z_max])),
             TerrainVoxel::empty(),
         );
+
         for (z, slice) in asset_data.voxels.iter().enumerate() {
             let z = z as i32;
             for (y, line) in slice.iter().enumerate() {
@@ -94,6 +103,7 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
                 }
             }
         }
+
         Ok(EnvTileAsset {
             inner: Arc::new(EnvTileAssetInner {
                 name: asset_data.name,

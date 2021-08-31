@@ -273,7 +273,8 @@ pub type TerrainVoxels = ChunkHashMap3<TerrainVoxel, ChunkMapBuilder3x1<TerrainV
 
 pub struct Terrain {
     materials: Vec<Handle<PbrMaterialAsset>>,
-    material_names: HashMap<String, u16>,
+    material_names: Vec<String>,
+    materials_map: HashMap<String, u16>,
     pub voxels: TerrainVoxels,
     task_pool: TaskPool,
     active_builders: usize,
@@ -307,8 +308,34 @@ impl Terrain {
         ]
     }
 
+    pub fn get_pallete_voxel_string(
+        &self,
+        voxel: &TerrainVoxel,
+        pallete: &mut Vec<String>,
+        pallete_builder: &mut HashMap<String, u8>,
+    ) -> String {
+        if voxel.is_empty() {
+            "00".to_string()
+        } else {
+            let mat = self.material_name_by_voxel(voxel);
+            let entry = pallete_builder.entry(mat.clone()).or_insert_with(|| {
+                pallete.push(mat);
+                pallete.len() as u8
+            });
+            format!("{:02X}", entry)
+        }
+    }
+
+    pub fn material_name_by_voxel(&self, voxel: &TerrainVoxel) -> String {
+        if voxel.is_empty() {
+            "".to_string()
+        } else {
+            self.material_names[voxel.0 as usize - 1].clone()
+        }
+    }
+
     pub fn voxel_by_material(&self, material_name: &str) -> Option<TerrainVoxel> {
-        self.material_names
+        self.materials_map
             .get(material_name)
             .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
     }
@@ -453,7 +480,7 @@ impl Terrain {
     ) {
         log::info!("Resetting terrain...");
 
-        self.voxels = Self::generate_voxels(&self.material_names, origin, size, style);
+        self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
         self.reset_chunks(world);
 
         log::info!("Terrain reset");
@@ -1025,15 +1052,20 @@ impl TerrainResource {
         let mut terrain = {
             let material_names = materials
                 .iter()
+                .map(|(name, _h)| name.to_string())
+                .collect();
+            let materials_map = materials
+                .iter()
                 .enumerate()
                 .map(|(idx, v)| (v.0.to_string(), idx as u16))
                 .collect();
             let materials = materials.iter().map(|v| v.1.clone()).collect();
-            let voxels = Terrain::generate_voxels(&material_names, origin, size, style);
+            let voxels = Terrain::generate_voxels(&materials_map, origin, size, style);
             let (render_tx, render_rx) = unbounded();
             Terrain {
                 materials,
                 material_names,
+                materials_map,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
                 active_builders: 0,
