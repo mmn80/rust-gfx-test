@@ -436,7 +436,7 @@ impl Terrain {
         let mut voxels = builder.build_with_hash_map_storage();
         let mut lod0 = voxels.lod_view_mut(0);
         let size = size as i32;
-        let base_min = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z()]);
+        let base_min = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z() - 1]);
         let base_extent = Extent3i::from_min_and_shape(base_min, PointN([size, size, 1]));
         match style {
             TerrainFillStyle::FlatBoard { material } => {

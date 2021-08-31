@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use building_blocks::core::prelude::*;
+use building_blocks::{core::prelude::*, storage::prelude::*};
 use distill::loader::handle::Handle;
 use egui::{Button, Checkbox};
 use glam::{Quat, Vec3};
@@ -9,7 +9,10 @@ use rafx::assets::{distill_impl::AssetResource, AssetManager};
 use rafx_plugins::components::TransformComponent;
 
 use crate::{
-    assets::{env_tile::EnvTileAsset, pbr_material::PbrMaterialAsset},
+    assets::{
+        env_tile::{EnvTileAsset, EnvTileExporter},
+        pbr_material::PbrMaterialAsset,
+    },
     camera::RTSCamera,
     env::{
         perlin::PerlinNoise2D,
@@ -18,6 +21,8 @@ use crate::{
     input::{InputResource, KeyboardKey, MouseButton},
     ui::{SpawnMode, UiState},
 };
+
+use super::terrain::TerrainVoxel;
 
 #[derive(Clone)]
 pub struct EnvTileComponent {
@@ -88,9 +93,6 @@ impl EnvObjectsState {
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
-        let input = resources.get::<InputResource>().unwrap();
-        let camera = resources.get::<RTSCamera>().unwrap();
-
         if ui_state.env.spawning {
             egui::CollapsingHeader::new("Spawn terrain object")
                 .default_open(true)
@@ -106,11 +108,46 @@ impl EnvObjectsState {
                     ui.horizontal_wrapped(|ui| {
                         for (name, _) in &self.tiles {
                             if ui.selectable_label(false, format!("{}", name)).clicked() {
-                                ui_state.env.object_type = String::from(name);
+                                ui_state.env.spawn_tile = String::from(name);
                                 ui_state.env.spawning = true;
                             }
                         }
                     });
+                });
+
+            egui::CollapsingHeader::new("Edit terrain object")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let mut editing_finished = false;
+                    let mut editing_failed = false;
+                    if let Some(tile) = &ui_state.env.edit_tile {
+                        ui.label(format!("Editing tile: {}", tile));
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.add_sized([100., 30.], Button::new("Save")).clicked() {
+                                editing_failed = self.save_edited_tile(tile, resources).is_none();
+                                editing_finished = !editing_failed;
+                            }
+                            if ui.add_sized([100., 30.], Button::new("Quit")).clicked() {
+                                editing_finished = true;
+                            }
+                        });
+                    } else {
+                        ui.horizontal_wrapped(|ui| {
+                            for (name, _) in &self.tiles {
+                                if ui.selectable_label(false, format!("{}", name)).clicked() {
+                                    ui_state.env.edit_tile = Some(String::from(name));
+                                    self.start_edit_tile(name, resources, world);
+                                }
+                            }
+                        });
+                    };
+                    if editing_finished {
+                        ui_state.env.edit_tile = None;
+                        self.reset_terrain(resources, world, ui_state);
+                    }
+                    if editing_failed {
+                        ui_state.error(format!("Exporting tile failed."));
+                    }
                 });
 
             egui::CollapsingHeader::new("Edit terrain")
@@ -233,20 +270,15 @@ impl EnvObjectsState {
                         .add_sized([100., 30.], Button::new("Reset terrain"))
                         .clicked()
                     {
-                        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-                        let mut storage = terrain_resource.write();
-                        let terrain = storage.get_mut(&self.terrain);
-                        terrain.reset(
-                            world,
-                            Point3i::ZERO,
-                            ui_state.env.terrain_size,
-                            ui_state.env.terrain_style.clone(),
-                        );
+                        self.reset_terrain(resources, world, ui_state);
                     }
                 });
         }
 
         if ui_state.env.spawning || (ui_state.env.edit_mode && !ui_state.unit.spawning) {
+            let input = resources.get::<InputResource>().unwrap();
+            let camera = resources.get::<RTSCamera>().unwrap();
+
             if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
@@ -267,7 +299,7 @@ impl EnvObjectsState {
                 if let Some(result) = cast_result {
                     if ui_state.env.spawning {
                         self.spawn(
-                            ui_state.env.object_type.clone(),
+                            ui_state.env.spawn_tile.clone(),
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
                             world,
@@ -290,6 +322,18 @@ impl EnvObjectsState {
         }
     }
 
+    fn reset_terrain(&mut self, resources: &mut Resources, world: &mut World, ui_state: &UiState) {
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let mut storage = terrain_resource.write();
+        let terrain = storage.get_mut(&self.terrain);
+        terrain.reset(
+            world,
+            Point3i::ZERO,
+            ui_state.env.terrain_size,
+            ui_state.env.terrain_style.clone(),
+        );
+    }
+
     #[profiling::function]
     pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
@@ -300,7 +344,7 @@ impl EnvObjectsState {
 
     pub fn spawn(
         &self,
-        object_type: String,
+        tile_name: String,
         position: Point3i,
         resources: &Resources,
         world: &mut World,
@@ -318,7 +362,7 @@ impl EnvObjectsState {
         };
 
         let asset_manager = resources.get::<AssetManager>().unwrap();
-        let handle = self.tiles.get(&object_type).unwrap().clone();
+        let handle = self.tiles.get(&tile_name).unwrap().clone();
         let tile = asset_manager.committed_asset(&handle).unwrap().clone();
 
         // env object component
@@ -329,7 +373,7 @@ impl EnvObjectsState {
         };
 
         // entity
-        log::info!("Spawn entity {:?} at: {}", object_type, translation);
+        log::info!("Spawn tile {:?} at: {}", tile_name, translation);
         let _entity = world.push((transform_component, env_tile_component));
 
         // update voxels
@@ -338,4 +382,69 @@ impl EnvObjectsState {
         let terrain = storage.get_mut(&self.terrain);
         terrain.instance_tile(&tile, position);
     }
+
+    pub fn start_edit_tile(&self, tile_name: &str, resources: &mut Resources, world: &mut World) {
+        {
+            let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+            let mut storage = terrain_resource.write();
+            let terrain = storage.get_mut(&self.terrain);
+            let terrain_style = TerrainFillStyle::FlatBoard {
+                material: "basic_tile",
+            };
+            terrain.reset(
+                world,
+                Point3i::ZERO,
+                TILE_EDIT_PLATFORM_SIZE as u32,
+                terrain_style,
+            );
+        }
+
+        self.spawn(tile_name.to_string(), Point3i::ZERO, resources, world);
+    }
+
+    pub fn save_edited_tile(&self, tile: &str, resources: &mut Resources) -> Option<()> {
+        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+        let mut storage = terrain_resource.write();
+        let terrain = storage.get_mut(&self.terrain);
+
+        let full_extent = Extent3i::from_min_and_shape(
+            PointN([
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                0,
+            ]),
+            Point3i::fill(TILE_EDIT_PLATFORM_SIZE),
+        );
+
+        let mut min = PointN([TILE_EDIT_PLATFORM_SIZE, TILE_EDIT_PLATFORM_SIZE, 0]);
+        let mut max = Point3i::fill(-TILE_EDIT_PLATFORM_SIZE);
+        for p in full_extent.iter_points() {
+            let v = terrain.voxels.get_point(0, p);
+            if !v.is_empty() {
+                if p.x() < min.x() {
+                    *min.x_mut() = p.x();
+                }
+                if p.y() < min.y() {
+                    *min.y_mut() = p.y();
+                }
+                if p.x() > max.x() {
+                    *max.x_mut() = p.x();
+                }
+                if p.y() > max.y() {
+                    *max.y_mut() = p.y();
+                }
+                if p.z() > max.z() {
+                    *max.z_mut() = p.z();
+                }
+            }
+        }
+        let extent = Extent3i::from_min_and_max(min, max);
+
+        let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
+        copy_extent(&extent, &terrain.voxels.lod_view(0), &mut export_voxels);
+
+        EnvTileExporter::export(tile.to_string(), export_voxels, terrain)
+    }
 }
+
+const TILE_EDIT_PLATFORM_SIZE: i32 = 32;

@@ -38,7 +38,9 @@ impl EnvTileExporter {
             palette,
             voxels: voxels_str,
         };
-        if let Ok(asset_string) = ron::ser::to_string::<EnvTileAssetData>(&asset_data) {
+        if let Ok(asset_string) =
+            ron::ser::to_string_pretty::<EnvTileAssetData>(&asset_data, Default::default())
+        {
             let path = format!("assets/tiles/{}.tile", name);
             if let Ok(_) = std::fs::write(path, asset_string) {
                 Some(())

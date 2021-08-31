@@ -8,7 +8,8 @@ pub mod terrain;
 pub struct EnvUiState {
     pub spawning: bool,
     pub spawn_mode: SpawnMode,
-    pub object_type: String,
+    pub spawn_tile: String,
+    pub edit_tile: Option<String>,
     pub edit_mode: bool,
     pub edit_material: &'static str,
     pub terrain_size: u32,
@@ -20,7 +21,8 @@ impl Default for EnvUiState {
         Self {
             spawning: false,
             spawn_mode: SpawnMode::OneShot,
-            object_type: "building".to_string(),
+            spawn_tile: "building".to_string(),
+            edit_tile: None,
             edit_mode: false,
             edit_material: "basic_tile",
             terrain_size: 4096,
