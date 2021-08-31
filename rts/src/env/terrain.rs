@@ -314,6 +314,13 @@ impl Terrain {
     }
 
     pub fn instance_tile(&mut self, tile: &EnvTileAsset, position: Point3i) {
+        let pallete: Vec<_> = tile
+            .inner
+            .palette
+            .iter()
+            .map(|mat_name| self.voxel_by_material(mat_name).unwrap())
+            .collect();
+
         let mut voxels = tile.inner.voxels.clone();
         let mut center = voxels.extent().shape / 2;
         *center.z_mut() = 0;
@@ -321,13 +328,11 @@ impl Terrain {
         let extent = voxels.extent().clone();
         voxels.for_each_mut(&extent, |_p: Point3i, vox: &mut TerrainVoxel| {
             if !vox.is_empty() {
-                let mat_name = &tile.inner.palette[vox.0 as usize - 1];
-                *vox = self.voxel_by_material(mat_name).unwrap();
+                *vox = pallete[vox.0 as usize - 1];
             }
         });
         copy_extent(&extent, &voxels, &mut self.voxels.lod_view_mut(0));
 
-        // set chunks dirty
         let mut chunks = vec![];
         self.voxels
             .visit_occupied_chunks(0, &voxels.extent().padded(1), |chunk| {
