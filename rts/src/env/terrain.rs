@@ -239,8 +239,7 @@ pub struct TerrainRenderChunk {
     pub dyn_mesh_handle: Option<DynMeshHandle>,
     pub render_object_handle: Option<RenderObjectHandle>,
     pub visibility_object_handle: Option<VisibilityObjectArc>,
-    pub source_version: u32,
-    pub rendered_version: u32,
+    pub dirty: bool,
     pub render_task: Option<Task<()>>,
 }
 
@@ -251,8 +250,7 @@ impl TerrainRenderChunk {
             dyn_mesh_handle: None,
             render_object_handle: None,
             visibility_object_handle: None,
-            source_version: 0,
-            rendered_version: 0,
+            dirty: false,
             render_task: None,
         }
     }
@@ -328,7 +326,7 @@ impl Terrain {
             ])
     }
 
-    pub fn set_chunk_dirty(&mut self, key: ChunkKey3) -> bool {
+    pub fn set_chunk_dirty(&mut self, key: ChunkKey3) {
         self.super_chunks
             .entry(Self::get_super_chunk_key(&key))
             .or_insert(HashSet::new())
@@ -337,12 +335,7 @@ impl Terrain {
             .render_chunks
             .entry(key)
             .or_insert(TerrainRenderChunk::new());
-        if chunk.source_version == chunk.rendered_version {
-            chunk.source_version += 1;
-            false
-        } else {
-            true
-        }
+        chunk.dirty = true;
     }
 
     pub fn update_voxel(&mut self, point: Point3i, voxel: CubeVoxel) {
@@ -472,9 +465,7 @@ impl Terrain {
                         && (chunk_key.minimum.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA
                     {
                         let chunk = self.render_chunks.get(chunk_key).unwrap();
-                        if chunk.render_task.is_none()
-                            && chunk.rendered_version < chunk.source_version
-                        {
+                        if chunk.render_task.is_none() && chunk.dirty {
                             changed_keys.push(chunk_key.clone());
                         }
                     }
@@ -578,6 +569,7 @@ impl Terrain {
                     });
                     if let Some(chunk) = self.render_chunks.get_mut(&key) {
                         chunk.render_task = Some(task);
+                        chunk.dirty = false;
                         self.active_tasks += 1;
                     }
                 }
@@ -598,7 +590,6 @@ impl Terrain {
 
             if let Some(chunk) = self.render_chunks.get_mut(&result.key) {
                 chunk.render_task = None;
-                chunk.rendered_version += 1;
                 self.active_tasks -= 1;
 
                 // log::info!("Dyn mesh built. {}", result.mesh.clone());
