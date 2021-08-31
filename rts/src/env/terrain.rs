@@ -43,7 +43,7 @@ use rafx_plugins::{
 };
 
 use crate::{
-    assets::pbr_material::PbrMaterialAsset,
+    assets::{env_tile::EnvTileAsset, pbr_material::PbrMaterialAsset},
     env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
         DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
@@ -307,16 +307,35 @@ impl Terrain {
         ]
     }
 
-    pub fn material_by_name(&self, name: &'static str) -> Option<Handle<PbrMaterialAsset>> {
-        self.material_names
-            .get(name)
-            .and_then(|idx| Some(self.materials[*idx as usize].clone()))
-    }
-
-    pub fn voxel_by_material(&self, material_name: &'static str) -> Option<TerrainVoxel> {
+    pub fn voxel_by_material(&self, material_name: &str) -> Option<TerrainVoxel> {
         self.material_names
             .get(material_name)
             .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
+    }
+
+    pub fn instance_tile(&mut self, tile: &EnvTileAsset, position: Point3i) {
+        let mut voxels = tile.inner.voxels.clone();
+        let mut center = voxels.extent().shape / 2;
+        *center.z_mut() = 0;
+        voxels.set_minimum(position - center);
+        let extent = voxels.extent().clone();
+        voxels.for_each_mut(&extent, |_p: Point3i, vox: &mut TerrainVoxel| {
+            if !vox.is_empty() {
+                let mat_name = &tile.inner.palette[vox.0 as usize - 1];
+                *vox = self.voxel_by_material(mat_name).unwrap();
+            }
+        });
+        copy_extent(&extent, &voxels, &mut self.voxels.lod_view_mut(0));
+
+        // set chunks dirty
+        let mut chunks = vec![];
+        self.voxels
+            .visit_occupied_chunks(0, &voxels.extent().padded(1), |chunk| {
+                chunks.push(ChunkKey3::new(0, chunk.extent().minimum));
+            });
+        for chunk_key in chunks {
+            self.set_chunk_dirty(chunk_key);
+        }
     }
 
     fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {

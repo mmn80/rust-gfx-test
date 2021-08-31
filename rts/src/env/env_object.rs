@@ -1,48 +1,34 @@
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
-use building_blocks::{core::prelude::*, storage::prelude::*};
+use building_blocks::core::prelude::*;
+use distill::loader::handle::Handle;
 use egui::{Button, Checkbox};
 use glam::{Quat, Vec3};
 use legion::{Resources, World};
-use rafx::assets::distill_impl::AssetResource;
+use rafx::assets::{distill_impl::AssetResource, AssetManager};
 use rafx_plugins::components::TransformComponent;
 
 use crate::{
-    assets::pbr_material::PbrMaterialAsset,
+    assets::{env_tile::EnvTileAsset, pbr_material::PbrMaterialAsset},
     camera::RTSCamera,
     env::{
         perlin::PerlinNoise2D,
-        terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource, TerrainVoxel},
+        terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
     },
     input::{InputResource, KeyboardKey, MouseButton},
     ui::{SpawnMode, UiState},
 };
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum EnvObjectType {
-    Building,
-    Tree,
-}
-
-impl Display for EnvObjectType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            EnvObjectType::Building => write!(f, "Building"),
-            EnvObjectType::Tree => write!(f, "Tree"),
-        }
-    }
-}
-
 #[derive(Clone)]
-pub struct EnvObjectComponent {
-    pub object_type: EnvObjectType,
+pub struct EnvTileComponent {
+    pub asset: Handle<EnvTileAsset>,
     pub health: f32,
     pub selected: bool,
 }
 
 pub struct EnvObjectsState {
     pub terrain: TerrainHandle,
-    objects: HashMap<EnvObjectType, Array3x1<TerrainVoxel>>,
+    tiles: HashMap<String, Handle<EnvTileAsset>>,
 }
 
 impl EnvObjectsState {
@@ -63,11 +49,25 @@ impl EnvObjectsState {
 
         log::info!("Terrain materials loaded");
 
+        log::info!("Loading terrain tiles...");
+
+        let tile_names = vec!["building", "tree"];
+        let tiles: HashMap<String, Handle<EnvTileAsset>> = tile_names
+            .iter()
+            .map(|name| {
+                let path = format!("tiles/{}.tile", *name);
+                let tile_handle = asset_resource.load_asset_path::<EnvTileAsset, _>(path);
+                (String::from(*name), tile_handle.clone())
+            })
+            .collect();
+
+        log::info!("Terrain tiles loaded");
+
         let ui_terrain_size: u32 = 4096;
         let ui_terrain_style = TerrainFillStyle::FlatBoard {
             material: "basic_tile",
         };
-        let terrain_handle = {
+        let terrain = {
             let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
             terrain_resource.new_terrain(
                 world,
@@ -77,62 +77,8 @@ impl EnvObjectsState {
                 ui_terrain_style.clone(),
             )
         };
-        let terrain_resource = resources.get::<TerrainResource>().unwrap();
-        let storage = terrain_resource.read();
-        let terrain = storage.get(&terrain_handle);
 
-        let empty_tile = TerrainVoxel::empty();
-        let dimond_tile = terrain.voxel_by_material("diamond_inlay_tile").unwrap();
-        let round_tile = terrain.voxel_by_material("round_tile").unwrap();
-        let curly_tile = terrain.voxel_by_material("curly_tile").unwrap();
-        let black_plastic = terrain.voxel_by_material("black_plastic").unwrap();
-
-        let mut objects = HashMap::new();
-
-        let mut building = Array3x1::<TerrainVoxel>::fill(
-            Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 8])),
-            empty_tile,
-        );
-        building.fill_extent(
-            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([8, 8, 4])),
-            dimond_tile,
-        );
-        building.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([1, 1, 4]), PointN([6, 6, 3])),
-            dimond_tile,
-        );
-        building.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([1, 1, 7]), PointN([6, 6, 1])),
-            round_tile,
-        );
-        objects.insert(EnvObjectType::Building, building);
-
-        let mut tree = Array3x1::<TerrainVoxel>::fill(
-            Extent3i::from_min_and_shape(PointN([-2, -2, 0]), PointN([5, 5, 9])),
-            empty_tile,
-        );
-        tree.fill_extent(
-            &Extent3i::from_min_and_shape(Point3i::ZERO, PointN([1, 1, 4])),
-            black_plastic,
-        );
-        tree.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([-2, -2, 4]), PointN([5, 5, 3])),
-            curly_tile,
-        );
-        tree.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([-1, -1, 7]), PointN([3, 3, 1])),
-            curly_tile,
-        );
-        tree.fill_extent(
-            &Extent3i::from_min_and_shape(PointN([0, 0, 8]), PointN([1, 1, 1])),
-            curly_tile,
-        );
-        objects.insert(EnvObjectType::Tree, tree);
-
-        EnvObjectsState {
-            terrain: terrain_handle,
-            objects,
-        }
+        EnvObjectsState { terrain, tiles }
     }
 
     pub fn update_ui(
@@ -158,9 +104,9 @@ impl EnvObjectsState {
                 .show(ui, |ui| {
                     ui_state.env.spawn_mode.ui(ui, &mut ui_state.env.spawning);
                     ui.horizontal_wrapped(|ui| {
-                        for (obj, _) in &self.objects {
-                            if ui.selectable_label(false, format!("{}", obj)).clicked() {
-                                ui_state.env.object_type = *obj;
+                        for (name, _) in &self.tiles {
+                            if ui.selectable_label(false, format!("{}", name)).clicked() {
+                                ui_state.env.object_type = String::from(name);
                                 ui_state.env.spawning = true;
                             }
                         }
@@ -321,7 +267,7 @@ impl EnvObjectsState {
                 if let Some(result) = cast_result {
                     if ui_state.env.spawning {
                         self.spawn(
-                            ui_state.env.object_type,
+                            ui_state.env.object_type.clone(),
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
                             world,
@@ -354,7 +300,7 @@ impl EnvObjectsState {
 
     pub fn spawn(
         &self,
-        object_type: EnvObjectType,
+        object_type: String,
         position: Point3i,
         resources: &Resources,
         world: &mut World,
@@ -371,41 +317,25 @@ impl EnvObjectsState {
             rotation: Quat::IDENTITY,
         };
 
-        // kin object component
-        let kin_object_component = EnvObjectComponent {
-            object_type,
+        let asset_manager = resources.get::<AssetManager>().unwrap();
+        let handle = self.tiles.get(&object_type).unwrap().clone();
+        let tile = asset_manager.committed_asset(&handle).unwrap().clone();
+
+        // env object component
+        let env_tile_component = EnvTileComponent {
+            asset: handle,
             health: 1.,
             selected: false,
         };
 
         // entity
         log::info!("Spawn entity {:?} at: {}", object_type, translation);
-        let _entity = world.push((transform_component, kin_object_component));
+        let _entity = world.push((transform_component, env_tile_component));
 
         // update voxels
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);
-
-        let mut object = self.objects.get(&object_type).unwrap().clone();
-        let mut half_size = object.extent().shape / 2;
-        *half_size.z_mut() = 0;
-        object.set_minimum(position - half_size);
-        copy_extent(
-            &object.extent(),
-            &object,
-            &mut terrain.voxels.lod_view_mut(0),
-        );
-
-        // set chunks dirty
-        let mut chunks = vec![];
-        terrain
-            .voxels
-            .visit_occupied_chunks(0, &object.extent().padded(1), |chunk| {
-                chunks.push(ChunkKey3::new(0, chunk.extent().minimum));
-            });
-        for chunk_key in chunks {
-            terrain.set_chunk_dirty(chunk_key);
-        }
+        terrain.instance_tile(&tile, position);
     }
 }

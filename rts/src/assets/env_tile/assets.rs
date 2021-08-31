@@ -44,7 +44,7 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
             .map(|slice| {
                 slice
                     .iter()
-                    .map(|line| line.len())
+                    .map(|line| line.len() / 2)
                     .max()
                     .unwrap_or_default()
             })
@@ -72,7 +72,7 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
                     )));
                 }
                 let mut x = 0;
-                while x < line.len() {
+                while 2 * x < line.len() {
                     let mat_str = &line[2 * x..2 * x + 2];
                     if let Ok(mat) = u16::from_str_radix(mat_str, 16) {
                         if mat > asset_data.palette.len() as u16 {
