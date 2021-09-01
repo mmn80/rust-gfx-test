@@ -11,7 +11,7 @@ use super::ui::{
 use crate::{
     assets::{
         env_tile::{EnvTileAsset, EnvTileExporter},
-        env_tileset::EnvTileSetsAsset,
+        env_tileset::{EnvTileSetsAsset, EnvTileSetsAssetData, EnvTileSetsExporter},
         pbr_material::PbrMaterialAsset,
     },
     camera::RTSCamera,
@@ -160,11 +160,46 @@ impl EnvObjectsState {
         resources: &mut Resources,
     ) -> Option<()> {
         match command {
-            EnvUiCmd::SaveEditedTile(tile) => {
-                let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
-                let mut storage = terrain_resource.write();
-                let terrain = storage.get_mut(&self.terrain);
-                terrain.save_edited_tile(&tile)
+            EnvUiCmd::SaveEditedTile {
+                tileset_name,
+                tile_name,
+            } => {
+                {
+                    let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
+                    let mut storage = terrain_resource.write();
+                    let terrain = storage.get_mut(&self.terrain);
+                    terrain.save_edited_tile(&tile_name)?;
+                }
+
+                if let Some(tileset_name) = tileset_name {
+                    let tilesets = {
+                        let asset_manager = resources.get::<AssetManager>().unwrap();
+                        asset_manager
+                            .committed_asset(&self.tilesets)
+                            .unwrap()
+                            .clone()
+                    };
+                    let tilesets = EnvTileSetsAssetData {
+                        tilesets: tilesets
+                            .inner
+                            .tilesets
+                            .iter()
+                            .map(|tileset| {
+                                let mut tileset = tileset.clone();
+                                if tileset.name == tileset_name {
+                                    let asset_resource = resources.get::<AssetResource>().unwrap();
+                                    tileset.add_tile(&tile_name, &asset_resource);
+                                    tileset
+                                } else {
+                                    tileset
+                                }
+                            })
+                            .collect(),
+                    };
+                    EnvTileSetsExporter::export(&format!("assets/{}", TILESETS_PATH), tilesets)
+                } else {
+                    Some(())
+                }
             }
             EnvUiCmd::StartEditTile {
                 tileset_name,

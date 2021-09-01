@@ -4,10 +4,14 @@ use super::EnvTileSetsAssetData;
 pub struct EnvTileSetsExporter;
 
 impl EnvTileSetsExporter {
-    pub fn export(path: String, asset_data: &EnvTileSetsAssetData) -> Option<()> {
+    pub fn export(path: &str, asset_data: EnvTileSetsAssetData) -> Option<()> {
+        log::info!("Generating string");
         let asset_string =
-            ron::ser::to_string_pretty::<EnvTileSetsAssetData>(asset_data, Default::default())
+            ron::ser::to_string_pretty::<EnvTileSetsAssetData>(&asset_data, Default::default())
                 .ok()?;
-        std::fs::write(path, asset_string).ok()
+        log::info!("Savinbg file");
+        std::fs::write(path, asset_string).ok()?;
+        log::info!("Saved");
+        Some(())
     }
 }

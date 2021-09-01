@@ -12,7 +12,10 @@ pub enum EnvUiCmd {
         tileset_name: String,
         tile_name: String,
     },
-    SaveEditedTile(String),
+    SaveEditedTile {
+        tileset_name: Option<String>,
+        tile_name: String,
+    },
     ResetTerrain(TerrainResetUiState),
 }
 
@@ -117,7 +120,11 @@ impl TileEditUiState {
                     ui.horizontal_wrapped(|ui| {
                         if ui.add_sized([100., 30.], Button::new("Save")).clicked() {
                             editing_failed = tile.is_empty()
-                                || cmd_exec(EnvUiCmd::SaveEditedTile(tile.clone())).is_none();
+                                || cmd_exec(EnvUiCmd::SaveEditedTile {
+                                    tileset_name: if ed.new_tile { Some(tileset) } else { None },
+                                    tile_name: tile.clone(),
+                                })
+                                .is_none();
                             editing_finished = !editing_failed;
                         }
                         if ui.add_sized([100., 30.], Button::new("Quit")).clicked() {
