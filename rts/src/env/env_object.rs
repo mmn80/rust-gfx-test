@@ -11,7 +11,7 @@ use super::ui::{
 use crate::{
     assets::{
         env_tile::{EnvTileAsset, EnvTileExporter},
-        env_tileset::{EnvTileSetsAsset, EnvTileSetsAssetData, EnvTileSetsExporter},
+        env_tileset::{EnvTileSetsAsset, EnvTileSetsExportData, EnvTileSetsExporter},
         pbr_material::PbrMaterialAsset,
     },
     camera::RTSCamera,
@@ -179,23 +179,11 @@ impl EnvObjectsState {
                             .unwrap()
                             .clone()
                     };
-                    let tilesets = EnvTileSetsAssetData {
-                        tilesets: tilesets
-                            .inner
-                            .tilesets
-                            .iter()
-                            .map(|tileset| {
-                                let mut tileset = tileset.clone();
-                                if tileset.name == tileset_name {
-                                    let asset_resource = resources.get::<AssetResource>().unwrap();
-                                    tileset.add_tile(&tile_name, &asset_resource);
-                                    tileset
-                                } else {
-                                    tileset
-                                }
-                            })
-                            .collect(),
+                    let tilesets = {
+                        let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+                        tilesets.get_loaded_tilesets(&mut asset_manager)
                     };
+                    let tilesets = EnvTileSetsExportData::new(&tilesets, &tileset_name, &tile_name);
                     EnvTileSetsExporter::export(&format!("assets/{}", TILESETS_PATH), tilesets)
                 } else {
                     Some(())
@@ -289,7 +277,7 @@ impl EnvObjectsState {
         };
 
         // entity
-        log::info!("Spawn tile {:?} at: {}", tile_name, translation);
+        log::info!("Spawn tile {} at: {}", tile_name, translation);
         let _entity = world.push((transform_component, env_tile_component));
 
         // update voxels

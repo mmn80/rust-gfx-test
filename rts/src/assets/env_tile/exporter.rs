@@ -44,11 +44,16 @@ impl EnvTileExporter {
     }
 
     pub fn get_tile_path(tile_name: &str, include_root_dir: bool) -> String {
-        let file_name = tile_name.to_lowercase().replace(" ", "_");
+        let file_name = Self::get_tile_file_name(tile_name);
         if include_root_dir {
-            format!("assets/tiles/{}.tile", file_name)
+            format!("assets/tiles/{}", file_name)
         } else {
-            format!("tiles/{}.tile", file_name)
+            format!("tiles/{}", file_name)
         }
+    }
+
+    pub fn get_tile_file_name(tile_name: &str) -> String {
+        let file_name = tile_name.to_lowercase().replace(" ", "_");
+        format!("{}.tile", file_name)
     }
 }

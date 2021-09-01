@@ -60,6 +60,7 @@ impl TileSpawnUiState {
                                     .selectable_label(false, format!("{}", &tile.inner.name))
                                     .clicked()
                                 {
+                                    ed.tileset = tileset.name.clone();
                                     ed.tile = tile.inner.name.clone();
                                     ed.active = true;
                                 }
