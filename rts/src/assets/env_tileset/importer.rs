@@ -7,39 +7,39 @@ use distill::{
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
-use crate::assets::env_tile::EnvTileAssetData;
+use crate::assets::env_tileset::EnvTileSetAssetData;
 
 #[derive(TypeUuid, Serialize, Deserialize, Default, Clone, Debug)]
-#[uuid = "6b5e8cc4-9a8e-45e2-9e25-7f1ab02f4ca0"]
-pub struct EnvTileImporterStateStable {
-    tile_asset_uuid: Option<AssetUuid>,
+#[uuid = "dbde9d62-6b8e-48a0-8bb9-61bf5a29c2f3"]
+pub struct EnvTileSetImporterStateStable {
+    tileset_asset_uuid: Option<AssetUuid>,
 }
 
-impl From<EnvTileImporterStateUnstable> for EnvTileImporterStateStable {
-    fn from(other: EnvTileImporterStateUnstable) -> Self {
-        let mut stable = EnvTileImporterStateStable::default();
-        stable.tile_asset_uuid = other.tile_asset_uuid.clone();
+impl From<EnvTileSetImporterStateUnstable> for EnvTileSetImporterStateStable {
+    fn from(other: EnvTileSetImporterStateUnstable) -> Self {
+        let mut stable = EnvTileSetImporterStateStable::default();
+        stable.tileset_asset_uuid = other.tile_asset_uuid.clone();
         stable
     }
 }
 
 #[derive(Default)]
-pub struct EnvTileImporterStateUnstable {
+pub struct EnvTileSetImporterStateUnstable {
     tile_asset_uuid: Option<AssetUuid>,
 }
 
-impl From<EnvTileImporterStateStable> for EnvTileImporterStateUnstable {
-    fn from(other: EnvTileImporterStateStable) -> Self {
-        let mut unstable = EnvTileImporterStateUnstable::default();
-        unstable.tile_asset_uuid = other.tile_asset_uuid.clone();
+impl From<EnvTileSetImporterStateStable> for EnvTileSetImporterStateUnstable {
+    fn from(other: EnvTileSetImporterStateStable) -> Self {
+        let mut unstable = EnvTileSetImporterStateUnstable::default();
+        unstable.tile_asset_uuid = other.tileset_asset_uuid.clone();
         unstable
     }
 }
 
 #[derive(TypeUuid)]
-#[uuid = "39fd954d-2463-4e89-907b-b0f12cb3abd7"]
-pub struct EnvTileImporter;
-impl Importer for EnvTileImporter {
+#[uuid = "3963feb1-5168-4607-ac57-a0a5a9da957e"]
+pub struct EnvTileSetImporter;
+impl Importer for EnvTileSetImporter {
     fn version_static() -> u32
     where
         Self: Sized,
@@ -52,7 +52,7 @@ impl Importer for EnvTileImporter {
     }
 
     type Options = ();
-    type State = EnvTileImporterStateStable;
+    type State = EnvTileSetImporterStateStable;
 
     #[profiling::function]
     fn import(
@@ -64,14 +64,14 @@ impl Importer for EnvTileImporter {
     ) -> distill::importer::Result<ImporterValue> {
         let mut imported_assets = Vec::<ImportedAsset>::default();
 
-        let mut unstable_state: EnvTileImporterStateUnstable = stable_state.clone().into();
+        let mut unstable_state: EnvTileSetImporterStateUnstable = stable_state.clone().into();
         unstable_state.tile_asset_uuid = Some(
             unstable_state
                 .tile_asset_uuid
                 .unwrap_or_else(|| AssetUuid(*uuid::Uuid::new_v4().as_bytes())),
         );
 
-        let asset_data = ron::de::from_reader::<_, EnvTileAssetData>(source)?;
+        let asset_data = ron::de::from_reader::<_, EnvTileSetAssetData>(source)?;
 
         let mut search_tags: Vec<(String, Option<String>)> = vec![];
         search_tags.push(("name".to_string(), Some(asset_data.name.clone())));

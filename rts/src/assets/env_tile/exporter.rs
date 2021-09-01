@@ -38,18 +38,10 @@ impl EnvTileExporter {
             palette,
             voxels: voxels_str,
         };
-        if let Ok(asset_string) =
-            ron::ser::to_string_pretty::<EnvTileAssetData>(&asset_data, Default::default())
-        {
-            let file_name = name.to_lowercase().replace(" ", "_");
-            let path = format!("assets/tiles/{}.tile", file_name);
-            if let Ok(_) = std::fs::write(path, asset_string) {
-                Some(())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        let asset_string =
+            ron::ser::to_string_pretty::<EnvTileAssetData>(&asset_data, Default::default()).ok()?;
+        let file_name = name.to_lowercase().replace(" ", "_");
+        let path = format!("assets/tiles/{}.tile", file_name);
+        std::fs::write(path, asset_string).ok()
     }
 }
