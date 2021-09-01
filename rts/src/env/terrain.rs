@@ -44,8 +44,8 @@ use rafx_plugins::{
 
 use crate::{
     assets::{
-        env_tile::{EnvTileAsset, EnvTileExporter},
         pbr_material::PbrMaterialAsset,
+        tile::{TileAsset, TileExporter},
     },
     env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
@@ -344,7 +344,7 @@ impl Terrain {
             .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
     }
 
-    pub fn instance_tile(&mut self, tile: &EnvTileAsset, position: Point3i) {
+    pub fn instance_tile(&mut self, tile: &TileAsset, position: Point3i) {
         let pallete: Vec<_> = tile
             .inner
             .palette
@@ -956,7 +956,7 @@ impl Terrain {
         let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
         copy_extent(&extent, &self.voxels.lod_view(0), &mut export_voxels);
 
-        EnvTileExporter::export(tile.to_string(), export_voxels, self)
+        TileExporter::export(tile.to_string(), export_voxels, self)
     }
 }
 

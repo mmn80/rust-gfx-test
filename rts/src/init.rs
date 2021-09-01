@@ -26,8 +26,8 @@ use raw_window_handle::HasRawWindowHandle;
 
 use crate::{
     assets::{
-        env_tile::EnvTileAssetTypeRendererPlugin, env_tileset::EnvTileSetsAssetTypeRendererPlugin,
-        pbr_material::PbrMaterialAssetTypeRendererPlugin,
+        pbr_material::PbrMaterialAssetTypeRendererPlugin, tile::TileAssetTypeRendererPlugin,
+        tilesets::TileSetsAssetTypeRendererPlugin,
     },
     camera::RTSCamera,
     env::terrain::TerrainResource,
@@ -73,8 +73,8 @@ pub fn rendering_init(
     let mut renderer_builder = RendererBuilder::default();
     renderer_builder = renderer_builder
         .add_asset(Arc::new(PbrMaterialAssetTypeRendererPlugin))
-        .add_asset(Arc::new(EnvTileAssetTypeRendererPlugin))
-        .add_asset(Arc::new(EnvTileSetsAssetTypeRendererPlugin))
+        .add_asset(Arc::new(TileAssetTypeRendererPlugin))
+        .add_asset(Arc::new(TileSetsAssetTypeRendererPlugin))
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
         .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))

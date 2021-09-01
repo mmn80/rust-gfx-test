@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use building_blocks::prelude::*;
 
 use crate::{
-    assets::env_tile::EnvTileAssetData,
+    assets::tile::TileAssetData,
     env::terrain::{Terrain, TerrainVoxel},
 };
 
 // don't know how to do it from distill
-pub struct EnvTileExporter;
+pub struct TileExporter;
 
-impl EnvTileExporter {
+impl TileExporter {
     pub fn export(name: String, voxels: Array3x1<TerrainVoxel>, terrain: &Terrain) -> Option<()> {
         let (min, shape) = (voxels.extent().minimum, voxels.extent().shape);
         let mut palette = vec![];
@@ -33,13 +33,13 @@ impl EnvTileExporter {
             }
             voxels_str.push(slice);
         }
-        let asset_data = EnvTileAssetData {
+        let asset_data = TileAssetData {
             name: name.clone(),
             palette,
             voxels: voxels_str,
         };
         let asset_string =
-            ron::ser::to_string_pretty::<EnvTileAssetData>(&asset_data, Default::default()).ok()?;
+            ron::ser::to_string_pretty::<TileAssetData>(&asset_data, Default::default()).ok()?;
         std::fs::write(Self::get_tile_path(&name, true), asset_string).ok()
     }
 

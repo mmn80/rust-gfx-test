@@ -2,7 +2,7 @@ use egui::{Button, Checkbox, Ui};
 
 use super::terrain::{Terrain, TerrainFillStyle};
 use crate::{
-    assets::env_tileset::LoadedEnvTileSet,
+    assets::tilesets::LoadedTileSet,
     env::perlin::PerlinNoise2D,
     ui::{SpawnMode, UiState},
 };
@@ -38,7 +38,7 @@ impl Default for TileSpawnUiState {
 }
 
 impl TileSpawnUiState {
-    pub fn ui(ui_state: &mut UiState, ui: &mut Ui, tilesets: &Vec<LoadedEnvTileSet>) {
+    pub fn ui(ui_state: &mut UiState, ui: &mut Ui, tilesets: &Vec<LoadedTileSet>) {
         let ed = &mut ui_state.env.tile_spawn;
         if ed.active {
             egui::CollapsingHeader::new("Spawn terrain object")
@@ -94,7 +94,7 @@ impl TileEditUiState {
     pub fn ui<F>(
         ui_state: &mut UiState,
         ui: &mut Ui,
-        tilesets: &Vec<LoadedEnvTileSet>,
+        tilesets: &Vec<LoadedTileSet>,
         mut cmd_exec: F,
     ) where
         F: FnMut(EnvUiCmd) -> Option<()>,

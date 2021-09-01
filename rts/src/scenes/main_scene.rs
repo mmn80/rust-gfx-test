@@ -13,7 +13,7 @@ use rafx_plugins::{
 use super::{Scene, SceneManagerAction};
 use crate::{
     camera::RTSCamera,
-    env::env_object::EnvObjectsState,
+    env::env::EnvState,
     input::{InputResource, KeyboardKey},
     time::TimeState,
     ui::UiState,
@@ -69,7 +69,7 @@ pub struct MainScene {
     main_state: MainState,
     main_light: Entity,
     units: UnitsState,
-    env_objects: EnvObjectsState,
+    env: EnvState,
 }
 
 impl MainScene {
@@ -94,16 +94,16 @@ impl MainScene {
         },));
 
         let main_view_frustum = visibility_region.register_view_frustum();
-        let kin_objects = EnvObjectsState::new(resources, world);
-        let dyn_objects = UnitsState::new(resources, kin_objects.terrain.clone());
+        let env = EnvState::new(resources, world);
+        let units = UnitsState::new(resources, env.terrain.clone());
 
         MainScene {
             main_view_frustum,
             font,
             main_state: MainState {},
             main_light,
-            units: dyn_objects,
-            env_objects: kin_objects,
+            units,
+            env,
         }
     }
 }
@@ -171,11 +171,11 @@ impl super::GameScene for MainScene {
             world,
             resources,
             Some(&mut self.main_state),
-            Some(&mut self.env_objects),
+            Some(&mut self.env),
             Some(&mut self.units),
         );
 
-        self.env_objects.update(world, resources);
+        self.env.update(world, resources);
         self.units.update(world, resources, ui_state);
 
         {

@@ -5,7 +5,7 @@ use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
 
 use crate::{
-    env::{env_object::EnvObjectsState, ui::EnvUiState},
+    env::{env::EnvState, ui::EnvUiState},
     scenes::MainState,
     time::TimeState,
     unit::unit::{UnitUiState, UnitsState},
@@ -63,7 +63,7 @@ impl UiState {
         world: &mut World,
         resources: &mut Resources,
         main_state: Option<&mut MainState>,
-        kin_state: Option<&mut EnvObjectsState>,
+        kin_state: Option<&mut EnvState>,
         dyn_state: Option<&mut UnitsState>,
     ) {
         let context = resources.get::<EguiContextResource>().unwrap().context();

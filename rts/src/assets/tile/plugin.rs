@@ -4,11 +4,11 @@ use rafx::{
     renderer::RendererAssetPlugin,
 };
 
-use super::{EnvTileAssetType, EnvTileImporter};
+use super::{EnvTileImporter, TileAssetType};
 
-pub struct EnvTileAssetTypeRendererPlugin;
+pub struct TileAssetTypeRendererPlugin;
 
-impl RendererAssetPlugin for EnvTileAssetTypeRendererPlugin {
+impl RendererAssetPlugin for TileAssetTypeRendererPlugin {
     fn configure_asset_daemon(&self, asset_daemon: AssetDaemon) -> AssetDaemon {
         asset_daemon.with_importer("tile", EnvTileImporter)
     }
@@ -18,6 +18,6 @@ impl RendererAssetPlugin for EnvTileAssetTypeRendererPlugin {
         asset_manager: &mut AssetManager,
         asset_resource: &mut AssetResource,
     ) {
-        asset_manager.register_asset_type::<EnvTileAssetType>(asset_resource);
+        asset_manager.register_asset_type::<TileAssetType>(asset_resource);
     }
 }

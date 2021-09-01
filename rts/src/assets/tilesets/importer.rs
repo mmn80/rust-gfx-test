@@ -7,30 +7,30 @@ use distill::{
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
-use crate::assets::env_tileset::EnvTileSetsAssetData;
+use crate::assets::tilesets::TileSetsAssetData;
 
 #[derive(TypeUuid, Serialize, Deserialize, Default, Clone, Debug)]
 #[uuid = "dbde9d62-6b8e-48a0-8bb9-61bf5a29c2f3"]
-pub struct EnvTileSetsImporterStateStable {
+pub struct TileSetsImporterStateStable {
     asset_uuid: Option<AssetUuid>,
 }
 
-impl From<EnvTileSetsImporterStateUnstable> for EnvTileSetsImporterStateStable {
-    fn from(other: EnvTileSetsImporterStateUnstable) -> Self {
-        let mut stable = EnvTileSetsImporterStateStable::default();
+impl From<TileSetsImporterStateUnstable> for TileSetsImporterStateStable {
+    fn from(other: TileSetsImporterStateUnstable) -> Self {
+        let mut stable = TileSetsImporterStateStable::default();
         stable.asset_uuid = other.asset_uuid.clone();
         stable
     }
 }
 
 #[derive(Default)]
-pub struct EnvTileSetsImporterStateUnstable {
+pub struct TileSetsImporterStateUnstable {
     asset_uuid: Option<AssetUuid>,
 }
 
-impl From<EnvTileSetsImporterStateStable> for EnvTileSetsImporterStateUnstable {
-    fn from(other: EnvTileSetsImporterStateStable) -> Self {
-        let mut unstable = EnvTileSetsImporterStateUnstable::default();
+impl From<TileSetsImporterStateStable> for TileSetsImporterStateUnstable {
+    fn from(other: TileSetsImporterStateStable) -> Self {
+        let mut unstable = TileSetsImporterStateUnstable::default();
         unstable.asset_uuid = other.asset_uuid.clone();
         unstable
     }
@@ -38,8 +38,8 @@ impl From<EnvTileSetsImporterStateStable> for EnvTileSetsImporterStateUnstable {
 
 #[derive(TypeUuid)]
 #[uuid = "3963feb1-5168-4607-ac57-a0a5a9da957e"]
-pub struct EnvTileSetsImporter;
-impl Importer for EnvTileSetsImporter {
+pub struct TileSetsImporter;
+impl Importer for TileSetsImporter {
     fn version_static() -> u32
     where
         Self: Sized,
@@ -52,7 +52,7 @@ impl Importer for EnvTileSetsImporter {
     }
 
     type Options = ();
-    type State = EnvTileSetsImporterStateStable;
+    type State = TileSetsImporterStateStable;
 
     #[profiling::function]
     fn import(
@@ -64,14 +64,14 @@ impl Importer for EnvTileSetsImporter {
     ) -> distill::importer::Result<ImporterValue> {
         let mut imported_assets = Vec::<ImportedAsset>::default();
 
-        let mut unstable_state: EnvTileSetsImporterStateUnstable = stable_state.clone().into();
+        let mut unstable_state: TileSetsImporterStateUnstable = stable_state.clone().into();
         unstable_state.asset_uuid = Some(
             unstable_state
                 .asset_uuid
                 .unwrap_or_else(|| AssetUuid(*uuid::Uuid::new_v4().as_bytes())),
         );
 
-        let asset_data = ron::de::from_reader::<_, EnvTileSetsAssetData>(source)?;
+        let asset_data = ron::de::from_reader::<_, TileSetsAssetData>(source)?;
 
         imported_assets.push(ImportedAsset {
             id: unstable_state.asset_uuid.unwrap(),

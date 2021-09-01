@@ -91,7 +91,7 @@ impl UnitsState {
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
         let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
 
-        log::info!("Loading dyn object meshes...");
+        log::info!("Loading units meshes...");
 
         let container_1_asset = asset_resource.load_asset_path("blender/storage_container1.glb");
         let container_2_asset = asset_resource.load_asset_path("blender/storage_container2.glb");
@@ -128,7 +128,7 @@ impl UnitsState {
             }),
         );
 
-        log::info!("Dyn object meshes loaded");
+        log::info!("Units meshes loaded");
 
         UnitsState { meshes, terrain }
     }
@@ -151,14 +151,14 @@ impl UnitsState {
         }
 
         if ui_state.unit.spawning {
-            egui::CollapsingHeader::new("Spawn dynamic object")
+            egui::CollapsingHeader::new("Spawn unit")
                 .default_open(true)
                 .show(ui, |ui| {
                     ui_state.unit.spawn_mode.ui(ui, &mut ui_state.unit.spawning);
-                    ui.label("Click a location on the map to spawn dynamic object");
+                    ui.label("Click a location on the map to spawn unit");
                 });
         } else if !ui_state.env.tile_spawn.active {
-            egui::CollapsingHeader::new("Spawn dynamic object")
+            egui::CollapsingHeader::new("Spawn unit")
                 .default_open(true)
                 .show(ui, |ui| {
                     ui_state.unit.spawn_mode.ui(ui, &mut ui_state.unit.spawning);
@@ -177,10 +177,7 @@ impl UnitsState {
             egui::CollapsingHeader::new("Object selection")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.label(format!(
-                        "{} dynamic objects selected",
-                        ui_state.unit.selected_count
-                    ));
+                    ui.label(format!("{} units selected", ui_state.unit.selected_count));
                     for (ty, count) in &ui_state.unit.selected {
                         ui.label(format!("- {:?}: {}", ty, count));
                     }
@@ -368,7 +365,7 @@ impl UnitsState {
 
     pub fn spawn(
         &self,
-        object_type: UnitType,
+        unit_type: UnitType,
         position: Vec3,
         resources: &Resources,
         world: &mut World,
@@ -386,14 +383,14 @@ impl UnitsState {
         };
 
         // mesh component
-        let mesh_render_object = self.meshes.get(&object_type).unwrap().clone();
+        let mesh_render_object = self.meshes.get(&unit_type).unwrap().clone();
         let mesh_component = MeshComponent {
             render_object_handle: mesh_render_object.clone(),
         };
 
         // dyn object component
-        let dyn_object_component = UnitComponent {
-            object_type,
+        let unit_component = UnitComponent {
+            object_type: unit_type,
             health: 1.,
             aim: Vec3::new(1., 0., 0.),
             speed: 0.,
@@ -402,8 +399,8 @@ impl UnitsState {
         };
 
         // entity
-        log::info!("Spawn entity {:?} at: {}", object_type, position);
-        let entity = world.push((transform_component, mesh_component, dyn_object_component));
+        log::info!("Spawn entity {:?} at: {}", unit_type, position);
+        let entity = world.push((transform_component, mesh_component, unit_component));
 
         // visibility component
         let asset_manager = resources.get::<AssetManager>().unwrap();

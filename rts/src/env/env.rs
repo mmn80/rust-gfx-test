@@ -10,9 +10,9 @@ use super::ui::{
 };
 use crate::{
     assets::{
-        env_tile::{EnvTileAsset, EnvTileExporter},
-        env_tileset::{EnvTileSetsAsset, EnvTileSetsExportData, EnvTileSetsExporter},
         pbr_material::PbrMaterialAsset,
+        tile::{TileAsset, TileExporter},
+        tilesets::{TileSetsAsset, TileSetsExportData, TileSetsExporter},
     },
     camera::RTSCamera,
     env::terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
@@ -21,20 +21,20 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct EnvTileComponent {
-    pub asset: Handle<EnvTileAsset>,
+pub struct TileComponent {
+    pub asset: Handle<TileAsset>,
     pub health: f32,
     pub selected: bool,
 }
 
 const TILESETS_PATH: &str = "tiles/main.tilesets";
 
-pub struct EnvObjectsState {
+pub struct EnvState {
     pub terrain: TerrainHandle,
-    tilesets: Handle<EnvTileSetsAsset>,
+    tilesets: Handle<TileSetsAsset>,
 }
 
-impl EnvObjectsState {
+impl EnvState {
     pub fn new(resources: &Resources, world: &mut World) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
         let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
@@ -60,7 +60,7 @@ impl EnvObjectsState {
                 },
             )
         };
-        EnvObjectsState { terrain, tilesets }
+        EnvState { terrain, tilesets }
     }
 
     #[profiling::function]
@@ -170,7 +170,6 @@ impl EnvObjectsState {
                     let terrain = storage.get_mut(&self.terrain);
                     terrain.save_edited_tile(&tile_name)?;
                 }
-
                 if let Some(tileset_name) = tileset_name {
                     let tilesets = {
                         let asset_manager = resources.get::<AssetManager>().unwrap();
@@ -183,8 +182,8 @@ impl EnvObjectsState {
                         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
                         tilesets.get_loaded_tilesets(&mut asset_manager)
                     };
-                    let tilesets = EnvTileSetsExportData::new(&tilesets, &tileset_name, &tile_name);
-                    EnvTileSetsExporter::export(&format!("assets/{}", TILESETS_PATH), tilesets)
+                    let tilesets = TileSetsExportData::new(&tilesets, &tileset_name, &tile_name);
+                    TileSetsExporter::export(&format!("assets/{}", TILESETS_PATH), tilesets)
                 } else {
                     Some(())
                 }
@@ -242,6 +241,21 @@ impl EnvObjectsState {
             rotation: Quat::IDENTITY,
         };
 
+        // tile component
+        let tile_component = TileComponent {
+            asset: {
+                let asset_resource = resources.get::<AssetResource>().unwrap();
+                asset_resource.load_asset_path(TileExporter::get_tile_path(tile_name, false))
+            },
+            health: 1.,
+            selected: false,
+        };
+
+        // entity
+        log::info!("Spawn tile {} at: {}", tile_name, translation);
+        let _entity = world.push((transform_component, tile_component));
+
+        // update voxels
         let tile = {
             let tilesets = {
                 let asset_manager = resources.get::<AssetManager>().unwrap();
@@ -265,22 +279,6 @@ impl EnvObjectsState {
                 .unwrap()
                 .clone()
         };
-
-        // env object component
-        let env_tile_component = EnvTileComponent {
-            asset: {
-                let asset_resource = resources.get::<AssetResource>().unwrap();
-                asset_resource.load_asset_path(EnvTileExporter::get_tile_path(tile_name, false))
-            },
-            health: 1.,
-            selected: false,
-        };
-
-        // entity
-        log::info!("Spawn tile {} at: {}", tile_name, translation);
-        let _entity = world.push((transform_component, env_tile_component));
-
-        // update voxels
         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
         let mut storage = terrain_resource.write();
         let terrain = storage.get_mut(&self.terrain);

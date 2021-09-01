@@ -7,7 +7,7 @@ use distill::{
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
-use crate::assets::env_tile::EnvTileAssetData;
+use crate::assets::tile::TileAssetData;
 
 #[derive(TypeUuid, Serialize, Deserialize, Default, Clone, Debug)]
 #[uuid = "6b5e8cc4-9a8e-45e2-9e25-7f1ab02f4ca0"]
@@ -71,7 +71,7 @@ impl Importer for EnvTileImporter {
                 .unwrap_or_else(|| AssetUuid(*uuid::Uuid::new_v4().as_bytes())),
         );
 
-        let asset_data = ron::de::from_reader::<_, EnvTileAssetData>(source)?;
+        let asset_data = ron::de::from_reader::<_, TileAssetData>(source)?;
 
         let mut search_tags: Vec<(String, Option<String>)> = vec![];
         search_tags.push(("name".to_string(), Some(asset_data.name.clone())));

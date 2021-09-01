@@ -12,13 +12,13 @@ use crate::env::terrain::TerrainVoxel;
 
 #[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]
 #[uuid = "e0b18b31-dcff-4e31-85dd-2e224bb1d04b"]
-pub struct EnvTileAssetData {
+pub struct TileAssetData {
     pub name: String,
     pub palette: Vec<String>,
     pub voxels: Vec<Vec<String>>,
 }
 
-pub struct EnvTileAssetInner {
+pub struct TileAssetInner {
     pub name: String,
     pub palette: Vec<String>,
     pub voxels: Array3x1<TerrainVoxel>,
@@ -26,18 +26,15 @@ pub struct EnvTileAssetInner {
 
 #[derive(TypeUuid, Clone)]
 #[uuid = "76097c2c-4d34-4957-bae1-8369f4a1d856"]
-pub struct EnvTileAsset {
-    pub inner: Arc<EnvTileAssetInner>,
+pub struct TileAsset {
+    pub inner: Arc<TileAssetInner>,
 }
 
-pub struct EnvTileLoadHandler;
+pub struct TileLoadHandler;
 
-impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoadHandler {
+impl DefaultAssetTypeLoadHandler<TileAssetData, TileAsset> for TileLoadHandler {
     #[profiling::function]
-    fn load(
-        _asset_manager: &mut AssetManager,
-        asset_data: EnvTileAssetData,
-    ) -> RafxResult<EnvTileAsset> {
+    fn load(_asset_manager: &mut AssetManager, asset_data: TileAssetData) -> RafxResult<TileAsset> {
         if asset_data.palette.len() > 256 {
             return Err(RafxError::StringError(format!(
                 "Pallete has {} materials but only 256 are supported.",
@@ -104,8 +101,8 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
             }
         }
 
-        Ok(EnvTileAsset {
-            inner: Arc::new(EnvTileAssetInner {
+        Ok(TileAsset {
+            inner: Arc::new(TileAssetInner {
                 name: asset_data.name,
                 palette: asset_data.palette,
                 voxels,
@@ -114,5 +111,4 @@ impl DefaultAssetTypeLoadHandler<EnvTileAssetData, EnvTileAsset> for EnvTileLoad
     }
 }
 
-pub type EnvTileAssetType =
-    DefaultAssetTypeHandler<EnvTileAssetData, EnvTileAsset, EnvTileLoadHandler>;
+pub type TileAssetType = DefaultAssetTypeHandler<TileAssetData, TileAsset, TileLoadHandler>;
