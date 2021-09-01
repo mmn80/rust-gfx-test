@@ -4,13 +4,13 @@ use rafx::{
     renderer::RendererAssetPlugin,
 };
 
-use super::{EnvTileSetAssetType, EnvTileSetImporter};
+use super::{EnvTileSetsAssetType, EnvTileSetsImporter};
 
-pub struct EnvTileSetAssetTypeRendererPlugin;
+pub struct EnvTileSetsAssetTypeRendererPlugin;
 
-impl RendererAssetPlugin for EnvTileSetAssetTypeRendererPlugin {
+impl RendererAssetPlugin for EnvTileSetsAssetTypeRendererPlugin {
     fn configure_asset_daemon(&self, asset_daemon: AssetDaemon) -> AssetDaemon {
-        asset_daemon.with_importer("tileset", EnvTileSetImporter)
+        asset_daemon.with_importer("tilesets", EnvTileSetsImporter)
     }
 
     fn register_asset_types(
@@ -18,6 +18,6 @@ impl RendererAssetPlugin for EnvTileSetAssetTypeRendererPlugin {
         asset_manager: &mut AssetManager,
         asset_resource: &mut AssetResource,
     ) {
-        asset_manager.register_asset_type::<EnvTileSetAssetType>(asset_resource);
+        asset_manager.register_asset_type::<EnvTileSetsAssetType>(asset_resource);
     }
 }

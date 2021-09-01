@@ -157,7 +157,7 @@ impl UnitsState {
                     ui_state.unit.spawn_mode.ui(ui, &mut ui_state.unit.spawning);
                     ui.label("Click a location on the map to spawn dynamic object");
                 });
-        } else if !ui_state.env.spawn_tile.spawning {
+        } else if !ui_state.env.tile_spawn.active {
             egui::CollapsingHeader::new("Spawn dynamic object")
                 .default_open(true)
                 .show(ui, |ui| {
@@ -187,7 +187,7 @@ impl UnitsState {
                 });
         }
 
-        if !ui_state.unit.spawning && !ui_state.env.spawn_tile.spawning {
+        if !ui_state.unit.spawning && !ui_state.env.tile_spawn.active {
             if let Some(MouseDragState {
                 begin_position: p0,
                 end_position: p1,

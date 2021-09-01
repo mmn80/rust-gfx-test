@@ -2,6 +2,6 @@
     version: 2,
     importer_options: (),
     importer_state: (
-        tileset_asset_uuid: Some("1759bf2c-7a00-493d-8cb7-280ddf8467d5"),
+        asset_uuid: Some("c7d9e382-16bc-42cc-827e-65f11350e393"),
     ),
 )

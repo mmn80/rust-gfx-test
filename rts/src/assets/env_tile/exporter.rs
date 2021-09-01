@@ -40,8 +40,15 @@ impl EnvTileExporter {
         };
         let asset_string =
             ron::ser::to_string_pretty::<EnvTileAssetData>(&asset_data, Default::default()).ok()?;
-        let file_name = name.to_lowercase().replace(" ", "_");
-        let path = format!("assets/tiles/{}.tile", file_name);
-        std::fs::write(path, asset_string).ok()
+        std::fs::write(Self::get_tile_path(&name, true), asset_string).ok()
+    }
+
+    pub fn get_tile_path(tile_name: &str, include_root_dir: bool) -> String {
+        let file_name = tile_name.to_lowercase().replace(" ", "_");
+        if include_root_dir {
+            format!("assets/tiles/{}.tile", file_name)
+        } else {
+            format!("tiles/{}.tile", file_name)
+        }
     }
 }

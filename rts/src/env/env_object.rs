@@ -10,7 +10,9 @@ use super::ui::{
 };
 use crate::{
     assets::{
-        env_tile::EnvTileAsset, env_tileset::EnvTileSetAsset, pbr_material::PbrMaterialAsset,
+        env_tile::{EnvTileAsset, EnvTileExporter},
+        env_tileset::EnvTileSetsAsset,
+        pbr_material::PbrMaterialAsset,
     },
     camera::RTSCamera,
     env::terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
@@ -25,52 +27,39 @@ pub struct EnvTileComponent {
     pub selected: bool,
 }
 
-const TILESETS: [&str; 2] = ["Base", "Extra"];
+const TILESETS_PATH: &str = "tiles/main.tilesets";
 
 pub struct EnvObjectsState {
     pub terrain: TerrainHandle,
-    tilesets: Vec<Handle<EnvTileSetAsset>>,
+    tilesets: Handle<EnvTileSetsAsset>,
 }
 
 impl EnvObjectsState {
     pub fn new(resources: &Resources, world: &mut World) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
-
-        let material_names = Terrain::get_default_material_names();
-        let terrain_materials: Vec<_> = material_names
-            .iter()
-            .map(|name| {
-                let path = format!("materials/terrain/{}.pbrmaterial", *name);
-                let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
-                (*name, material_handle.clone())
-            })
-            .collect();
-
-        let tilesets = TILESETS
-            .iter()
-            .map(|name| {
-                let file_name = name.to_lowercase().replace(" ", "_");
-                let path = format!("tiles/{}.tileset", file_name);
-                let tile_handle = asset_resource.load_asset_path::<EnvTileSetAsset, _>(path);
-                tile_handle.clone()
-            })
-            .collect();
-
-        let ui_terrain_size: u32 = 4096;
-        let ui_terrain_style = TerrainFillStyle::FlatBoard {
-            material: "basic_tile",
-        };
+        let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
         let terrain = {
+            let material_names = Terrain::get_default_material_names();
+            let terrain_materials: Vec<_> = material_names
+                .iter()
+                .map(|name| {
+                    let path = format!("materials/terrain/{}.pbrmaterial", *name);
+                    let material_handle =
+                        asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
+                    (*name, material_handle.clone())
+                })
+                .collect();
             let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
             terrain_resource.new_terrain(
                 world,
                 terrain_materials,
                 Point3i::ZERO,
-                ui_terrain_size,
-                ui_terrain_style.clone(),
+                4096,
+                TerrainFillStyle::FlatBoard {
+                    material: "basic_tile",
+                },
             )
         };
-
         EnvObjectsState { terrain, tilesets }
     }
 
@@ -89,9 +78,23 @@ impl EnvObjectsState {
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
-        TileSpawnUiState::ui(ui_state, ui, &self.get_loaded_tilesets(resources));
-        if !ui_state.env.spawn_tile.spawning && !ui_state.unit.spawning {
-            TileEditUiState::ui(ui_state, ui, &self.get_loaded_tilesets(resources), |cmd| {
+        let tilesets = {
+            let asset_manager = resources.get::<AssetManager>().unwrap();
+            if let Some(asset) = asset_manager.committed_asset(&self.tilesets) {
+                asset.clone()
+            } else {
+                ui.label("Waiting for tilesets asset to load...");
+                return;
+            }
+        };
+        let tilesets = {
+            let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+            tilesets.get_loaded_tilesets(&mut asset_manager)
+        };
+
+        TileSpawnUiState::ui(ui_state, ui, &tilesets);
+        if !ui_state.env.tile_spawn.active && !ui_state.unit.spawning {
+            TileEditUiState::ui(ui_state, ui, &tilesets, |cmd| {
                 self.ui_cmd_handler(cmd, world, resources)
             });
             TerrainEditUiState::ui(ui_state, ui);
@@ -100,8 +103,8 @@ impl EnvObjectsState {
             });
         }
 
-        if ui_state.env.spawn_tile.spawning
-            || (ui_state.env.edit_terrain.edit_mode && !ui_state.unit.spawning)
+        if ui_state.env.tile_spawn.active
+            || (ui_state.env.terrain_edit.active && !ui_state.unit.spawning)
         {
             let input = resources.get::<InputResource>().unwrap();
             let camera = resources.get::<RTSCamera>().unwrap();
@@ -119,20 +122,20 @@ impl EnvObjectsState {
                         ui_state,
                     );
                     let default_material = terrain
-                        .voxel_by_material(ui_state.env.edit_terrain.edit_material)
+                        .voxel_by_material(ui_state.env.terrain_edit.material)
                         .unwrap();
                     (cast_result, default_material)
                 };
                 if let Some(result) = cast_result {
-                    if ui_state.env.spawn_tile.spawning {
+                    if ui_state.env.tile_spawn.active {
                         self.spawn(
-                            &ui_state.env.spawn_tile.spawn_tileset,
-                            &ui_state.env.spawn_tile.spawn_tile,
+                            &ui_state.env.tile_spawn.tileset,
+                            &ui_state.env.tile_spawn.tile,
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
                             world,
                         );
-                    } else if ui_state.env.edit_terrain.edit_mode {
+                    } else if ui_state.env.terrain_edit.active {
                         let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
                         let mut storage = terrain_resource.write();
                         let terrain = storage.get_mut(&self.terrain);
@@ -143,8 +146,8 @@ impl EnvObjectsState {
                         }
                     }
                 }
-                if ui_state.env.spawn_tile.spawn_mode == SpawnMode::OneShot {
-                    ui_state.env.spawn_tile.spawning = false;
+                if ui_state.env.tile_spawn.mode == SpawnMode::OneShot {
+                    ui_state.env.tile_spawn.active = false;
                 }
             }
         }
@@ -158,7 +161,7 @@ impl EnvObjectsState {
     ) -> Option<()> {
         match command {
             EnvUiCmd::SaveEditedTile(tile) => {
-                let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+                let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
                 let mut storage = terrain_resource.write();
                 let terrain = storage.get_mut(&self.terrain);
                 terrain.save_edited_tile(&tile)
@@ -168,7 +171,7 @@ impl EnvObjectsState {
                 tile_name,
             } => {
                 {
-                    let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+                    let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
                     let mut storage = terrain_resource.write();
                     let terrain = storage.get_mut(&self.terrain);
                     let terrain_style = TerrainFillStyle::FlatBoard {
@@ -187,26 +190,13 @@ impl EnvObjectsState {
                 Some(())
             }
             EnvUiCmd::ResetTerrain(params) => {
-                let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
+                let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
                 let mut storage = terrain_resource.write();
                 let terrain = storage.get_mut(&self.terrain);
-                terrain.reset(
-                    world,
-                    Point3i::ZERO,
-                    params.terrain_size,
-                    params.terrain_style.clone(),
-                );
+                terrain.reset(world, Point3i::ZERO, params.size, params.style.clone());
                 Some(())
             }
         }
-    }
-
-    fn get_loaded_tilesets(&self, resources: &Resources) -> Vec<EnvTileSetAsset> {
-        let asset_manager = resources.get::<AssetManager>().unwrap();
-        self.tilesets
-            .iter()
-            .map(|tileset| asset_manager.committed_asset(tileset).unwrap().clone())
-            .collect()
     }
 
     pub fn spawn(
@@ -229,18 +219,36 @@ impl EnvObjectsState {
             rotation: Quat::IDENTITY,
         };
 
-        let tilesets = self.get_loaded_tilesets(resources);
-        let asset_manager = resources.get::<AssetManager>().unwrap();
-        let tileset = tilesets
-            .iter()
-            .find(|tileset| &tileset.inner.name == &tileset_name)
-            .unwrap();
-        let tile_handle = tileset.get_tile_handle(tile_name);
-        let tile = asset_manager.committed_asset(&tile_handle).unwrap();
+        let tile = {
+            let tilesets = {
+                let asset_manager = resources.get::<AssetManager>().unwrap();
+                asset_manager
+                    .committed_asset(&self.tilesets)
+                    .unwrap()
+                    .clone()
+            };
+            let tilesets = {
+                let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
+                tilesets.get_loaded_tilesets(&mut asset_manager)
+            };
+            let tileset = tilesets
+                .iter()
+                .find(|tileset| &tileset.name == tileset_name)
+                .unwrap();
+            tileset
+                .tiles
+                .iter()
+                .find(|tile| &tile.inner.name == tile_name)
+                .unwrap()
+                .clone()
+        };
 
         // env object component
         let env_tile_component = EnvTileComponent {
-            asset: tile_handle,
+            asset: {
+                let asset_resource = resources.get::<AssetResource>().unwrap();
+                asset_resource.load_asset_path(EnvTileExporter::get_tile_path(tile_name, false))
+            },
             health: 1.,
             selected: false,
         };

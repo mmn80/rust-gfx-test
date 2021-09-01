@@ -1,0 +1,16 @@
+(
+    tilesets: [
+        (
+            name: "Base",
+            tiles: [
+                "building.tile",
+                "tree.tile",
+                "bronze_statue.tile",
+            ],
+        ),
+        (
+            name: "Extra",
+            tiles: [],
+        ),
+    ]
+)
