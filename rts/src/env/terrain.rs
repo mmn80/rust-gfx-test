@@ -43,7 +43,10 @@ use rafx_plugins::{
 };
 
 use crate::{
-    assets::{env_tile::EnvTileAsset, pbr_material::PbrMaterialAsset},
+    assets::{
+        env_tile::{EnvTileAsset, EnvTileExporter},
+        pbr_material::PbrMaterialAsset,
+    },
     env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
         DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
@@ -291,6 +294,7 @@ const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 4;
 const MAX_RENDER_CHUNK_JOBS_INIT: usize = 65536;
 const MAX_DISTANCE_FROM_CAMERA: i32 = 256;
 const SUPER_CHUNK_SIZE: i32 = 256;
+const TILE_EDIT_PLATFORM_SIZE: i32 = 32;
 
 impl Terrain {
     pub fn get_default_material_names() -> Vec<&'static str> {
@@ -913,6 +917,46 @@ impl Terrain {
             traversal.step();
         }
         return None;
+    }
+
+    pub fn save_edited_tile(&self, tile: &str) -> Option<()> {
+        let full_extent = Extent3i::from_min_and_shape(
+            PointN([
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                0,
+            ]),
+            Point3i::fill(TILE_EDIT_PLATFORM_SIZE),
+        );
+
+        let mut min = PointN([TILE_EDIT_PLATFORM_SIZE, TILE_EDIT_PLATFORM_SIZE, 0]);
+        let mut max = Point3i::fill(-TILE_EDIT_PLATFORM_SIZE);
+        for p in full_extent.iter_points() {
+            let v = self.voxels.get_point(0, p);
+            if !v.is_empty() {
+                if p.x() < min.x() {
+                    *min.x_mut() = p.x();
+                }
+                if p.y() < min.y() {
+                    *min.y_mut() = p.y();
+                }
+                if p.x() > max.x() {
+                    *max.x_mut() = p.x();
+                }
+                if p.y() > max.y() {
+                    *max.y_mut() = p.y();
+                }
+                if p.z() > max.z() {
+                    *max.z_mut() = p.z();
+                }
+            }
+        }
+        let extent = Extent3i::from_min_and_max(min, max);
+
+        let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
+        copy_extent(&extent, &self.voxels.lod_view(0), &mut export_voxels);
+
+        EnvTileExporter::export(tile.to_string(), export_voxels, self)
     }
 }
 

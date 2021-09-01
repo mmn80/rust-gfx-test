@@ -1,9 +1,9 @@
 use super::EnvTileSetAssetData;
 
 // don't know how to do it from distill
-pub struct EnvTileExporter;
+pub struct EnvTileSetExporter;
 
-impl EnvTileExporter {
+impl EnvTileSetExporter {
     pub fn export(name: String, asset_data: &EnvTileSetAssetData) -> Option<()> {
         let asset_string =
             ron::ser::to_string_pretty::<EnvTileSetAssetData>(asset_data, Default::default())

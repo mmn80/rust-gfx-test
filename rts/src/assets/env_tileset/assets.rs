@@ -46,6 +46,18 @@ pub struct EnvTileSetAsset {
     pub inner: Arc<EnvTileSetAssetInner>,
 }
 
+impl EnvTileSetAsset {
+    pub fn get_tile_handle(&self, name: &str) -> Handle<EnvTileAsset> {
+        self.inner
+            .tiles
+            .iter()
+            .find(|v| v.name == name)
+            .unwrap()
+            .handle
+            .clone()
+    }
+}
+
 pub struct EnvTileSetLoadHandler;
 
 impl DefaultAssetTypeLoadHandler<EnvTileSetAssetData, EnvTileSetAsset> for EnvTileSetLoadHandler {

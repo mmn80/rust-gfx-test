@@ -5,7 +5,7 @@ use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
 
 use crate::{
-    env::{env_object::EnvObjectsState, EnvUiState},
+    env::{env_object::EnvObjectsState, ui::EnvUiState},
     scenes::MainState,
     time::TimeState,
     unit::unit::{UnitUiState, UnitsState},
