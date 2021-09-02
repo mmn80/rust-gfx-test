@@ -147,7 +147,9 @@ impl UnitsState {
 
         ui_state.unit.selecting = false;
         if let Some(MouseDragState { .. }) = input.mouse_drag_just_finished(MouseButton::LEFT) {
-            ui_state.unit.selecting = !ui_state.unit.spawning;
+            ui_state.unit.selecting = !ui_state.unit.spawning
+                && !ui_state.env.tile_spawn.active
+                && !ui_state.env.terrain_edit.active;
         }
 
         if ui_state.unit.spawning {
@@ -184,7 +186,10 @@ impl UnitsState {
                 });
         }
 
-        if !ui_state.unit.spawning && !ui_state.env.tile_spawn.active {
+        if !ui_state.unit.spawning
+            && !ui_state.env.tile_spawn.active
+            && !ui_state.env.terrain_edit.active
+        {
             if let Some(MouseDragState {
                 begin_position: p0,
                 end_position: p1,
@@ -226,7 +231,7 @@ impl UnitsState {
         }
 
         if ui_state.unit.spawning {
-            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
+            if input.is_mouse_just_down(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let cast_result = {
                     let terrain_resource = resources.get::<TerrainResource>().unwrap();
@@ -253,7 +258,7 @@ impl UnitsState {
                     ui_state.unit.spawning = false;
                 }
             }
-        } else if input.is_mouse_button_just_clicked(MouseButton::RIGHT) {
+        } else if input.is_mouse_just_down(MouseButton::RIGHT) {
             let mut first = true;
             let cursor_pos = input.mouse_position();
             let cast_result = {

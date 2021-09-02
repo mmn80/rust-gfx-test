@@ -109,7 +109,7 @@ impl EnvState {
             let input = resources.get::<InputResource>().unwrap();
             let camera = resources.get::<RTSCamera>().unwrap();
 
-            if input.is_mouse_button_just_clicked(MouseButton::LEFT) {
+            if input.is_mouse_just_down(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
                     let terrain_resource = resources.get::<TerrainResource>().unwrap();
