@@ -1,7 +1,6 @@
 use std::{
     cmp::{max, min},
     collections::{HashMap, HashSet},
-    sync::Arc,
 };
 
 use bevy_tasks::{Task, TaskPool, TaskPoolBuilder};
@@ -30,10 +29,7 @@ use rafx::{
         geometry::{AxisAlignedBoundingBox, BoundingSphere},
         VisibleBounds,
     },
-    render_features::{
-        render_features_prelude::{RwLock, RwLockReadGuard, RwLockWriteGuard},
-        RenderObjectHandle,
-    },
+    render_features::RenderObjectHandle,
     renderer::ViewportsResource,
     visibility::{CullModel, ObjectId, VisibilityObjectArc, VisibilityRegion},
 };
@@ -266,6 +262,7 @@ pub type TerrainVoxels = ChunkHashMap3<TerrainVoxel, ChunkMapBuilder3x1<TerrainV
 
 pub struct Terrain {
     initialized: bool,
+    pub world: World,
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: Vec<String>,
     materials_map: HashMap<String, u16>,
@@ -445,26 +442,20 @@ impl Terrain {
         TileExporter::export(tile.to_string(), export_voxels, self)
     }
 
-    pub fn reset(
-        &mut self,
-        world: &mut World,
-        origin: Point3i,
-        size: u32,
-        style: TerrainFillStyle,
-    ) {
+    pub fn reset(&mut self, origin: Point3i, size: u32, style: TerrainFillStyle) {
         log::info!("Resetting terrain...");
 
         self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
-        self.reset_chunks(world);
+        self.reset_chunks();
 
         log::info!("Terrain reset");
     }
 
-    fn reset_chunks(&mut self, world: &mut World) {
+    fn reset_chunks(&mut self) {
         self.active_builders = 0;
         self.super_chunks.clear();
         for chunk in self.chunks.values_mut() {
-            chunk.clear(world);
+            chunk.clear(&mut self.world);
         }
         self.chunks.clear();
         let full_extent = self.voxels.bounding_extent(0);
@@ -545,9 +536,9 @@ impl Terrain {
     }
 
     #[profiling::function]
-    pub fn update_chunks(&mut self, world: &mut World, resources: &Resources) {
+    pub fn update_chunks(&mut self, resources: &Resources) {
         self.start_mesh_jobs(resources);
-        self.process_job_results(world, resources);
+        self.process_job_results(resources);
         self.check_reset_metrics(5.0, true);
     }
 
@@ -688,7 +679,7 @@ impl Terrain {
     }
 
     #[profiling::function]
-    fn process_job_results(&mut self, world: &mut World, resources: &Resources) {
+    fn process_job_results(&mut self, resources: &Resources) {
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
@@ -717,7 +708,7 @@ impl Terrain {
                         });
                     }
                 } else {
-                    chunk.clear(world);
+                    chunk.clear(&mut self.world);
                     cleared_chunks.push(result.key.clone());
                 }
             } else {
@@ -754,7 +745,8 @@ impl Terrain {
                                         render_object_handle: render_object_handle.clone(),
                                     };
 
-                                    let entity = world.push((transform_component, mesh_component));
+                                    let entity =
+                                        self.world.push((transform_component, mesh_component));
                                     chunk.entity = Some(entity);
 
                                     let visibility_object_handle = {
@@ -775,7 +767,7 @@ impl Terrain {
                                         handle.add_render_object(&render_object_handle);
                                         handle
                                     };
-                                    let mut entry = world.entry(entity).unwrap();
+                                    let mut entry = self.world.entry(entity).unwrap();
                                     entry.add_component(VisibilityComponent {
                                         visibility_object_handle: visibility_object_handle.clone(),
                                     });
@@ -1025,49 +1017,6 @@ pub struct TerrainHandle {
     handle: GenericDropSlabKey,
 }
 
-pub struct TerrainStorage {
-    inner: DropSlab<Terrain>,
-}
-
-impl TerrainStorage {
-    pub fn new() -> Self {
-        Self {
-            inner: Default::default(),
-        }
-    }
-
-    fn register_terrain(&mut self, terrain: Terrain) -> TerrainHandle {
-        self.inner.process_drops();
-
-        let drop_slab_key = self.inner.allocate(terrain);
-        TerrainHandle {
-            handle: drop_slab_key.generic_drop_slab_key(),
-        }
-    }
-
-    pub fn get(&self, terrain_handle: &TerrainHandle) -> &Terrain {
-        self.inner
-            .get(&terrain_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "TerrainStorage did not contain handle {:?}.",
-                    terrain_handle
-                )
-            })
-    }
-
-    pub fn get_mut(&mut self, terrain_handle: &TerrainHandle) -> &mut Terrain {
-        self.inner
-            .get_mut(&terrain_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "TerrainStorage did not contain handle {:?}.",
-                    terrain_handle
-                )
-            })
-    }
-}
-
 #[derive(Clone)]
 pub enum TerrainFillStyle {
     FlatBoard {
@@ -1083,39 +1032,23 @@ pub enum TerrainFillStyle {
     },
 }
 
-#[derive(Clone)]
-pub struct TerrainResource {
-    storage: Arc<RwLock<TerrainStorage>>,
+pub struct Simulation {
+    terrain: DropSlab<Terrain>,
+    active_terrain: Option<TerrainHandle>,
+    default_world: World,
 }
 
-impl TerrainResource {
+impl Simulation {
     pub fn new() -> Self {
         Self {
-            storage: Arc::new(RwLock::new(TerrainStorage::new())),
+            terrain: Default::default(),
+            active_terrain: None,
+            default_world: World::default(),
         }
-    }
-
-    pub fn read(&self) -> RwLockReadGuard<TerrainStorage> {
-        let storage = &self.storage;
-        storage.try_read().unwrap_or_else(move || {
-            log::warn!("TerrainStorage is being written by another thread.");
-
-            storage.read()
-        })
-    }
-
-    pub fn write(&mut self) -> RwLockWriteGuard<TerrainStorage> {
-        let storage = &self.storage;
-        storage.try_write().unwrap_or_else(move || {
-            log::warn!("TerrainStorage is being read or written by another thread.");
-
-            storage.write()
-        })
     }
 
     pub fn new_terrain(
         &mut self,
-        world: &mut World,
         dyn_mesh_manager: &DynMeshManager,
         materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
@@ -1140,6 +1073,7 @@ impl TerrainResource {
             let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
             Terrain {
                 initialized: false,
+                world: Default::default(),
                 materials,
                 material_names,
                 materials_map,
@@ -1158,20 +1092,56 @@ impl TerrainResource {
             }
         };
 
-        terrain.reset_chunks(world);
+        terrain.reset_chunks();
 
-        let terrain_handle = {
-            let mut storage = self.write();
-            storage.register_terrain(terrain)
-        };
+        let terrain_handle = self.register_terrain(terrain);
+        self.active_terrain = Some(terrain_handle.clone());
 
         log::info!("Terrain created");
 
         terrain_handle
     }
-}
 
-#[derive(Clone)]
-pub struct TerrainComponent {
-    pub handle: TerrainHandle,
+    fn register_terrain(&mut self, terrain: Terrain) -> TerrainHandle {
+        self.terrain.process_drops();
+
+        let drop_slab_key = self.terrain.allocate(terrain);
+        TerrainHandle {
+            handle: drop_slab_key.generic_drop_slab_key(),
+        }
+    }
+
+    pub fn get(&self, terrain_handle: &TerrainHandle) -> &Terrain {
+        self.terrain
+            .get(&terrain_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| {
+                panic!(
+                    "TerrainStorage did not contain handle {:?}.",
+                    terrain_handle
+                )
+            })
+    }
+
+    pub fn get_mut(&mut self, terrain_handle: &TerrainHandle) -> &mut Terrain {
+        self.terrain
+            .get_mut(&terrain_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| {
+                panic!(
+                    "TerrainStorage did not contain handle {:?}.",
+                    terrain_handle
+                )
+            })
+    }
+
+    pub fn get_active_terrain(&mut self) -> Option<&mut Terrain> {
+        let h = self.active_terrain.as_ref().map(|h| h.clone())?;
+        Some(self.get_mut(&h))
+    }
+
+    pub fn get_active_world(&mut self) -> &mut World {
+        if self.active_terrain.is_none() {
+            return &mut self.default_world;
+        };
+        &mut self.get_active_terrain().unwrap().world
+    }
 }

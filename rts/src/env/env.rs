@@ -1,9 +1,13 @@
 use building_blocks::core::prelude::*;
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
-use legion::{Resources, World};
-use rafx::assets::{distill_impl::AssetResource, AssetManager};
-use rafx_plugins::components::TransformComponent;
+use legion::{Entity, Resources};
+use rafx::{
+    assets::{distill_impl::AssetResource, AssetManager},
+    renderer::ViewportsResource,
+    visibility::{ViewFrustumArc, VisibilityRegion},
+};
+use rafx_plugins::components::{DirectionalLightComponent, TransformComponent};
 
 use super::ui::{
     EnvUiCmd, TerrainEditUiState, TerrainResetUiState, TileEditUiState, TileSpawnUiState,
@@ -15,10 +19,12 @@ use crate::{
         tilesets::{TileSetsAsset, TileSetsExportData, TileSetsExporter},
     },
     camera::RTSCamera,
-    env::terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
+    env::terrain::{Simulation, Terrain, TerrainFillStyle, TerrainHandle},
     features::dyn_mesh::DynMeshManager,
     input::{InputResource, KeyboardKey, MouseButton},
+    time::TimeState,
     ui::{SpawnMode, UiState},
+    RenderOptions,
 };
 
 #[derive(Clone)]
@@ -31,12 +37,14 @@ pub struct TileComponent {
 const TILESETS_PATH: &str = "tiles/main.tilesets";
 
 pub struct EnvState {
+    main_view_frustum: ViewFrustumArc,
+    main_light: Entity,
     pub terrain: TerrainHandle,
     tilesets: Handle<TileSetsAsset>,
 }
 
 impl EnvState {
-    pub fn new(resources: &Resources, world: &mut World) -> Self {
+    pub fn new(resources: &Resources, simulation: &mut Simulation) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
         let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
         let terrain = {
@@ -50,10 +58,8 @@ impl EnvState {
                     (*name, material_handle.clone())
                 })
                 .collect();
-            let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
             let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
-            terrain_resource.new_terrain(
-                world,
+            simulation.new_terrain(
                 &dyn_mesh_manager,
                 terrain_materials,
                 Point3i::ZERO,
@@ -63,20 +69,95 @@ impl EnvState {
                 },
             )
         };
-        EnvState { terrain, tilesets }
+
+        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
+        let main_view_frustum = visibility_region.register_view_frustum();
+        let main_light = {
+            let light_from = Vec3::new(0.0, 5.0, 4.0);
+            let light_to = Vec3::ZERO;
+            let light_direction = (light_to - light_from).normalize();
+            let terrain = simulation.get_mut(&terrain);
+            terrain.world.push((DirectionalLightComponent {
+                direction: light_direction,
+                intensity: 5.0,
+                color: [1.0, 1.0, 1.0, 1.0].into(),
+                view_frustum: visibility_region.register_view_frustum(),
+            },))
+        };
+
+        EnvState {
+            main_view_frustum,
+            main_light,
+            terrain,
+            tilesets,
+        }
     }
 
     #[profiling::function]
-    pub fn update(&mut self, world: &mut World, resources: &mut Resources) {
-        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-        let mut storage = terrain_resource.write();
-        let terrain = storage.get_mut(&self.terrain);
-        terrain.update_chunks(world, resources);
+    pub fn update(
+        &mut self,
+        simulation: &mut Simulation,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+    ) {
+        {
+            let input = resources.get::<InputResource>().unwrap();
+            let time_state = resources.get::<TimeState>().unwrap();
+            let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
+            let render_options = resources.get::<RenderOptions>().unwrap();
+            let mut camera = resources.get_mut::<RTSCamera>().unwrap();
+
+            camera.update(
+                &*time_state,
+                &*render_options,
+                &mut self.main_view_frustum,
+                &mut *viewports_resource,
+                &input,
+            );
+        }
+
+        let terrain = simulation.get_mut(&self.terrain);
+
+        {
+            if let Some(mut entry) = terrain.world.entry(self.main_light) {
+                if let Ok(light) = entry.get_component_mut::<DirectionalLightComponent>() {
+                    if ui_state.main_light_rotates {
+                        let time_state = resources.get::<TimeState>().unwrap();
+                        const LIGHT_XY_DISTANCE: f32 = 50.0;
+                        const LIGHT_Z: f32 = 50.0;
+                        const LIGHT_ROTATE_SPEED: f32 = 0.2;
+                        const LIGHT_LOOP_OFFSET: f32 = 2.0;
+                        let loop_time = time_state.total_time().as_secs_f32();
+                        let light_from = Vec3::new(
+                            LIGHT_XY_DISTANCE
+                                * f32::cos(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
+                            LIGHT_XY_DISTANCE
+                                * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET),
+                            LIGHT_Z,
+                            //LIGHT_Z// * f32::sin(LIGHT_ROTATE_SPEED * loop_time + LIGHT_LOOP_OFFSET).abs(),
+                            //0.2
+                            //2.0
+                        );
+                        let light_to = Vec3::default();
+
+                        light.direction = (light_to - light_from).normalize();
+                    } else {
+                        let q = Quat::from_rotation_x(
+                            ui_state.main_light_pitch * std::f32::consts::PI / 180.,
+                        );
+                        light.direction = q.mul_vec3(Vec3::Y);
+                    }
+                    light.color = ui_state.main_light_color;
+                }
+            }
+        }
+
+        terrain.update_chunks(resources);
     }
 
     pub fn update_ui(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
@@ -98,11 +179,11 @@ impl EnvState {
         TileSpawnUiState::ui(ui_state, ui, &tilesets);
         if !ui_state.env.tile_spawn.active && !ui_state.unit.spawning {
             TileEditUiState::ui(ui_state, ui, &tilesets, |cmd| {
-                self.ui_cmd_handler(cmd, world, resources)
+                self.ui_cmd_handler(cmd, simulation, resources)
             });
             TerrainEditUiState::ui(ui_state, ui);
             TerrainResetUiState::ui(ui_state, ui, |cmd| {
-                self.ui_cmd_handler(cmd, world, resources)
+                self.ui_cmd_handler(cmd, simulation, resources)
             });
         }
 
@@ -115,9 +196,7 @@ impl EnvState {
             if input.is_mouse_just_down(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
-                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
-                    let storage = terrain_resource.read();
-                    let terrain = storage.get(&self.terrain);
+                    let terrain = simulation.get(&self.terrain);
                     let cast_result = camera.ray_cast_terrain(
                         cursor_pos.x as u32,
                         cursor_pos.y as u32,
@@ -136,12 +215,10 @@ impl EnvState {
                             &ui_state.env.tile_spawn.tile,
                             PointN([result.hit.x(), result.hit.y(), result.hit.z() + 1]),
                             resources,
-                            world,
+                            simulation,
                         );
                     } else if ui_state.env.terrain_edit.active {
-                        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-                        let mut storage = terrain_resource.write();
-                        let terrain = storage.get_mut(&self.terrain);
+                        let terrain = simulation.get_mut(&self.terrain);
                         if input.is_key_down(KeyboardKey::LControl) {
                             terrain.clear_voxel(result.hit);
                         } else {
@@ -159,18 +236,16 @@ impl EnvState {
     fn ui_cmd_handler(
         &mut self,
         command: EnvUiCmd,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
     ) -> Option<()> {
+        let terrain = simulation.get_mut(&self.terrain);
         match command {
             EnvUiCmd::SaveEditedTile {
                 tileset_name,
                 tile_name,
             } => {
                 {
-                    let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
-                    let mut storage = terrain_resource.write();
-                    let terrain = storage.get_mut(&self.terrain);
                     terrain.save_edited_tile(&tile_name)?;
                 }
                 if let Some(tileset_name) = tileset_name {
@@ -196,29 +271,24 @@ impl EnvState {
                 tile_name,
             } => {
                 {
-                    let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
-                    let mut storage = terrain_resource.write();
-                    let terrain = storage.get_mut(&self.terrain);
                     let terrain_style = TerrainFillStyle::FlatBoard {
                         material: "basic_tile",
                     };
-                    terrain.reset(
-                        world,
-                        Point3i::ZERO,
-                        TILE_EDIT_PLATFORM_SIZE as u32,
-                        terrain_style,
-                    );
+                    terrain.reset(Point3i::ZERO, TILE_EDIT_PLATFORM_SIZE as u32, terrain_style);
                 }
                 if !tile_name.is_empty() {
-                    self.spawn(&tileset_name, &tile_name, Point3i::ZERO, resources, world);
+                    self.spawn(
+                        &tileset_name,
+                        &tile_name,
+                        Point3i::ZERO,
+                        resources,
+                        simulation,
+                    );
                 }
                 Some(())
             }
             EnvUiCmd::ResetTerrain(params) => {
-                let mut terrain_resource = resources.get_mut::<TerrainResource>()?;
-                let mut storage = terrain_resource.write();
-                let terrain = storage.get_mut(&self.terrain);
-                terrain.reset(world, Point3i::ZERO, params.size, params.style.clone());
+                terrain.reset(Point3i::ZERO, params.size, params.style.clone());
                 Some(())
             }
         }
@@ -230,8 +300,10 @@ impl EnvState {
         tile_name: &str,
         position: Point3i,
         resources: &Resources,
-        world: &mut World,
+        simulation: &mut Simulation,
     ) {
+        let terrain = simulation.get_mut(&self.terrain);
+
         // transform component
         let translation = Vec3::new(
             position.x() as f32,
@@ -256,7 +328,7 @@ impl EnvState {
 
         // entity
         log::info!("Spawn tile {} at: {}", tile_name, translation);
-        let _entity = world.push((transform_component, tile_component));
+        let _entity = terrain.world.push((transform_component, tile_component));
 
         // update voxels
         let tile = {
@@ -282,9 +354,7 @@ impl EnvState {
                 .unwrap()
                 .clone()
         };
-        let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-        let mut storage = terrain_resource.write();
-        let terrain = storage.get_mut(&self.terrain);
+
         terrain.instance_tile(&tile, position);
     }
 }

@@ -1,5 +1,5 @@
 use egui::{Align2, Button};
-use legion::{Resources, World};
+use legion::Resources;
 use rafx::{
     rafx_visibility::{DepthRange, OrthographicParameters, Projection},
     render_features::{
@@ -17,6 +17,7 @@ use rafx_plugins::{
 use super::SceneManagerAction;
 use crate::{
     camera::RTSCamera,
+    env::terrain::Simulation,
     input::{InputResource, KeyboardKey},
     scenes::Scene,
     ui::UiState,
@@ -27,7 +28,7 @@ pub(super) struct MenuScene {
 }
 
 impl MenuScene {
-    pub(super) fn new(_world: &mut World, resources: &Resources) -> Self {
+    pub(super) fn new(_simulation: &mut Simulation, resources: &Resources) -> Self {
         let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
@@ -89,11 +90,11 @@ impl MenuScene {
 impl super::GameScene for MenuScene {
     fn update(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         ui_state: &mut UiState,
     ) -> SceneManagerAction {
-        ui_state.update(world, resources, None, None, None);
+        ui_state.update(simulation, resources, None, None, None);
 
         let mut action = SceneManagerAction::None;
 

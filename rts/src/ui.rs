@@ -1,11 +1,11 @@
 use egui::{Align, Checkbox, Color32};
 use glam::Vec4;
-use legion::{Resources, World};
+use legion::Resources;
 use rafx::render_feature_renderer_prelude::AssetResource;
 use rafx_plugins::features::egui::EguiContextResource;
 
 use crate::{
-    env::{env::EnvState, ui::EnvUiState},
+    env::{env::EnvState, terrain::Simulation, ui::EnvUiState},
     scenes::MainState,
     time::TimeState,
     unit::unit::{UnitUiState, UnitsState},
@@ -60,7 +60,7 @@ impl UiState {
     #[profiling::function]
     pub fn update(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         main_state: Option<&mut MainState>,
         kin_state: Option<&mut EnvState>,
@@ -158,13 +158,13 @@ impl UiState {
             }
 
             if let Some(main_state) = main_state {
-                main_state.update_ui(world, resources, self, ui);
+                main_state.update_ui(simulation, resources, self, ui);
             }
             if let Some(kin_state) = kin_state {
-                kin_state.update_ui(world, resources, self, ui);
+                kin_state.update_ui(simulation, resources, self, ui);
             }
             if let Some(dyn_state) = dyn_state {
-                dyn_state.update_ui(world, resources, self, ui);
+                dyn_state.update_ui(simulation, resources, self, ui);
             }
 
             if !self.error.is_empty() {

@@ -1,6 +1,7 @@
 // There's a decent amount of code that's just for example and isn't called
 #![allow(dead_code)]
 
+use env::terrain::Simulation;
 use legion::*;
 use rafx::{
     api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},
@@ -239,7 +240,7 @@ struct DemoApp {
     ui_state: UiState,
     scene_manager: SceneManager,
     resources: Resources,
-    world: World,
+    simulation: Simulation,
     print_time_event: PeriodicEvent,
 }
 
@@ -271,14 +272,14 @@ impl DemoApp {
             physical_size.height,
         )?;
 
-        let world = World::default();
+        let simulation = Simulation::new();
         let print_time_event = crate::time::PeriodicEvent::default();
 
         Ok(DemoApp {
             ui_state: Default::default(),
             scene_manager,
             resources,
-            world,
+            simulation,
             print_time_event,
         })
     }
@@ -324,12 +325,12 @@ impl DemoApp {
 
         if let SceneManagerAction::Scene(scene) = self.scene_manager.scene_action {
             self.scene_manager
-                .try_cleanup_current_scene(&mut self.world, &self.resources);
+                .try_cleanup_current_scene(&mut self.simulation, &self.resources);
 
             {
                 // NOTE(dvd): Legion leaks memory because the entity IDs aren't reset when the
                 // world is cleared and the entity location map will grow without bounds.
-                self.world = World::default();
+                //self.simulation = World::default();
 
                 // NOTE(dvd): The Renderer maintains some per-frame temporary data to avoid
                 // allocating each frame. We can clear this between scene transitions.
@@ -337,7 +338,7 @@ impl DemoApp {
                 renderer.clear_temporary_work();
             }
             self.scene_manager
-                .try_load_scene(&mut self.world, &self.resources, scene);
+                .try_load_scene(&mut self.simulation, &self.resources, scene);
         }
 
         {
@@ -367,7 +368,7 @@ impl DemoApp {
         {
             profiling::scope!("update scene");
             self.scene_manager.scene_action = self.scene_manager.update_scene(
-                &mut self.world,
+                &mut self.simulation,
                 &mut self.resources,
                 &mut self.ui_state,
             );
@@ -472,7 +473,10 @@ impl DemoApp {
             let mut camera = self.resources.get_mut::<camera::RTSCamera>().unwrap();
             extract_resources.insert(&mut *camera);
 
-            extract_resources.insert(&mut self.world);
+            unsafe {
+                let world = self.simulation.get_active_world();
+                extract_resources.insert(rafx::base::memory::force_to_static_lifetime_mut(world));
+            }
 
             renderer
                 .start_rendering_next_frame(&mut extract_resources)

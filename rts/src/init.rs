@@ -30,7 +30,6 @@ use crate::{
         tilesets::TileSetsAssetTypeRendererPlugin,
     },
     camera::RTSCamera,
-    env::terrain::TerrainResource,
     features::dyn_mesh::{BufferUploaderConfig, DynMeshManager, DynMeshRendererPlugin},
 };
 
@@ -125,7 +124,6 @@ pub fn rendering_init(
     resources.insert(renderer_builder_result.asset_manager);
     resources.insert(renderer_builder_result.renderer);
     resources.insert(RendererConfigResource::default());
-    resources.insert(TerrainResource::new());
 
     {
         let device_context = resources.get::<RafxDeviceContext>().unwrap();
@@ -149,7 +147,6 @@ pub fn rendering_init(
 pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
     // Destroy these first
     {
-        resources.remove::<TerrainResource>();
         {
             let swapchain_helper = resources.remove::<RafxSwapchainHelper>().unwrap();
             let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();

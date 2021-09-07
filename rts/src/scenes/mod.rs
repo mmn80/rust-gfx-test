@@ -14,7 +14,7 @@ mod main_scene;
 use main_scene::MainScene;
 pub use main_scene::MainState;
 
-use crate::ui::UiState;
+use crate::{env::terrain::Simulation, ui::UiState};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {
@@ -30,10 +30,14 @@ fn random_color(rng: &mut impl Rng) -> Vec3 {
     v.normalize()
 }
 
-fn create_scene(scene: Scene, world: &mut World, resources: &Resources) -> Box<dyn GameScene> {
+fn create_scene(
+    scene: Scene,
+    simulation: &mut Simulation,
+    resources: &Resources,
+) -> Box<dyn GameScene> {
     match scene {
-        Scene::Menu => Box::new(MenuScene::new(world, resources)),
-        Scene::Main => Box::new(MainScene::new(world, resources)),
+        Scene::Menu => Box::new(MenuScene::new(simulation, resources)),
+        Scene::Main => Box::new(MainScene::new(simulation, resources)),
     }
 }
 
@@ -47,12 +51,12 @@ pub enum SceneManagerAction {
 pub trait GameScene {
     fn update(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         ui_state: &mut UiState,
     ) -> SceneManagerAction;
 
-    fn cleanup(&mut self, _world: &mut World, _resources: &Resources) {}
+    fn cleanup(&mut self, _simulation: &mut Simulation, _resources: &Resources) {}
 }
 
 pub struct SceneManager {
@@ -72,34 +76,43 @@ impl Default for SceneManager {
 }
 
 impl SceneManager {
-    pub fn try_load_scene(&mut self, world: &mut World, resources: &Resources, next_scene: Scene) {
+    pub fn try_load_scene(
+        &mut self,
+        simulation: &mut Simulation,
+        resources: &Resources,
+        next_scene: Scene,
+    ) {
         if let Some(scene) = &mut self.scene {
-            scene.cleanup(world, resources);
+            scene.cleanup(simulation, resources);
         }
-        world.clear();
+        //simulation.clear();
         log::info!("Load scene {:?}", next_scene);
-        self.scene = Some(create_scene(next_scene, world, resources));
+        self.scene = Some(create_scene(next_scene, simulation, resources));
     }
 
     pub fn update_scene(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         ui_state: &mut UiState,
     ) -> SceneManagerAction {
         if let Some(scene) = &mut self.scene {
-            scene.update(world, resources, ui_state)
+            scene.update(simulation, resources, ui_state)
         } else {
             SceneManagerAction::None
         }
     }
 
-    pub fn try_cleanup_current_scene(&mut self, world: &mut World, resources: &Resources) {
+    pub fn try_cleanup_current_scene(
+        &mut self,
+        simulation: &mut Simulation,
+        resources: &Resources,
+    ) {
         if let Some(scene) = &mut self.scene {
-            scene.cleanup(world, resources);
+            scene.cleanup(simulation, resources);
         }
 
-        world.clear();
+        //simulation.clear();
     }
 }
 

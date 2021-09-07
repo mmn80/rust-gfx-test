@@ -25,7 +25,7 @@ use rand::{thread_rng, Rng};
 
 use crate::{
     camera::RTSCamera,
-    env::terrain::{TerrainHandle, TerrainResource},
+    env::terrain::{Simulation, TerrainHandle},
     input::{InputResource, MouseButton, MouseDragState},
     time::TimeState,
     ui::{SpawnMode, UiState},
@@ -135,12 +135,14 @@ impl UnitsState {
 
     pub fn update_ui(
         &mut self,
-        world: &mut World,
+        simulation: &mut Simulation,
         resources: &mut Resources,
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
-        self.add_debug_draw(resources, world);
+        let terrain = simulation.get_mut(&self.terrain);
+
+        self.add_debug_draw(resources, &terrain.world);
 
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
@@ -233,25 +235,19 @@ impl UnitsState {
         if ui_state.unit.spawning {
             if input.is_mouse_just_down(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
-                let cast_result = {
-                    let terrain_resource = resources.get::<TerrainResource>().unwrap();
-                    let storage = terrain_resource.read();
-                    let terrain = storage.get(&self.terrain);
-                    camera.ray_cast_terrain(
-                        cursor_pos.x as u32,
-                        cursor_pos.y as u32,
-                        terrain,
-                        ui_state,
-                    )
-                };
-
+                let cast_result = camera.ray_cast_terrain(
+                    cursor_pos.x as u32,
+                    cursor_pos.y as u32,
+                    terrain,
+                    ui_state,
+                );
                 if let Some(result) = cast_result {
                     let p = result.hit;
                     self.spawn(
                         ui_state.unit.object_type,
                         Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
                         resources,
-                        world,
+                        &mut terrain.world,
                     );
                 }
                 if ui_state.unit.spawn_mode == SpawnMode::OneShot {
@@ -261,17 +257,17 @@ impl UnitsState {
         } else if input.is_mouse_just_down(MouseButton::RIGHT) {
             let mut first = true;
             let cursor_pos = input.mouse_position();
-            let cast_result = {
-                let terrain_resource = resources.get::<TerrainResource>().unwrap();
-                let storage = terrain_resource.read();
-                let terrain = storage.get(&self.terrain);
-                camera.ray_cast_terrain(cursor_pos.x as u32, cursor_pos.y as u32, terrain, ui_state)
-            };
+            let cast_result = camera.ray_cast_terrain(
+                cursor_pos.x as u32,
+                cursor_pos.y as u32,
+                terrain,
+                ui_state,
+            );
             if let Some(result) = cast_result {
                 let p = result.hit;
                 let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
                 let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
-                for (transform, dyn_object) in query.iter_mut(world) {
+                for (transform, dyn_object) in query.iter_mut(&mut terrain.world) {
                     if dyn_object.selected {
                         if !first {
                             target.x += transform.scale.x;
@@ -286,11 +282,17 @@ impl UnitsState {
     }
 
     #[profiling::function]
-    pub fn update(&mut self, world: &mut World, resources: &mut Resources, ui_state: &mut UiState) {
+    pub fn update(
+        &mut self,
+        simulation: &mut Simulation,
+        resources: &mut Resources,
+        ui_state: &mut UiState,
+    ) {
         let camera = resources.get::<RTSCamera>().unwrap();
         let view_proj = camera.view_proj();
         let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
         let input = resources.get::<InputResource>().unwrap();
+        let terrain = simulation.get_mut(&self.terrain);
 
         let (x0, y0, x1, y1) = if let Some(MouseDragState {
             begin_position: p0,
@@ -317,7 +319,7 @@ impl UnitsState {
             Read<VisibilityComponent>,
             Write<UnitComponent>,
         )>::query();
-        query.par_for_each_mut(world, |(transform, visibility, dyn_object)| {
+        query.par_for_each_mut(&mut terrain.world, |(transform, visibility, dyn_object)| {
             if let Some(target) = dyn_object.move_target {
                 let target_dir = (target - transform.translation).normalize();
                 let orig_dir = Vec3::X;
@@ -358,7 +360,7 @@ impl UnitsState {
             ui_state.unit.selected_count = 0;
             ui_state.unit.selected.clear();
             let mut query = <Read<UnitComponent>>::query();
-            for dyn_object in query.iter(world) {
+            for dyn_object in query.iter(&terrain.world) {
                 if dyn_object.selected {
                     ui_state.unit.selected_count += 1;
                     let entry = ui_state.unit.selected.entry(dyn_object.object_type);
