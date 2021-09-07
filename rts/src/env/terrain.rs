@@ -49,15 +49,14 @@ use crate::{
     },
     env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
-        DynMeshData, DynMeshDataPart, DynMeshHandle, DynMeshRenderObject, DynMeshRenderObjectSet,
-        DynMeshResource,
+        DynMeshCommand, DynMeshCommandResults, DynMeshData, DynMeshDataPart, DynMeshHandle,
+        DynMeshRenderObject, DynMeshRenderObjectSet, DynMeshResource,
     },
 };
 
 pub struct TerrainChunkTaskMetrics {
-    pub quads_time: u32,   // µs
-    pub mesh_time: u32,    // µs
-    pub results_time: u32, // µs
+    pub quads_time: u32, // µs
+    pub mesh_time: u32,  // µs
     pub failed: bool,
 }
 
@@ -118,7 +117,6 @@ pub struct TerrainChunkDistributionMetrics {
     pub extract_time: SingleDistributionMetrics,
     pub quads_time: SingleDistributionMetrics,
     pub mesh_time: SingleDistributionMetrics,
-    pub results_time: SingleDistributionMetrics,
 }
 
 impl TerrainChunkDistributionMetrics {
@@ -126,7 +124,6 @@ impl TerrainChunkDistributionMetrics {
         self.extract_time.info_log("extract");
         self.quads_time.info_log("quads");
         self.mesh_time.info_log("mesh");
-        self.results_time.info_log("results");
     }
 }
 
@@ -186,18 +183,11 @@ impl TerrainChunkMetrics {
                 .map(|t| check(t.failed, t.mesh_time as usize))
                 .collect(),
         );
-        let results_time = SingleDistributionMetrics::new(
-            self.tasks
-                .iter()
-                .map(|t| check(t.failed, t.results_time as usize))
-                .collect(),
-        );
 
         TerrainChunkDistributionMetrics {
             extract_time,
             quads_time,
             mesh_time,
-            results_time,
         }
     }
 }
@@ -287,6 +277,10 @@ pub struct Terrain {
     builder_rx: Receiver<TerrainChunkTaskResults>,
     metrics: TerrainChunkMetrics,
     initialized: bool,
+    dyn_mesh_cmd_tx: Sender<DynMeshCommand>,
+    dyn_mesh_cmd_rx: Receiver<DynMeshCommandResults>,
+    dyn_mesh_add_requests: HashMap<usize, (ChunkKey3, VisibleBounds)>,
+    current_dyn_mesh_add_request: usize,
 }
 
 const MAX_RENDER_CHUNK_JOBS: usize = 16;
@@ -618,7 +612,6 @@ impl Terrain {
                             metrics: TerrainChunkTaskMetrics {
                                 quads_time: quads_duration.as_micros() as u32,
                                 mesh_time: mesh_duration.as_micros() as u32,
-                                results_time: 0,
                                 failed,
                             },
                         };
@@ -636,66 +629,32 @@ impl Terrain {
 
     #[profiling::function]
     fn process_job_results(&mut self, world: &mut World, resources: &Resources) {
-        let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
         let mut cleared_chunks = vec![];
         for result in self.builder_rx.try_iter() {
-            let results_start = Instant::now();
             let mut metrics = result.metrics;
 
             if let Some(chunk) = self.chunks.get_mut(&result.key) {
                 chunk.builder = None;
                 self.active_builders -= 1;
-
-                // log::info!("Dyn mesh built. {}", result.mesh.clone());
-
                 if let Some(mesh) = result.mesh {
-                    let visible_bounds = mesh.visible_bounds.clone();
                     if let Some(handle) = &chunk.dyn_mesh_handle {
-                        if let Err(error) = dyn_mesh_resource.update_dyn_mesh(&handle, mesh) {
-                            log::error!("{}", error);
-                        }
-                    } else if let Ok(handle) = dyn_mesh_resource.add_dyn_mesh(mesh) {
-                        chunk.dyn_mesh_handle = Some(handle.clone());
-
-                        let transform_component = TransformComponent {
-                            translation: Vec3::ZERO,
-                            scale: Vec3::ONE,
-                            rotation: Quat::IDENTITY,
-                        };
-
-                        let render_object_handle = dyn_mesh_render_objects
-                            .register_render_object(DynMeshRenderObject { mesh: handle });
-                        let mesh_component = MeshComponent {
-                            render_object_handle: render_object_handle.clone(),
-                        };
-
-                        let entity = world.push((transform_component, mesh_component));
-                        chunk.entity = Some(entity);
-
-                        let visibility_object_handle = {
-                            let handle = visibility_region.register_static_object(
-                                ObjectId::from(entity),
-                                CullModel::VisibleBounds(visible_bounds),
-                            );
-                            let pos = result.key.minimum;
-                            handle.set_transform(
-                                Vec3::new(pos.x() as f32, pos.y() as f32, pos.z() as f32),
-                                Quat::IDENTITY,
-                                Vec3::ONE,
-                            );
-                            handle.add_render_object(&render_object_handle);
-                            handle
-                        };
-                        let mut entry = world.entry(entity).unwrap();
-                        entry.add_component(VisibilityComponent {
-                            visibility_object_handle: visibility_object_handle.clone(),
+                        let _res = self.dyn_mesh_cmd_tx.send(DynMeshCommand::Update {
+                            request_handle: 0,
+                            handle: handle.clone(),
+                            data: mesh,
                         });
-
-                        chunk.visibility_object_handle = Some(visibility_object_handle);
-                        chunk.render_object_handle = Some(render_object_handle);
+                    } else {
+                        self.current_dyn_mesh_add_request += 1;
+                        let request_handle = self.current_dyn_mesh_add_request;
+                        self.dyn_mesh_add_requests
+                            .insert(request_handle, (result.key, mesh.visible_bounds.clone()));
+                        let _res = self.dyn_mesh_cmd_tx.send(DynMeshCommand::Add {
+                            request_handle,
+                            data: mesh,
+                        });
                     }
                 } else {
                     chunk.clear(world);
@@ -704,9 +663,80 @@ impl Terrain {
             } else {
                 metrics.failed = true;
             };
-
-            metrics.results_time = (Instant::now() - results_start).as_micros() as u32;
             self.metrics.tasks.push(metrics);
+        }
+
+        for result in self.dyn_mesh_cmd_rx.try_iter() {
+            match result {
+                DynMeshCommandResults::Add {
+                    request_handle,
+                    result,
+                } => {
+                    if let Some((key, visible_bounds)) =
+                        self.dyn_mesh_add_requests.remove(&request_handle)
+                    {
+                        if let Some(chunk) = self.chunks.get_mut(&key) {
+                            match result {
+                                Ok(handle) => {
+                                    chunk.dyn_mesh_handle = Some(handle.clone());
+
+                                    let transform_component = TransformComponent {
+                                        translation: Vec3::ZERO,
+                                        scale: Vec3::ONE,
+                                        rotation: Quat::IDENTITY,
+                                    };
+
+                                    let render_object_handle = dyn_mesh_render_objects
+                                        .register_render_object(DynMeshRenderObject {
+                                            mesh: handle,
+                                        });
+                                    let mesh_component = MeshComponent {
+                                        render_object_handle: render_object_handle.clone(),
+                                    };
+
+                                    let entity = world.push((transform_component, mesh_component));
+                                    chunk.entity = Some(entity);
+
+                                    let visibility_object_handle = {
+                                        let handle = visibility_region.register_static_object(
+                                            ObjectId::from(entity),
+                                            CullModel::VisibleBounds(visible_bounds),
+                                        );
+                                        let pos = key.minimum;
+                                        handle.set_transform(
+                                            Vec3::new(
+                                                pos.x() as f32,
+                                                pos.y() as f32,
+                                                pos.z() as f32,
+                                            ),
+                                            Quat::IDENTITY,
+                                            Vec3::ONE,
+                                        );
+                                        handle.add_render_object(&render_object_handle);
+                                        handle
+                                    };
+                                    let mut entry = world.entry(entity).unwrap();
+                                    entry.add_component(VisibilityComponent {
+                                        visibility_object_handle: visibility_object_handle.clone(),
+                                    });
+
+                                    chunk.visibility_object_handle = Some(visibility_object_handle);
+                                    chunk.render_object_handle = Some(render_object_handle);
+                                }
+                                Err(err) => log::error!("{}", err),
+                            }
+                        }
+                    };
+                }
+                DynMeshCommandResults::Update {
+                    request_handle: _,
+                    result,
+                } => {
+                    if let Err(error) = result {
+                        log::error!("{}", error);
+                    }
+                }
+            }
         }
 
         for chunk in cleared_chunks {
@@ -1086,6 +1116,7 @@ impl TerrainResource {
     pub fn new_terrain(
         &mut self,
         world: &mut World,
+        dyn_mesh_resource: &DynMeshResource,
         materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
         size: u32,
@@ -1106,6 +1137,7 @@ impl TerrainResource {
             let materials = materials.iter().map(|v| v.1.clone()).collect();
             let voxels = Terrain::generate_voxels(&materials_map, origin, size, style);
             let (render_tx, render_rx) = unbounded();
+            let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_resource.get_command_channels();
             Terrain {
                 materials,
                 material_names,
@@ -1119,6 +1151,10 @@ impl TerrainResource {
                 builder_rx: render_rx,
                 metrics: Default::default(),
                 initialized: false,
+                dyn_mesh_cmd_tx,
+                dyn_mesh_cmd_rx,
+                dyn_mesh_add_requests: HashMap::new(),
+                current_dyn_mesh_add_request: 0,
             }
         };
 

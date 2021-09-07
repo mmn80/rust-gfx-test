@@ -179,8 +179,35 @@ impl std::fmt::Display for DynMeshHandle {
     }
 }
 
+pub enum DynMeshCommand {
+    Add {
+        request_handle: usize,
+        data: DynMeshData,
+    },
+    Update {
+        request_handle: usize,
+        handle: DynMeshHandle,
+        data: DynMeshData,
+    },
+}
+
+pub enum DynMeshCommandResults {
+    Add {
+        request_handle: usize,
+        result: RafxResult<DynMeshHandle>,
+    },
+    Update {
+        request_handle: usize,
+        result: RafxResult<()>,
+    },
+}
+
 struct DynMeshStorage {
     storage: DropSlab<DynMeshState>,
+    cmd_in_tx: Sender<DynMeshCommand>,
+    cmd_in_rx: Receiver<DynMeshCommand>,
+    cmd_out_tx: Sender<DynMeshCommandResults>,
+    cmd_out_rx: Receiver<DynMeshCommandResults>,
     uploader: Option<BufferUploader>,
     vertex_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
     vertex_tx: Sender<BufferUploadResult>,
@@ -192,10 +219,16 @@ struct DynMeshStorage {
 
 impl DynMeshStorage {
     pub fn new() -> Self {
+        let (cmd_in_tx, cmd_in_rx) = crossbeam_channel::unbounded();
+        let (cmd_out_tx, cmd_out_rx) = crossbeam_channel::unbounded();
         let (vertex_tx, vertex_rx) = crossbeam_channel::unbounded();
         let (index_tx, index_rx) = crossbeam_channel::unbounded();
         Self {
             storage: Default::default(),
+            cmd_in_tx,
+            cmd_in_rx,
+            cmd_out_tx,
+            cmd_out_rx,
             uploader: None,
             vertex_uploads: Default::default(),
             vertex_tx,
@@ -204,6 +237,12 @@ impl DynMeshStorage {
             index_tx,
             index_rx,
         }
+    }
+
+    pub fn get_command_channels(
+        &self,
+    ) -> (Sender<DynMeshCommand>, Receiver<DynMeshCommandResults>) {
+        (self.cmd_in_tx.clone(), self.cmd_out_rx.clone())
     }
 
     pub fn init_buffer_uploader(
@@ -505,6 +544,54 @@ impl DynMeshResource {
             let _res = upload.update();
         }
         storage.process_upload_results(asset_manager);
+
+        let mut commands = vec![];
+        for cmd in storage.cmd_in_rx.try_iter() {
+            commands.push(cmd);
+        }
+        for cmd in commands {
+            match cmd {
+                DynMeshCommand::Add {
+                    request_handle,
+                    data,
+                } => {
+                    let result = storage.add_dyn_mesh(data);
+                    let _res = storage.cmd_out_tx.send(DynMeshCommandResults::Add {
+                        request_handle,
+                        result,
+                    });
+                }
+                DynMeshCommand::Update {
+                    request_handle,
+                    handle,
+                    data,
+                } => {
+                    let result = match storage.start_upload(data, Some(&handle)) {
+                        Ok(mesh_state) => {
+                            if let DynMeshState::Uploading(ref upload, _) = mesh_state {
+                                storage
+                                    .vertex_uploads
+                                    .insert(upload.vertex_upload_id.clone(), handle.clone());
+                                storage
+                                    .index_uploads
+                                    .insert(upload.index_upload_id.clone(), handle.clone());
+                            } else {
+                                unreachable!();
+                            }
+
+                            let old_mesh_state = storage.get_mut(&handle);
+                            let _old = std::mem::replace(old_mesh_state, mesh_state);
+                            Ok(())
+                        }
+                        Err(err) => Err(err),
+                    };
+                    let _res = storage.cmd_out_tx.send(DynMeshCommandResults::Update {
+                        request_handle,
+                        result,
+                    });
+                }
+            }
+        }
     }
 
     #[profiling::function]
@@ -541,6 +628,13 @@ impl DynMeshResource {
         let _old = std::mem::replace(old_mesh_state, mesh_state);
 
         Ok(())
+    }
+
+    pub fn get_command_channels(
+        &self,
+    ) -> (Sender<DynMeshCommand>, Receiver<DynMeshCommandResults>) {
+        let storage = self.read();
+        storage.get_command_channels()
     }
 
     pub fn get(&self, handle: &DynMeshHandle) -> Option<DynMesh> {
