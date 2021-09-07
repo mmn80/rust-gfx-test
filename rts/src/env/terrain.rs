@@ -54,18 +54,51 @@ use crate::{
     },
 };
 
-pub struct TerrainChunkTaskMetrics {
+#[derive(Clone, Copy, Default)]
+pub struct TerrainVoxel(u16);
+
+impl TerrainVoxel {
+    pub fn empty() -> Self {
+        Self(0)
+    }
+
+    pub fn from_material_index(material: u16) -> Self {
+        Self(material)
+    }
+}
+
+impl MergeVoxel for TerrainVoxel {
+    type VoxelValue = u16;
+
+    fn voxel_merge_value(&self) -> Self::VoxelValue {
+        self.0
+    }
+}
+
+impl IsOpaque for TerrainVoxel {
+    fn is_opaque(&self) -> bool {
+        true
+    }
+}
+
+impl IsEmpty for TerrainVoxel {
+    fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+struct TerrainChunkTaskMetrics {
     pub quads_time: u32, // µs
     pub mesh_time: u32,  // µs
     pub failed: bool,
 }
 
-pub struct TerrainChunkExtractMetrics {
+struct TerrainChunkExtractMetrics {
     pub tasks: u32,
     pub extract_time: u32, // µs
 }
 
-pub struct SingleDistributionMetrics {
+struct SingleDistributionMetrics {
     pub samples: usize,
     pub failed: usize,
     pub min_time: f64, // µs
@@ -113,7 +146,7 @@ impl SingleDistributionMetrics {
     }
 }
 
-pub struct TerrainChunkDistributionMetrics {
+struct TerrainChunkDistributionMetrics {
     pub extract_time: SingleDistributionMetrics,
     pub quads_time: SingleDistributionMetrics,
     pub mesh_time: SingleDistributionMetrics,
@@ -127,7 +160,7 @@ impl TerrainChunkDistributionMetrics {
     }
 }
 
-pub struct TerrainChunkMetrics {
+struct TerrainChunkMetrics {
     pub start: Instant,
     pub tasks: Vec<TerrainChunkTaskMetrics>,
     pub extract: Vec<TerrainChunkExtractMetrics>,
@@ -192,43 +225,10 @@ impl TerrainChunkMetrics {
     }
 }
 
-pub struct TerrainChunkTaskResults {
+struct TerrainChunkTaskResults {
     pub key: ChunkKey3,
     pub mesh: Option<DynMeshData>,
     pub metrics: TerrainChunkTaskMetrics,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct TerrainVoxel(u16);
-
-impl TerrainVoxel {
-    pub fn empty() -> Self {
-        Self(0)
-    }
-
-    pub fn from_material_index(material: u16) -> Self {
-        Self(material)
-    }
-}
-
-impl MergeVoxel for TerrainVoxel {
-    type VoxelValue = u16;
-
-    fn voxel_merge_value(&self) -> Self::VoxelValue {
-        self.0
-    }
-}
-
-impl IsOpaque for TerrainVoxel {
-    fn is_opaque(&self) -> bool {
-        true
-    }
-}
-
-impl IsEmpty for TerrainVoxel {
-    fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
 }
 
 struct TerrainChunk {
@@ -265,10 +265,11 @@ impl TerrainChunk {
 pub type TerrainVoxels = ChunkHashMap3<TerrainVoxel, ChunkMapBuilder3x1<TerrainVoxel>>;
 
 pub struct Terrain {
+    initialized: bool,
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: Vec<String>,
     materials_map: HashMap<String, u16>,
-    pub voxels: TerrainVoxels,
+    voxels: TerrainVoxels,
     task_pool: TaskPool,
     active_builders: usize,
     chunks: HashMap<ChunkKey3, TerrainChunk>,
@@ -276,7 +277,6 @@ pub struct Terrain {
     builder_tx: Sender<TerrainChunkTaskResults>,
     builder_rx: Receiver<TerrainChunkTaskResults>,
     metrics: TerrainChunkMetrics,
-    initialized: bool,
     dyn_mesh_cmd_tx: Sender<DynMeshCommand>,
     dyn_mesh_cmd_rx: Receiver<DynMeshCommandResults>,
     dyn_mesh_add_requests: HashMap<usize, (ChunkKey3, VisibleBounds)>,
@@ -338,6 +338,43 @@ impl Terrain {
             .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
     }
 
+    pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<RayCastResult> {
+        let start = PointN([start.x, start.y, start.z]);
+        let ray = PointN([ray.x, ray.y, ray.z]);
+        let mut traversal = GridRayTraversal3::new(start, ray);
+        let mut prev = PointN([start.x() as i32, start.y() as i32, start.z() as i32]);
+        for _ in 0..256 {
+            let current = traversal.current_voxel();
+            let vox = self.voxels.get_point(0, current);
+            if vox.0 != 0 {
+                return Some(RayCastResult {
+                    hit: current,
+                    before_hit: prev,
+                });
+            }
+            prev = current;
+            traversal.step();
+        }
+        return None;
+    }
+
+    pub fn update_voxel(&mut self, point: Point3i, voxel: TerrainVoxel) {
+        let vox_ref: &mut TerrainVoxel = self.voxels.get_mut_point(0, point);
+        *vox_ref = voxel;
+        let keys = self
+            .voxels
+            .indexer
+            .chunk_mins_for_extent(&Extent3i::from_min_and_shape(point, Point3i::ONES).padded(1))
+            .map(|p| ChunkKey3::new(0, p));
+        for key in keys {
+            self.set_chunk_dirty(key);
+        }
+    }
+
+    pub fn clear_voxel(&mut self, point: Point3i) {
+        self.update_voxel(point, TerrainVoxel::empty());
+    }
+
     pub fn instance_tile(&mut self, tile: &TileAsset, position: Point3i) {
         let pallete: Vec<_> = tile
             .inner
@@ -368,44 +405,62 @@ impl Terrain {
         }
     }
 
-    fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
-        let c = chunk.minimum;
-        let p = c / SUPER_CHUNK_SIZE;
-        SUPER_CHUNK_SIZE
-            * PointN([
-                if c.x() < 0 { p.x() - 1 } else { p.x() },
-                if c.y() < 0 { p.y() - 1 } else { p.y() },
-                if c.z() < 0 { p.z() - 1 } else { p.z() },
-            ])
-    }
+    pub fn save_edited_tile(&self, tile: &str) -> Option<()> {
+        let full_extent = Extent3i::from_min_and_shape(
+            PointN([
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                -TILE_EDIT_PLATFORM_SIZE / 2,
+                0,
+            ]),
+            Point3i::fill(TILE_EDIT_PLATFORM_SIZE),
+        );
 
-    pub fn set_chunk_dirty(&mut self, key: ChunkKey3) {
-        self.super_chunks
-            .entry(Self::get_super_chunk_key(&key))
-            .or_insert(HashSet::new())
-            .insert(key);
-        let chunk = self.chunks.entry(key).or_insert(TerrainChunk::new());
-        chunk.dirty = true;
-    }
-
-    pub fn update_voxel(&mut self, point: Point3i, voxel: TerrainVoxel) {
-        let vox_ref: &mut TerrainVoxel = self.voxels.get_mut_point(0, point);
-        *vox_ref = voxel;
-        let keys = self
-            .voxels
-            .indexer
-            .chunk_mins_for_extent(&Extent3i::from_min_and_shape(point, Point3i::ONES).padded(1))
-            .map(|p| ChunkKey3::new(0, p));
-        for key in keys {
-            self.set_chunk_dirty(key);
+        let mut min = PointN([TILE_EDIT_PLATFORM_SIZE, TILE_EDIT_PLATFORM_SIZE, 0]);
+        let mut max = Point3i::fill(-TILE_EDIT_PLATFORM_SIZE);
+        for p in full_extent.iter_points() {
+            let v = self.voxels.get_point(0, p);
+            if !v.is_empty() {
+                if p.x() < min.x() {
+                    *min.x_mut() = p.x();
+                }
+                if p.y() < min.y() {
+                    *min.y_mut() = p.y();
+                }
+                if p.x() > max.x() {
+                    *max.x_mut() = p.x();
+                }
+                if p.y() > max.y() {
+                    *max.y_mut() = p.y();
+                }
+                if p.z() > max.z() {
+                    *max.z_mut() = p.z();
+                }
+            }
         }
+        let extent = Extent3i::from_min_and_max(min, max);
+
+        let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
+        copy_extent(&extent, &self.voxels.lod_view(0), &mut export_voxels);
+
+        TileExporter::export(tile.to_string(), export_voxels, self)
     }
 
-    pub fn clear_voxel(&mut self, point: Point3i) {
-        self.update_voxel(point, TerrainVoxel::empty());
+    pub fn reset(
+        &mut self,
+        world: &mut World,
+        origin: Point3i,
+        size: u32,
+        style: TerrainFillStyle,
+    ) {
+        log::info!("Resetting terrain...");
+
+        self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
+        self.reset_chunks(world);
+
+        log::info!("Terrain reset");
     }
 
-    pub fn reset_chunks(&mut self, world: &mut World) {
+    fn reset_chunks(&mut self, world: &mut World) {
         self.active_builders = 0;
         self.super_chunks.clear();
         for chunk in self.chunks.values_mut() {
@@ -422,7 +477,7 @@ impl Terrain {
         }
     }
 
-    pub fn generate_voxels(
+    fn generate_voxels(
         materials: &HashMap<String, u16>,
         origin: Point3i,
         size: u32,
@@ -469,19 +524,24 @@ impl Terrain {
         voxels
     }
 
-    pub fn reset(
-        &mut self,
-        world: &mut World,
-        origin: Point3i,
-        size: u32,
-        style: TerrainFillStyle,
-    ) {
-        log::info!("Resetting terrain...");
+    fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
+        let c = chunk.minimum;
+        let p = c / SUPER_CHUNK_SIZE;
+        SUPER_CHUNK_SIZE
+            * PointN([
+                if c.x() < 0 { p.x() - 1 } else { p.x() },
+                if c.y() < 0 { p.y() - 1 } else { p.y() },
+                if c.z() < 0 { p.z() - 1 } else { p.z() },
+            ])
+    }
 
-        self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
-        self.reset_chunks(world);
-
-        log::info!("Terrain reset");
+    fn set_chunk_dirty(&mut self, key: ChunkKey3) {
+        self.super_chunks
+            .entry(Self::get_super_chunk_key(&key))
+            .or_insert(HashSet::new())
+            .insert(key);
+        let chunk = self.chunks.entry(key).or_insert(TerrainChunk::new());
+        chunk.dirty = true;
     }
 
     #[profiling::function]
@@ -928,66 +988,6 @@ impl Terrain {
             hash,
         }
     }
-
-    pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<RayCastResult> {
-        let start = PointN([start.x, start.y, start.z]);
-        let ray = PointN([ray.x, ray.y, ray.z]);
-        let mut traversal = GridRayTraversal3::new(start, ray);
-        let mut prev = PointN([start.x() as i32, start.y() as i32, start.z() as i32]);
-        for _ in 0..256 {
-            let current = traversal.current_voxel();
-            let vox = self.voxels.get_point(0, current);
-            if vox.0 != 0 {
-                return Some(RayCastResult {
-                    hit: current,
-                    before_hit: prev,
-                });
-            }
-            prev = current;
-            traversal.step();
-        }
-        return None;
-    }
-
-    pub fn save_edited_tile(&self, tile: &str) -> Option<()> {
-        let full_extent = Extent3i::from_min_and_shape(
-            PointN([
-                -TILE_EDIT_PLATFORM_SIZE / 2,
-                -TILE_EDIT_PLATFORM_SIZE / 2,
-                0,
-            ]),
-            Point3i::fill(TILE_EDIT_PLATFORM_SIZE),
-        );
-
-        let mut min = PointN([TILE_EDIT_PLATFORM_SIZE, TILE_EDIT_PLATFORM_SIZE, 0]);
-        let mut max = Point3i::fill(-TILE_EDIT_PLATFORM_SIZE);
-        for p in full_extent.iter_points() {
-            let v = self.voxels.get_point(0, p);
-            if !v.is_empty() {
-                if p.x() < min.x() {
-                    *min.x_mut() = p.x();
-                }
-                if p.y() < min.y() {
-                    *min.y_mut() = p.y();
-                }
-                if p.x() > max.x() {
-                    *max.x_mut() = p.x();
-                }
-                if p.y() > max.y() {
-                    *max.y_mut() = p.y();
-                }
-                if p.z() > max.z() {
-                    *max.z_mut() = p.z();
-                }
-            }
-        }
-        let extent = Extent3i::from_min_and_max(min, max);
-
-        let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
-        copy_extent(&extent, &self.voxels.lod_view(0), &mut export_voxels);
-
-        TileExporter::export(tile.to_string(), export_voxels, self)
-    }
 }
 
 pub struct RayCastResult {
@@ -1036,7 +1036,7 @@ impl TerrainStorage {
         }
     }
 
-    pub fn register_terrain(&mut self, terrain: Terrain) -> TerrainHandle {
+    fn register_terrain(&mut self, terrain: Terrain) -> TerrainHandle {
         self.inner.process_drops();
 
         let drop_slab_key = self.inner.allocate(terrain);
@@ -1139,6 +1139,7 @@ impl TerrainResource {
             let (render_tx, render_rx) = unbounded();
             let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
             Terrain {
+                initialized: false,
                 materials,
                 material_names,
                 materials_map,
@@ -1150,7 +1151,6 @@ impl TerrainResource {
                 builder_tx: render_tx,
                 builder_rx: render_rx,
                 metrics: Default::default(),
-                initialized: false,
                 dyn_mesh_cmd_tx,
                 dyn_mesh_cmd_rx,
                 dyn_mesh_add_requests: HashMap::new(),
