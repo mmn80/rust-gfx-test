@@ -50,7 +50,7 @@ use crate::{
     env::perlin::PerlinNoise2D,
     features::dyn_mesh::{
         DynMeshCommand, DynMeshCommandResults, DynMeshData, DynMeshDataPart, DynMeshHandle,
-        DynMeshRenderObject, DynMeshRenderObjectSet, DynMeshResource,
+        DynMeshManager, DynMeshRenderObject, DynMeshRenderObjectSet,
     },
 };
 
@@ -1116,7 +1116,7 @@ impl TerrainResource {
     pub fn new_terrain(
         &mut self,
         world: &mut World,
-        dyn_mesh_resource: &DynMeshResource,
+        dyn_mesh_manager: &DynMeshManager,
         materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
         size: u32,
@@ -1137,7 +1137,7 @@ impl TerrainResource {
             let materials = materials.iter().map(|v| v.1.clone()).collect();
             let voxels = Terrain::generate_voxels(&materials_map, origin, size, style);
             let (render_tx, render_rx) = unbounded();
-            let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_resource.get_command_channels();
+            let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
             Terrain {
                 materials,
                 material_names,

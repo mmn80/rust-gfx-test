@@ -23,7 +23,7 @@ use winit::{
 };
 
 use crate::{
-    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshResource,
+    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshManager,
     input::InputResource, scenes::SceneManager, scenes::SceneManagerAction, time::TimeState,
     ui::UiState,
 };
@@ -355,8 +355,8 @@ impl DemoApp {
         {
             profiling::scope!("update dyn mesh");
             let mut asset_manager = self.resources.get_mut::<AssetManager>().unwrap();
-            let mut dyn_mesh_resource = self.resources.get_mut::<DynMeshResource>().unwrap();
-            dyn_mesh_resource.update(&mut asset_manager);
+            let mut dyn_mesh_manager = self.resources.get_mut::<DynMeshManager>().unwrap();
+            dyn_mesh_manager.update(&mut asset_manager);
         }
 
         {
@@ -448,6 +448,7 @@ impl DemoApp {
             add_to_extract_resources!(RafxSwapchainHelper);
             add_to_extract_resources!(ViewportsResource);
             add_to_extract_resources!(AssetManager);
+            add_to_extract_resources!(DynMeshManager);
             add_to_extract_resources!(TimeState);
             add_to_extract_resources!(RenderOptions);
             add_to_extract_resources!(BasicPipelineRenderOptions);

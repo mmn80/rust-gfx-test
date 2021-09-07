@@ -31,7 +31,7 @@ use crate::{
     },
     camera::RTSCamera,
     env::terrain::TerrainResource,
-    features::dyn_mesh::{BufferUploaderConfig, DynMeshRendererPlugin, DynMeshResource},
+    features::dyn_mesh::{BufferUploaderConfig, DynMeshManager, DynMeshRendererPlugin},
 };
 
 pub fn rendering_init(
@@ -130,8 +130,8 @@ pub fn rendering_init(
     {
         let device_context = resources.get::<RafxDeviceContext>().unwrap();
         let renderer = resources.get::<Renderer>().unwrap();
-        let mut dyn_mesh_resource = resources.get_mut::<DynMeshResource>().unwrap();
-        dyn_mesh_resource.init_buffer_uploader(
+        let mut dyn_mesh_manager = resources.get_mut::<DynMeshManager>().unwrap();
+        dyn_mesh_manager.init_buffer_uploader(
             &device_context,
             BufferUploaderConfig {
                 max_bytes_per_transfer: 64 * 1024 * 1024,

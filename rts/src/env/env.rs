@@ -16,7 +16,7 @@ use crate::{
     },
     camera::RTSCamera,
     env::terrain::{Terrain, TerrainFillStyle, TerrainHandle, TerrainResource},
-    features::dyn_mesh::DynMeshResource,
+    features::dyn_mesh::DynMeshManager,
     input::{InputResource, KeyboardKey, MouseButton},
     ui::{SpawnMode, UiState},
 };
@@ -51,10 +51,10 @@ impl EnvState {
                 })
                 .collect();
             let mut terrain_resource = resources.get_mut::<TerrainResource>().unwrap();
-            let dyn_mesh_resource = resources.get::<DynMeshResource>().unwrap();
+            let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
             terrain_resource.new_terrain(
                 world,
-                &dyn_mesh_resource,
+                &dyn_mesh_manager,
                 terrain_materials,
                 Point3i::ZERO,
                 4096,

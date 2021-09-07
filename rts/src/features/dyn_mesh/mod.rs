@@ -33,6 +33,8 @@ pub use jobs::DynMeshVertex;
 mod buffer_upload;
 mod dyn_mesh;
 pub use dyn_mesh::*;
+mod dyn_mesh_manager;
+pub use dyn_mesh_manager::*;
 
 mod render_object;
 pub use render_object::*;
