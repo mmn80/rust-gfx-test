@@ -7,7 +7,6 @@ use rafx::{
         RenderViewDepthRange,
     },
     renderer::{RenderViewMeta, ViewportsResource},
-    visibility::{ViewFrustumArc, VisibilityRegion},
 };
 use rafx_plugins::{
     features::egui::{EguiContextResource, EguiRenderFeature},
@@ -23,39 +22,21 @@ use crate::{
     ui::UiState,
 };
 
-pub(super) struct MenuScene {
-    main_view_frustum: ViewFrustumArc,
-}
+pub(super) struct MenuScene {}
 
 impl MenuScene {
-    pub(super) fn new(_simulation: &mut Simulation, resources: &Resources) -> Self {
+    pub(super) fn new(simulation: &mut Simulation, resources: &Resources) -> Self {
         let mut viewports_resource = resources.get_mut::<ViewportsResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-
-        let render_phase_mask = RenderPhaseMaskBuilder::default()
-            .add_render_phase::<UiRenderPhase>()
-            .build();
-
-        let render_feature_mask = RenderFeatureMaskBuilder::default()
-            .add_render_feature::<EguiRenderFeature>()
-            .build();
-
-        let render_feature_flag_mask = RenderFeatureFlagMaskBuilder::default().build();
 
         let eye = glam::Vec3::new(1400.0, -200.0, 1000.0);
-
         let half_width = camera.win_width as f32 / 2.0;
         let half_height = camera.win_height as f32 / 2.0;
-
         let look_at = eye.truncate().extend(0.0);
         let up = glam::Vec3::new(0.0, 1.0, 0.0);
-
         let view = glam::Mat4::look_at_rh(eye, look_at, up);
-
         let near = 0.01;
         let far = 2000.0;
-
         let projection = Projection::Orthographic(OrthographicParameters::new(
             -half_width,
             half_width,
@@ -66,13 +47,22 @@ impl MenuScene {
             DepthRange::InfiniteReverse,
         ));
 
-        let main_view_frustum = visibility_region.register_view_frustum();
-        main_view_frustum
+        simulation
+            .universe()
+            .main_view_frustum
             .set_projection(&projection)
             .set_transform(eye, look_at, up);
 
+        let render_phase_mask = RenderPhaseMaskBuilder::default()
+            .add_render_phase::<UiRenderPhase>()
+            .build();
+        let render_feature_mask = RenderFeatureMaskBuilder::default()
+            .add_render_feature::<EguiRenderFeature>()
+            .build();
+        let render_feature_flag_mask = RenderFeatureFlagMaskBuilder::default().build();
+
         viewports_resource.main_view_meta = Some(RenderViewMeta {
-            view_frustum: main_view_frustum.clone(),
+            view_frustum: simulation.universe().main_view_frustum.clone(),
             eye_position: eye,
             view,
             proj: projection.as_rh_mat4(),
@@ -83,7 +73,7 @@ impl MenuScene {
             debug_name: "main".to_string(),
         });
 
-        MenuScene { main_view_frustum }
+        MenuScene {}
     }
 }
 

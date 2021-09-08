@@ -6,9 +6,9 @@ use legion::*;
 use rafx::{
     api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},
     assets::{distill_impl::AssetResource, AssetManager},
+    base::memory::force_to_static_lifetime_mut,
     render_features::ExtractResources,
     renderer::{AssetSource, Renderer, RendererConfigResource, ViewportsResource},
-    visibility::VisibilityRegion,
 };
 use rafx_plugins::{
     features::{egui::WinitEguiManager, mesh::MeshRenderOptions},
@@ -272,10 +272,7 @@ impl DemoApp {
             physical_size.height,
         )?;
 
-        let simulation = {
-            let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
-            Simulation::new(&dyn_mesh_manager)
-        };
+        let simulation = Simulation::new(&resources);
         let print_time_event = crate::time::PeriodicEvent::default();
 
         Ok(DemoApp {
@@ -431,7 +428,7 @@ impl DemoApp {
         // Redraw
         //
         {
-            profiling::scope!("Start Next Frame Render");
+            profiling::scope!("Start next frame render");
             let renderer = self.resources.get::<Renderer>().unwrap();
 
             let mut extract_resources = ExtractResources::default();
@@ -448,7 +445,10 @@ impl DemoApp {
                 };
             }
 
-            add_to_extract_resources!(VisibilityRegion);
+            unsafe {
+                let visibility_region = &mut self.simulation.universe().visibility_region;
+                extract_resources.insert(force_to_static_lifetime_mut(visibility_region));
+            }
             add_to_extract_resources!(RafxSwapchainHelper);
             add_to_extract_resources!(ViewportsResource);
             add_to_extract_resources!(AssetManager);
@@ -472,13 +472,11 @@ impl DemoApp {
             );
             add_to_extract_resources!(rafx_plugins::features::text::TextResource, text_resource);
             add_to_extract_resources!(WinitEguiManager, winit_egui_manager);
-
             let mut camera = self.resources.get_mut::<camera::RTSCamera>().unwrap();
             extract_resources.insert(&mut *camera);
-
             unsafe {
                 let world = &mut self.simulation.universe().world;
-                extract_resources.insert(rafx::base::memory::force_to_static_lifetime_mut(world));
+                extract_resources.insert(force_to_static_lifetime_mut(world));
             }
 
             renderer

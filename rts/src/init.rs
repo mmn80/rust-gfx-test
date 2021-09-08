@@ -4,7 +4,6 @@ use legion::Resources;
 use rafx::{
     api::{RafxApi, RafxDeviceContext, RafxResult, RafxSwapchainHelper},
     assets::{distill_impl::AssetResource, AssetManager},
-    framework::visibility::VisibilityRegion,
     render_features::{ExtractResources, RenderRegistry},
     renderer::{
         AssetSource, Renderer, RendererBuilder, RendererConfigResource, SwapchainHandler,
@@ -40,7 +39,6 @@ pub fn rendering_init(
     window_width: u32,
     window_height: u32,
 ) -> RafxResult<()> {
-    resources.insert(VisibilityRegion::new());
     resources.insert(ViewportsResource::default());
     resources.insert(RTSCamera::default());
 

@@ -5,7 +5,6 @@ use legion::{Entity, Resources};
 use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
-    visibility::{ViewFrustumArc, VisibilityRegion},
 };
 use rafx_plugins::components::{DirectionalLightComponent, TransformComponent};
 
@@ -37,7 +36,6 @@ pub struct TileComponent {
 const TILESETS_PATH: &str = "tiles/main.tilesets";
 
 pub struct EnvState {
-    main_view_frustum: ViewFrustumArc,
     main_light: Entity,
     tilesets: Handle<TileSetsAsset>,
 }
@@ -68,12 +66,14 @@ impl EnvState {
                 },
             );
         }
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-        let main_view_frustum = visibility_region.register_view_frustum();
         let main_light = {
             let light_from = Vec3::new(0.0, 5.0, 4.0);
             let light_to = Vec3::ZERO;
             let light_direction = (light_to - light_from).normalize();
+            let view_frustum = simulation
+                .universe()
+                .visibility_region
+                .register_view_frustum();
             simulation
                 .universe()
                 .world
@@ -81,12 +81,11 @@ impl EnvState {
                     direction: light_direction,
                     intensity: 5.0,
                     color: [1.0, 1.0, 1.0, 1.0].into(),
-                    view_frustum: visibility_region.register_view_frustum(),
+                    view_frustum,
                 },))
         };
 
         EnvState {
-            main_view_frustum,
             main_light,
             tilesets,
         }
@@ -99,6 +98,7 @@ impl EnvState {
         resources: &mut Resources,
         ui_state: &mut UiState,
     ) {
+        let universe = simulation.universe();
         {
             let input = resources.get::<InputResource>().unwrap();
             let time_state = resources.get::<TimeState>().unwrap();
@@ -109,13 +109,11 @@ impl EnvState {
             camera.update(
                 &*time_state,
                 &*render_options,
-                &mut self.main_view_frustum,
+                &mut universe.main_view_frustum,
                 &mut *viewports_resource,
                 &input,
             );
         }
-
-        let universe = simulation.universe();
 
         {
             if let Some(mut entry) = universe.world.entry(self.main_light) {

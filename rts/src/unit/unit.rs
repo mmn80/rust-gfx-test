@@ -247,6 +247,7 @@ impl UnitsState {
                         Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
                         resources,
                         &mut universe.world,
+                        &universe.visibility_region,
                     );
                 }
                 if ui_state.unit.spawn_mode == SpawnMode::OneShot {
@@ -378,6 +379,7 @@ impl UnitsState {
         position: Vec3,
         resources: &Resources,
         world: &mut World,
+        visibility_region: &VisibilityRegion,
     ) {
         // transform component
         const SCALE_MIN: f32 = 0.5;
@@ -413,7 +415,6 @@ impl UnitsState {
 
         // visibility component
         let asset_manager = resources.get::<AssetManager>().unwrap();
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
         let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
         let mesh_render_objects = mesh_render_objects.read();
         let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;

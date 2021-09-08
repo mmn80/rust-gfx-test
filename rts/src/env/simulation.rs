@@ -28,7 +28,7 @@ use rafx::{
     },
     render_features::RenderObjectHandle,
     renderer::ViewportsResource,
-    visibility::{CullModel, ObjectId, VisibilityObjectArc, VisibilityRegion},
+    visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityObjectArc, VisibilityRegion},
 };
 use rafx_plugins::{
     components::{MeshComponent, TransformComponent, VisibilityComponent},
@@ -261,6 +261,8 @@ pub struct Universe {
     id: UniverseId,
     initialized: bool,
     pub world: World,
+    pub visibility_region: VisibilityRegion,
+    pub main_view_frustum: ViewFrustumArc,
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: Vec<String>,
     materials_map: HashMap<String, u16>,
@@ -682,8 +684,6 @@ impl Universe {
     #[profiling::function]
     fn process_job_results(&mut self, resources: &Resources) {
         let mut dyn_mesh_render_objects = resources.get_mut::<DynMeshRenderObjectSet>().unwrap();
-        let visibility_region = resources.get::<VisibilityRegion>().unwrap();
-
         let mut cleared_chunks = vec![];
         for result in self.mesher_rx.try_iter() {
             let mut metrics = result.metrics;
@@ -751,7 +751,7 @@ impl Universe {
                                     chunk.entity = Some(entity);
 
                                     let visibility_object_handle = {
-                                        let handle = visibility_region.register_static_object(
+                                        let handle = self.visibility_region.register_static_object(
                                             ObjectId::from(entity),
                                             CullModel::VisibleBounds(visible_bounds),
                                         );
@@ -1039,7 +1039,8 @@ pub struct Simulation {
 }
 
 impl Simulation {
-    pub fn new(dyn_mesh_manager: &DynMeshManager) -> Self {
+    pub fn new(resources: &Resources) -> Self {
+        let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
         let universe_id = UniverseId(0);
         let task_pool = TaskPoolBuilder::new().build();
         let universe = {
@@ -1049,10 +1050,14 @@ impl Simulation {
             let voxels = builder.build_with_hash_map_storage();
             let (mesher_tx, mesher_rx) = unbounded();
             let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
+            let visibility_region = VisibilityRegion::new();
+            let main_view_frustum = visibility_region.register_view_frustum();
             Universe {
                 id: universe_id,
                 initialized: true,
                 world: Default::default(),
+                visibility_region,
+                main_view_frustum,
                 materials: Default::default(),
                 material_names: Default::default(),
                 materials_map: Default::default(),
@@ -1088,9 +1093,10 @@ impl Simulation {
         size: u32,
         style: UniverseFillStyle,
     ) -> UniverseId {
-        log::info!("Inflating universe...");
-
         let universe_id = self.next_universe_id;
+
+        log::info!("Inflating universe #{:?}...", universe_id);
+
         self.next_universe_id = UniverseId(universe_id.0 + 1);
         let universe = {
             let material_names = materials
@@ -1106,10 +1112,14 @@ impl Simulation {
             let voxels = Universe::generate_voxels(&materials_map, origin, size, style);
             let (mesher_tx, mesher_rx) = unbounded();
             let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
+            let visibility_region = VisibilityRegion::new();
+            let main_view_frustum = visibility_region.register_view_frustum();
             let mut universe = Universe {
                 id: universe_id,
                 initialized: false,
                 world: Default::default(),
+                visibility_region,
+                main_view_frustum,
                 materials,
                 material_names,
                 materials_map,
