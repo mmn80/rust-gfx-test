@@ -1,7 +1,10 @@
 use distill::loader::handle::Handle;
 use glam::{Vec3, Vec4};
 use legion::Resources;
-use rafx::{assets::distill_impl::AssetResource, renderer::ViewportsResource};
+use rafx::{
+    assets::{distill_impl::AssetResource, AssetManager},
+    renderer::ViewportsResource,
+};
 use rafx_plugins::{assets::font::FontAsset, features::text::TextResource};
 
 use super::{Scene, SceneManagerAction};
@@ -74,7 +77,7 @@ impl MainScene {
         };
 
         let env = EnvState::new(resources, simulation);
-        let units = UnitsState::new(resources, env.universe.clone());
+        let units = UnitsState::new(resources);
 
         MainScene {
             font,
@@ -106,18 +109,21 @@ impl super::GameScene for MainScene {
         self.units.update(simulation, resources, ui_state);
 
         {
-            let viewports_resource = resources.get::<ViewportsResource>().unwrap();
-            let mut text_resource = resources.get_mut::<TextResource>().unwrap();
-            let camera = resources.get::<RTSCamera>().unwrap();
-            let scale = camera.win_scale_factor;
-            let pos_y = viewports_resource.main_window_size.height as f32 - 30. * scale;
-            text_resource.add_text(
-                format!("camera: {:.2}m", camera.look_at_dist),
-                Vec3::new(300.0, pos_y, 0.0),
-                &self.font,
-                20.0 * scale,
-                glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
-            );
+            let asset_manager = resources.get::<AssetManager>().unwrap();
+            if asset_manager.committed_asset(&self.font).is_some() {
+                let viewports_resource = resources.get::<ViewportsResource>().unwrap();
+                let mut text_resource = resources.get_mut::<TextResource>().unwrap();
+                let camera = resources.get::<RTSCamera>().unwrap();
+                let scale = camera.win_scale_factor;
+                let pos_y = viewports_resource.main_window_size.height as f32 - 30. * scale;
+                text_resource.add_text(
+                    format!("camera: {:.2}m", camera.look_at_dist),
+                    Vec3::new(300.0, pos_y, 0.0),
+                    &self.font,
+                    20.0 * scale,
+                    glam::Vec4::new(1.0, 1.0, 1.0, 1.0),
+                );
+            }
         }
 
         {
@@ -130,5 +136,7 @@ impl super::GameScene for MainScene {
         }
     }
 
-    fn cleanup(&mut self, _simulation: &mut Simulation, _resources: &Resources) {}
+    fn cleanup(&mut self, simulation: &mut Simulation, _resources: &Resources) {
+        simulation.reset();
+    }
 }

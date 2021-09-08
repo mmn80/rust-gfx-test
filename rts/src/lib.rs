@@ -272,7 +272,10 @@ impl DemoApp {
             physical_size.height,
         )?;
 
-        let simulation = Simulation::new();
+        let simulation = {
+            let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
+            Simulation::new(&dyn_mesh_manager)
+        };
         let print_time_event = crate::time::PeriodicEvent::default();
 
         Ok(DemoApp {
@@ -474,7 +477,7 @@ impl DemoApp {
             extract_resources.insert(&mut *camera);
 
             unsafe {
-                let world = self.simulation.get_active_world();
+                let world = &mut self.simulation.universe().world;
                 extract_resources.insert(rafx::base::memory::force_to_static_lifetime_mut(world));
             }
 

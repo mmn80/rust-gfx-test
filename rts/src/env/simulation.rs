@@ -21,10 +21,7 @@ use legion::{Entity, Resources, World};
 use rafx::{
     api::RafxIndexType,
     assets::{push_buffer::PushBuffer, AssetManager},
-    base::{
-        slab::{DropSlab, GenericDropSlabKey},
-        Instant,
-    },
+    base::Instant,
     rafx_visibility::{
         geometry::{AxisAlignedBoundingBox, BoundingSphere},
         VisibleBounds,
@@ -261,6 +258,7 @@ impl Chunk {
 pub type MaterialVoxels = ChunkHashMap3<MaterialVoxel, ChunkMapBuilder3x1<MaterialVoxel>>;
 
 pub struct Universe {
+    id: UniverseId,
     initialized: bool,
     pub world: World,
     materials: Vec<Handle<PbrMaterialAsset>>,
@@ -301,6 +299,15 @@ impl Universe {
             "black_plastic",
             "curly_tile",
         ]
+    }
+
+    fn get_loaded_materials(&self, asset_manager: &AssetManager) -> Option<Vec<PbrMaterialAsset>> {
+        let mut materials = vec![];
+        for handle in self.materials.iter() {
+            let mat = asset_manager.committed_asset(handle)?;
+            materials.push(mat.clone());
+        }
+        Some(materials)
     }
 
     pub fn get_pallete_voxel_string(
@@ -613,65 +620,59 @@ impl Universe {
             let to_render = self.extract_mesh_voxels(resources);
 
             if to_render.len() > 0 {
-                let extract_time = (Instant::now() - extract_start).as_micros() as u32;
-                log::debug!(
-                    "Starting {} greedy mesh jobs (data extraction took {}µs)",
-                    to_render.len(),
-                    extract_time
-                );
-                self.metrics.extract.push(ChunkExtractMetrics {
-                    tasks: to_render.len() as u32,
-                    extract_time,
-                });
-                self.initialized = true;
-
                 let asset_manager = resources.get::<AssetManager>().unwrap();
-                let materials: Vec<_> = self
-                    .materials
-                    .iter()
-                    .map(|h| {
-                        asset_manager
-                            .committed_asset(h)
-                            .and_then(|m| Some(m.clone()))
-                    })
-                    .collect();
-
-                for (key, padded_chunk) in to_render {
-                    let builder_tx = self.mesher_tx.clone();
-                    let materials = materials.clone();
-                    let padded_extent = padded_chunk.extent().clone();
-                    let task = self.task_pool.spawn(async move {
-                        let quads_start = Instant::now();
-                        let mut buffer = GreedyQuadsBuffer::new(
-                            padded_extent,
-                            RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
-                        );
-                        greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
-                        let quads_duration = Instant::now() - quads_start;
-                        let mesh_start = Instant::now();
-                        let (mesh, failed) = if buffer.num_quads() == 0 {
-                            (None, false)
-                        } else {
-                            let mesh = Self::make_dyn_mesh_data(&padded_chunk, &buffer, &materials);
-                            let failed = mesh.is_none();
-                            (mesh, failed)
-                        };
-                        let mesh_duration = Instant::now() - mesh_start;
-                        let results = ChunkTaskResults {
-                            key: key.clone(),
-                            mesh,
-                            metrics: ChunkTaskMetrics {
-                                quads_time: quads_duration.as_micros() as u32,
-                                mesh_time: mesh_duration.as_micros() as u32,
-                                failed,
-                            },
-                        };
-                        let _result = builder_tx.send(results);
+                let materials = self.get_loaded_materials(&asset_manager);
+                if let Some(materials) = materials {
+                    let extract_time = (Instant::now() - extract_start).as_micros() as u32;
+                    log::debug!(
+                        "Starting {} greedy mesh jobs (data extraction took {}µs)",
+                        to_render.len(),
+                        extract_time
+                    );
+                    self.metrics.extract.push(ChunkExtractMetrics {
+                        tasks: to_render.len() as u32,
+                        extract_time,
                     });
-                    if let Some(chunk) = self.chunks.get_mut(&key) {
-                        chunk.builder = Some(task);
-                        chunk.dirty = false;
-                        self.active_meshers += 1;
+                    self.initialized = true;
+
+                    for (key, padded_chunk) in to_render {
+                        let builder_tx = self.mesher_tx.clone();
+                        let materials = materials.clone();
+                        let padded_extent = padded_chunk.extent().clone();
+                        let task = self.task_pool.spawn(async move {
+                            let quads_start = Instant::now();
+                            let mut buffer = GreedyQuadsBuffer::new(
+                                padded_extent,
+                                RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
+                            );
+                            greedy_quads(&padded_chunk, &padded_extent, &mut buffer);
+                            let quads_duration = Instant::now() - quads_start;
+                            let mesh_start = Instant::now();
+                            let (mesh, failed) = if buffer.num_quads() == 0 {
+                                (None, false)
+                            } else {
+                                let mesh =
+                                    Self::make_dyn_mesh_data(&padded_chunk, &buffer, &materials);
+                                let failed = mesh.is_none();
+                                (mesh, failed)
+                            };
+                            let mesh_duration = Instant::now() - mesh_start;
+                            let results = ChunkTaskResults {
+                                key: key.clone(),
+                                mesh,
+                                metrics: ChunkTaskMetrics {
+                                    quads_time: quads_duration.as_micros() as u32,
+                                    mesh_time: mesh_duration.as_micros() as u32,
+                                    failed,
+                                },
+                            };
+                            let _result = builder_tx.send(results);
+                        });
+                        if let Some(chunk) = self.chunks.get_mut(&key) {
+                            chunk.builder = Some(task);
+                            chunk.dirty = false;
+                            self.active_meshers += 1;
+                        }
                     }
                 }
             }
@@ -828,7 +829,7 @@ impl Universe {
     fn make_dyn_mesh_data(
         voxels: &Array3x1<MaterialVoxel>,
         quads: &GreedyQuadsBuffer,
-        materials: &Vec<Option<PbrMaterialAsset>>,
+        materials: &Vec<PbrMaterialAsset>,
     ) -> Option<DynMeshData> {
         let mut quad_parts: FnvHashMap<_, _> = Default::default();
         for (idx, group) in quads.quad_groups.iter().enumerate() {
@@ -858,7 +859,7 @@ impl Universe {
         for (mat, quads) in quad_parts.iter() {
             let mesh_part = {
                 let pbr_material = materials.get(*mat as usize);
-                if let Some(Some(pbr_material)) = pbr_material {
+                if let Some(pbr_material) = pbr_material {
                     let mut vertices_num = 0;
                     let index_type = if quads.num_quads() * 6 >= 0xFFFF {
                         RafxIndexType::Uint32
@@ -1012,10 +1013,8 @@ impl PerMaterialGreedyQuadsBuffer {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct UniverseHandle {
-    handle: GenericDropSlabKey,
-}
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct UniverseId(usize);
 
 #[derive(Clone)]
 pub enum UniverseFillStyle {
@@ -1033,17 +1032,51 @@ pub enum UniverseFillStyle {
 }
 
 pub struct Simulation {
-    multiverse: DropSlab<Universe>,
-    active_universe: Option<UniverseHandle>,
-    default_world: World,
+    multiverse: HashMap<UniverseId, Universe>,
+    next_universe_id: UniverseId,
+    active_universe_id: UniverseId,
+    task_pool: TaskPool,
 }
 
 impl Simulation {
-    pub fn new() -> Self {
+    pub fn new(dyn_mesh_manager: &DynMeshManager) -> Self {
+        let universe_id = UniverseId(0);
+        let task_pool = TaskPoolBuilder::new().build();
+        let universe = {
+            let chunk_shape = Point3i::fill(16);
+            let ambient_value = MaterialVoxel::default();
+            let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
+            let voxels = builder.build_with_hash_map_storage();
+            let (mesher_tx, mesher_rx) = unbounded();
+            let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
+            Universe {
+                id: universe_id,
+                initialized: true,
+                world: Default::default(),
+                materials: Default::default(),
+                material_names: Default::default(),
+                materials_map: Default::default(),
+                voxels,
+                task_pool: task_pool.clone(),
+                active_meshers: 0,
+                chunks: HashMap::new(),
+                sectors: HashMap::new(),
+                mesher_tx,
+                mesher_rx,
+                metrics: Default::default(),
+                mesh_cmd_tx,
+                mesh_cmd_rx,
+                mesh_add_requests: HashMap::new(),
+                current_mesh_add_request: 0,
+            }
+        };
+        let mut multiverse = HashMap::new();
+        multiverse.insert(universe_id, universe);
         Self {
-            multiverse: Default::default(),
-            active_universe: None,
-            default_world: World::default(),
+            multiverse,
+            next_universe_id: UniverseId(1),
+            active_universe_id: universe_id,
+            task_pool,
         }
     }
 
@@ -1054,10 +1087,12 @@ impl Simulation {
         origin: Point3i,
         size: u32,
         style: UniverseFillStyle,
-    ) -> UniverseHandle {
+    ) -> UniverseId {
         log::info!("Inflating universe...");
 
-        let mut universe = {
+        let universe_id = self.next_universe_id;
+        self.next_universe_id = UniverseId(universe_id.0 + 1);
+        let universe = {
             let material_names = materials
                 .iter()
                 .map(|(name, _h)| name.to_string())
@@ -1071,14 +1106,15 @@ impl Simulation {
             let voxels = Universe::generate_voxels(&materials_map, origin, size, style);
             let (mesher_tx, mesher_rx) = unbounded();
             let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
-            Universe {
+            let mut universe = Universe {
+                id: universe_id,
                 initialized: false,
                 world: Default::default(),
                 materials,
                 material_names,
                 materials_map,
                 voxels,
-                task_pool: TaskPoolBuilder::new().build(),
+                task_pool: self.task_pool.clone(),
                 active_meshers: 0,
                 chunks: HashMap::new(),
                 sectors: HashMap::new(),
@@ -1089,49 +1125,43 @@ impl Simulation {
                 mesh_cmd_rx,
                 mesh_add_requests: HashMap::new(),
                 current_mesh_add_request: 0,
-            }
+            };
+            universe.reset_chunks();
+            universe
         };
-
-        universe.reset_chunks();
-
-        let universe_handle = self.register_universe(universe);
-        self.active_universe = Some(universe_handle.clone());
+        self.multiverse.insert(universe_id, universe);
+        self.active_universe_id = universe_id;
 
         log::info!("Universe inflated");
 
-        universe_handle
+        universe_id
     }
 
-    fn register_universe(&mut self, terrain: Universe) -> UniverseHandle {
-        self.multiverse.process_drops();
-
-        let drop_slab_key = self.multiverse.allocate(terrain);
-        UniverseHandle {
-            handle: drop_slab_key.generic_drop_slab_key(),
-        }
-    }
-
-    pub fn get(&self, universe_handle: &UniverseHandle) -> &Universe {
+    pub fn get_universe(&self, id: UniverseId) -> &Universe {
         self.multiverse
-            .get(&universe_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| panic!("Multiverse did not contain handle {:?}.", universe_handle))
+            .get(&id)
+            .unwrap_or_else(|| panic!("Multiverse did not contain id {:?}.", id))
     }
 
-    pub fn get_mut(&mut self, universe_handle: &UniverseHandle) -> &mut Universe {
+    pub fn get_universe_mut(&mut self, id: UniverseId) -> &mut Universe {
         self.multiverse
-            .get_mut(&universe_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| panic!("Multiverse did not contain handle {:?}.", universe_handle))
+            .get_mut(&id)
+            .unwrap_or_else(|| panic!("Multiverse did not contain id {:?}.", id))
     }
 
-    pub fn get_active_universe(&mut self) -> Option<&mut Universe> {
-        let h = self.active_universe.as_ref().map(|h| h.clone())?;
-        Some(self.get_mut(&h))
+    pub fn remove_universe(&mut self, id: UniverseId) {
+        self.multiverse
+            .remove(&id)
+            .unwrap_or_else(|| panic!("Multiverse did not contain id {:?}.", id));
     }
 
-    pub fn get_active_world(&mut self) -> &mut World {
-        if self.active_universe.is_none() {
-            return &mut self.default_world;
-        };
-        &mut self.get_active_universe().unwrap().world
+    pub fn universe(&mut self) -> &mut Universe {
+        self.get_universe_mut(self.active_universe_id)
+    }
+
+    pub fn reset(&mut self) {
+        let default_universe_id = UniverseId(0);
+        self.active_universe_id = default_universe_id;
+        self.multiverse.retain(|&id, _| id == default_universe_id);
     }
 }

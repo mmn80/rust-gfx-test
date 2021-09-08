@@ -25,7 +25,7 @@ use rand::{thread_rng, Rng};
 
 use crate::{
     camera::RTSCamera,
-    env::simulation::{Simulation, UniverseHandle},
+    env::simulation::Simulation,
     input::{InputResource, MouseButton, MouseDragState},
     time::TimeState,
     ui::{SpawnMode, UiState},
@@ -82,11 +82,10 @@ impl Default for UnitUiState {
 
 pub struct UnitsState {
     meshes: HashMap<UnitType, RenderObjectHandle>,
-    universe: UniverseHandle,
 }
 
 impl UnitsState {
-    pub fn new(resources: &Resources, universe: UniverseHandle) -> Self {
+    pub fn new(resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
         let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
@@ -130,7 +129,7 @@ impl UnitsState {
 
         log::info!("Units meshes loaded");
 
-        UnitsState { meshes, universe }
+        UnitsState { meshes }
     }
 
     pub fn update_ui(
@@ -140,7 +139,7 @@ impl UnitsState {
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
-        let universe = simulation.get_mut(&self.universe);
+        let universe = simulation.universe();
 
         self.add_debug_draw(resources, &universe.world);
 
@@ -292,7 +291,7 @@ impl UnitsState {
         let view_proj = camera.view_proj();
         let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
         let input = resources.get::<InputResource>().unwrap();
-        let universe = simulation.get_mut(&self.universe);
+        let universe = simulation.universe();
 
         let (x0, y0, x1, y1) = if let Some(MouseDragState {
             begin_position: p0,
