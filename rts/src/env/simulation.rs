@@ -461,6 +461,23 @@ impl Universe {
     pub fn reset(&mut self, origin: Point3i, size: u32, style: TerrainFillStyle) {
         log::info!("Resetting universe...");
 
+        self.visibility_region = VisibilityRegion::new();
+        self.main_view_frustum = self.visibility_region.register_view_frustum();
+
+        self.world = Default::default();
+        if self.main_light.is_some() {
+            let light_from = Vec3::new(0.0, 5.0, 4.0);
+            let light_to = Vec3::ZERO;
+            let light_direction = (light_to - light_from).normalize();
+            let light_comp = DirectionalLightComponent {
+                direction: light_direction,
+                intensity: 5.0,
+                color: [1.0, 1.0, 1.0, 1.0].into(),
+                view_frustum: self.visibility_region.register_view_frustum(),
+            };
+            self.main_light = Some(self.world.push((light_comp,)));
+        }
+
         self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
         self.reset_chunks();
 
