@@ -1,6 +1,6 @@
 use egui::{Button, Checkbox, Ui};
 
-use super::simulation::{Universe, UniverseFillStyle};
+use super::simulation::TerrainFillStyle;
 use crate::{
     assets::tilesets::LoadedTileSet,
     env::perlin::PerlinNoise2D,
@@ -187,20 +187,20 @@ impl TileEditUiState {
 
 pub struct TerrainEditUiState {
     pub active: bool,
-    pub material: &'static str,
+    pub material: String,
 }
 
 impl Default for TerrainEditUiState {
     fn default() -> Self {
         Self {
             active: false,
-            material: "basic_tile",
+            material: "basic_tile".to_string(),
         }
     }
 }
 
 impl TerrainEditUiState {
-    pub fn ui(ui_state: &mut UiState, ui: &mut Ui) {
+    pub fn ui(ui_state: &mut UiState, ui: &mut Ui, materials: &Vec<String>) {
         let ed = &mut ui_state.env.terrain_edit;
         egui::CollapsingHeader::new("Edit terrain")
             .default_open(true)
@@ -209,9 +209,14 @@ impl TerrainEditUiState {
                 ui.add(ck);
                 if ed.active {
                     ui.label("Build material:");
-                    for material_name in Universe::get_default_material_names() {
-                        ui.radio_value(&mut ed.material, material_name, material_name);
+                    let mut index = materials
+                        .iter()
+                        .position(|mat| mat == &ed.material)
+                        .unwrap();
+                    for (idx, material_name) in materials.iter().enumerate() {
+                        ui.radio_value(&mut index, idx, material_name);
                     }
+                    ed.material = materials[index].clone();
                 }
             });
     }
@@ -220,22 +225,22 @@ impl TerrainEditUiState {
 #[derive(Clone)]
 pub struct TerrainResetUiState {
     pub size: u32,
-    pub style: UniverseFillStyle,
+    pub style: TerrainFillStyle,
 }
 
 impl Default for TerrainResetUiState {
     fn default() -> Self {
         Self {
             size: 4096,
-            style: UniverseFillStyle::FlatBoard {
-                material: "basic_tile",
+            style: TerrainFillStyle::FlatBoard {
+                material: "basic_tile".to_string(),
             },
         }
     }
 }
 
 impl TerrainResetUiState {
-    pub fn ui<F>(ui_state: &mut UiState, ui: &mut Ui, mut cmd_exec: F)
+    pub fn ui<F>(ui_state: &mut UiState, ui: &mut Ui, materials: &Vec<String>, mut cmd_exec: F)
     where
         F: FnMut(EnvUiCmd) -> Option<()>,
     {
@@ -253,9 +258,9 @@ impl TerrainResetUiState {
                     }
                 });
                 let mut style_idx = match ed.style {
-                    UniverseFillStyle::FlatBoard { material: _ } => 0,
-                    UniverseFillStyle::CheckersBoard { zero: _, one: _ } => 1,
-                    UniverseFillStyle::PerlinNoise {
+                    TerrainFillStyle::FlatBoard { material: _ } => 0,
+                    TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
+                    TerrainFillStyle::PerlinNoise {
                         params: _,
                         material: _,
                     } => 2,
@@ -266,29 +271,33 @@ impl TerrainResetUiState {
 
                 ui.add_space(10.);
 
-                let materials = Universe::get_default_material_names();
                 if style_idx == 0 {
-                    let material = if let UniverseFillStyle::FlatBoard { material } = ed.style {
-                        material
+                    let material = if let TerrainFillStyle::FlatBoard { material } = &ed.style {
+                        material.clone()
                     } else {
-                        "basic_tile"
+                        "basic_tile".to_string()
                     };
-                    let material = UiState::combo_box(ui, &materials, material, "mat");
-                    ed.style = UniverseFillStyle::FlatBoard { material };
+                    let material = UiState::combo_box(ui, &materials, &material, "mat");
+                    ed.style = TerrainFillStyle::FlatBoard {
+                        material: material.to_string(),
+                    };
                 } else if style_idx == 1 {
                     let (zero, one) =
-                        if let UniverseFillStyle::CheckersBoard { zero, one } = ed.style {
-                            (zero, one)
+                        if let TerrainFillStyle::CheckersBoard { zero, one } = &ed.style {
+                            (zero.clone(), one.clone())
                         } else {
-                            ("basic_tile", "black_plastic")
+                            ("basic_tile".to_string(), "black_plastic".to_string())
                         };
-                    let zero = UiState::combo_box(ui, &materials, zero, "zero");
-                    let one = UiState::combo_box(ui, &materials, one, "one");
-                    ed.style = UniverseFillStyle::CheckersBoard { zero, one };
+                    let zero = UiState::combo_box(ui, &materials, &zero, "zero");
+                    let one = UiState::combo_box(ui, &materials, &one, "one");
+                    ed.style = TerrainFillStyle::CheckersBoard {
+                        zero: zero.to_string(),
+                        one: one.to_string(),
+                    };
                 } else if style_idx == 2 {
                     let (mut params, material) =
-                        if let UniverseFillStyle::PerlinNoise { params, material } = ed.style {
-                            (params, material)
+                        if let TerrainFillStyle::PerlinNoise { params, material } = &ed.style {
+                            (params.clone(), material.clone())
                         } else {
                             (
                                 PerlinNoise2D {
@@ -301,10 +310,10 @@ impl TerrainResetUiState {
                                     bias: 0.,
                                     seed: 42,
                                 },
-                                "basic_tile",
+                                "basic_tile".to_string(),
                             )
                         };
-                    let material = UiState::combo_box(ui, &materials, material, "mat");
+                    let material = UiState::combo_box(ui, &materials, &material, "mat");
                     ui.add(egui::Slider::new(&mut params.octaves, 0..=8).text("octaves"));
                     ui.add(egui::Slider::new(&mut params.amplitude, 0.0..=64.0).text("amplitude"));
                     ui.add(egui::Slider::new(&mut params.frequency, 0.0..=4.0).text("frequency"));
@@ -317,7 +326,10 @@ impl TerrainResetUiState {
                     );
                     ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
 
-                    ed.style = UniverseFillStyle::PerlinNoise { params, material };
+                    ed.style = TerrainFillStyle::PerlinNoise {
+                        params,
+                        material: material.to_string(),
+                    };
                 }
                 ui.add_space(10.);
                 if ui

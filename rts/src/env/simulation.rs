@@ -306,6 +306,10 @@ impl Universe {
         ]
     }
 
+    pub fn get_material_names(&self) -> &Vec<String> {
+        &self.material_names
+    }
+
     fn get_loaded_materials(&self, asset_manager: &AssetManager) -> Option<Vec<PbrMaterialAsset>> {
         let mut materials = vec![];
         for handle in self.materials.iter() {
@@ -454,7 +458,7 @@ impl Universe {
         TileExporter::export(tile.to_string(), export_voxels, self)
     }
 
-    pub fn reset(&mut self, origin: Point3i, size: u32, style: UniverseFillStyle) {
+    pub fn reset(&mut self, origin: Point3i, size: u32, style: TerrainFillStyle) {
         log::info!("Resetting universe...");
 
         self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
@@ -484,7 +488,7 @@ impl Universe {
         materials: &HashMap<String, u16>,
         origin: Point3i,
         size: u32,
-        style: UniverseFillStyle,
+        style: TerrainFillStyle,
     ) -> MaterialVoxels {
         let chunk_shape = Point3i::fill(16);
         let ambient_value = MaterialVoxel::default();
@@ -495,13 +499,13 @@ impl Universe {
         let base_min = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z() - 1]);
         let base_extent = Extent3i::from_min_and_shape(base_min, PointN([size, size, 1]));
         match style {
-            UniverseFillStyle::FlatBoard { material } => {
-                let voxel = MaterialVoxel(materials[material] + 1);
+            TerrainFillStyle::FlatBoard { material } => {
+                let voxel = MaterialVoxel(materials[&material] + 1);
                 lod0.fill_extent(&base_extent, voxel);
             }
-            UniverseFillStyle::CheckersBoard { zero, one } => {
-                let zero_voxel = MaterialVoxel(materials[zero] + 1);
-                let one_voxel = MaterialVoxel(materials[one] + 1);
+            TerrainFillStyle::CheckersBoard { zero, one } => {
+                let zero_voxel = MaterialVoxel(materials[&zero] + 1);
+                let one_voxel = MaterialVoxel(materials[&one] + 1);
                 for p in base_extent.iter_points() {
                     let px = p.x() % 2;
                     let py = p.y() % 2;
@@ -515,8 +519,8 @@ impl Universe {
                     );
                 }
             }
-            UniverseFillStyle::PerlinNoise { params, material } => {
-                let voxel = MaterialVoxel(materials[material] + 1);
+            TerrainFillStyle::PerlinNoise { params, material } => {
+                let voxel = MaterialVoxel(materials[&material] + 1);
                 for p in base_extent.iter_points() {
                     let noise = params.get_noise(p.x() as f64, p.y() as f64) as i32;
                     let top = PointN([p.x(), p.y(), noise - 8]);
@@ -1020,17 +1024,17 @@ impl PerMaterialGreedyQuadsBuffer {
 pub struct UniverseId(usize);
 
 #[derive(Clone)]
-pub enum UniverseFillStyle {
+pub enum TerrainFillStyle {
     FlatBoard {
-        material: &'static str,
+        material: String,
     },
     CheckersBoard {
-        zero: &'static str,
-        one: &'static str,
+        zero: String,
+        one: String,
     },
     PerlinNoise {
         params: PerlinNoise2D,
-        material: &'static str,
+        material: String,
     },
 }
 
@@ -1095,7 +1099,7 @@ impl Simulation {
         materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
         size: u32,
-        style: UniverseFillStyle,
+        style: TerrainFillStyle,
     ) -> UniverseId {
         let universe_id = self.next_universe_id;
 

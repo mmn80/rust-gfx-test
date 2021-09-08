@@ -19,7 +19,7 @@ use crate::{
         tilesets::{TileSetsAsset, TileSetsExportData, TileSetsExporter},
     },
     camera::RTSCamera,
-    env::simulation::{Simulation, Universe, UniverseFillStyle},
+    env::simulation::{Simulation, TerrainFillStyle, Universe},
     features::dyn_mesh::DynMeshManager,
     input::{InputResource, KeyboardKey, MouseButton},
     time::TimeState,
@@ -63,8 +63,8 @@ impl EnvState {
             terrain_materials.clone(),
             Point3i::ZERO,
             4096,
-            UniverseFillStyle::FlatBoard {
-                material: "basic_tile",
+            TerrainFillStyle::FlatBoard {
+                material: "basic_tile".to_string(),
             },
         );
 
@@ -73,8 +73,8 @@ impl EnvState {
             terrain_materials,
             Point3i::ZERO,
             TILE_EDIT_PLATFORM_SIZE as u32,
-            UniverseFillStyle::FlatBoard {
-                material: "basic_tile",
+            TerrainFillStyle::FlatBoard {
+                material: "basic_tile".to_string(),
             },
         );
 
@@ -172,11 +172,12 @@ impl EnvState {
 
         TileSpawnUiState::ui(ui_state, ui, &tilesets);
         if !ui_state.env.tile_spawn.active && !ui_state.unit.spawning {
+            let materials = simulation.universe().get_material_names().clone();
             TileEditUiState::ui(ui_state, ui, &tilesets, |cmd| {
                 self.ui_cmd_handler(cmd, simulation, resources)
             });
-            TerrainEditUiState::ui(ui_state, ui);
-            TerrainResetUiState::ui(ui_state, ui, |cmd| {
+            TerrainEditUiState::ui(ui_state, ui, &materials);
+            TerrainResetUiState::ui(ui_state, ui, &materials, |cmd| {
                 self.ui_cmd_handler(cmd, simulation, resources)
             });
         }
@@ -198,7 +199,7 @@ impl EnvState {
                         ui_state,
                     );
                     let default_material = universe
-                        .voxel_by_material(ui_state.env.terrain_edit.material)
+                        .voxel_by_material(&ui_state.env.terrain_edit.material)
                         .unwrap();
                     (cast_result, default_material)
                 };
@@ -276,8 +277,8 @@ impl EnvState {
                 simulation.universe().reset(
                     Point3i::ZERO,
                     TILE_EDIT_PLATFORM_SIZE as u32,
-                    UniverseFillStyle::FlatBoard {
-                        material: "basic_tile",
+                    TerrainFillStyle::FlatBoard {
+                        material: "basic_tile".to_string(),
                     },
                 );
                 simulation.set_active_universe(self.main_universe);

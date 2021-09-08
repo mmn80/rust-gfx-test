@@ -184,12 +184,12 @@ impl UiState {
         log::error!("{}", message);
     }
 
-    pub fn combo_box(
+    pub fn combo_box<'a>(
         ui: &mut egui::Ui,
-        list: &Vec<&'static str>,
-        current: &'static str,
-        label: &'static str,
-    ) -> &'static str {
+        list: &'a Vec<String>,
+        current: &'a str,
+        label: &'a str,
+    ) -> &'a str {
         let mut result = current;
         egui::ComboBox::from_label(label)
             .selected_text(current)
