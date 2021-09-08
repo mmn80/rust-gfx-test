@@ -1,6 +1,6 @@
 use egui::{Button, Checkbox, Ui};
 
-use super::terrain::{Terrain, TerrainFillStyle};
+use super::simulation::{Universe, UniverseFillStyle};
 use crate::{
     assets::tilesets::LoadedTileSet,
     env::perlin::PerlinNoise2D,
@@ -41,14 +41,14 @@ impl TileSpawnUiState {
     pub fn ui(ui_state: &mut UiState, ui: &mut Ui, tilesets: &Vec<LoadedTileSet>) {
         let ed = &mut ui_state.env.tile_spawn;
         if ed.active {
-            egui::CollapsingHeader::new("Spawn terrain object")
+            egui::CollapsingHeader::new("Spawn tile")
                 .default_open(true)
                 .show(ui, |ui| {
                     ed.mode.ui(ui, &mut ed.active);
-                    ui.label("Click a location on the map to spawn terrain object");
+                    ui.label("Click a location on the map to spawn tile");
                 });
         } else if !ui_state.unit.spawning {
-            egui::CollapsingHeader::new("Spawn terrain object")
+            egui::CollapsingHeader::new("Spawn tile")
                 .default_open(true)
                 .show(ui, |ui| {
                     ed.mode.ui(ui, &mut ed.active);
@@ -99,7 +99,7 @@ impl TileEditUiState {
     ) where
         F: FnMut(EnvUiCmd) -> Option<()>,
     {
-        egui::CollapsingHeader::new("Edit terrain object")
+        egui::CollapsingHeader::new("Edit tile")
             .default_open(false)
             .show(ui, |ui| {
                 let ed = &mut ui_state.env.tile_edit;
@@ -208,7 +208,7 @@ impl TerrainEditUiState {
                 ui.add(ck);
                 if ed.active {
                     ui.label("Build material:");
-                    for material_name in Terrain::get_default_material_names() {
+                    for material_name in Universe::get_default_material_names() {
                         ui.radio_value(&mut ed.material, material_name, material_name);
                     }
                 }
@@ -219,14 +219,14 @@ impl TerrainEditUiState {
 #[derive(Clone)]
 pub struct TerrainResetUiState {
     pub size: u32,
-    pub style: TerrainFillStyle,
+    pub style: UniverseFillStyle,
 }
 
 impl Default for TerrainResetUiState {
     fn default() -> Self {
         Self {
             size: 4096,
-            style: TerrainFillStyle::FlatBoard {
+            style: UniverseFillStyle::FlatBoard {
                 material: "basic_tile",
             },
         }
@@ -252,9 +252,9 @@ impl TerrainResetUiState {
                     }
                 });
                 let mut style_idx = match ed.style {
-                    TerrainFillStyle::FlatBoard { material: _ } => 0,
-                    TerrainFillStyle::CheckersBoard { zero: _, one: _ } => 1,
-                    TerrainFillStyle::PerlinNoise {
+                    UniverseFillStyle::FlatBoard { material: _ } => 0,
+                    UniverseFillStyle::CheckersBoard { zero: _, one: _ } => 1,
+                    UniverseFillStyle::PerlinNoise {
                         params: _,
                         material: _,
                     } => 2,
@@ -265,28 +265,28 @@ impl TerrainResetUiState {
 
                 ui.add_space(10.);
 
-                let materials = Terrain::get_default_material_names();
+                let materials = Universe::get_default_material_names();
                 if style_idx == 0 {
-                    let material = if let TerrainFillStyle::FlatBoard { material } = ed.style {
+                    let material = if let UniverseFillStyle::FlatBoard { material } = ed.style {
                         material
                     } else {
                         "basic_tile"
                     };
                     let material = UiState::combo_box(ui, &materials, material, "mat");
-                    ed.style = TerrainFillStyle::FlatBoard { material };
+                    ed.style = UniverseFillStyle::FlatBoard { material };
                 } else if style_idx == 1 {
                     let (zero, one) =
-                        if let TerrainFillStyle::CheckersBoard { zero, one } = ed.style {
+                        if let UniverseFillStyle::CheckersBoard { zero, one } = ed.style {
                             (zero, one)
                         } else {
                             ("basic_tile", "black_plastic")
                         };
                     let zero = UiState::combo_box(ui, &materials, zero, "zero");
                     let one = UiState::combo_box(ui, &materials, one, "one");
-                    ed.style = TerrainFillStyle::CheckersBoard { zero, one };
+                    ed.style = UniverseFillStyle::CheckersBoard { zero, one };
                 } else if style_idx == 2 {
                     let (mut params, material) =
-                        if let TerrainFillStyle::PerlinNoise { params, material } = ed.style {
+                        if let UniverseFillStyle::PerlinNoise { params, material } = ed.style {
                             (params, material)
                         } else {
                             (
@@ -316,7 +316,7 @@ impl TerrainResetUiState {
                     );
                     ui.add(egui::Slider::new(&mut params.seed, 0..=16384).text("seed"));
 
-                    ed.style = TerrainFillStyle::PerlinNoise { params, material };
+                    ed.style = UniverseFillStyle::PerlinNoise { params, material };
                 }
                 ui.add_space(10.);
                 if ui

@@ -14,7 +14,7 @@ mod main_scene;
 use main_scene::MainScene;
 pub use main_scene::MainState;
 
-use crate::{env::terrain::Simulation, ui::UiState};
+use crate::{env::simulation::Simulation, ui::UiState};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Scene {

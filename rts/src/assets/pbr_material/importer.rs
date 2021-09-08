@@ -16,14 +16,14 @@ use crate::assets::pbr_material::{PbrMaterialAssetData, PbrMaterialSource};
 #[derive(TypeUuid, Serialize, Deserialize, Default, Clone, Debug)]
 #[uuid = "6b5e8cc4-9a8e-45e2-9e25-7f1ab02f4ca0"]
 pub struct PbrMaterialImporterStateStable {
-    terrain_asset_uuid: Option<AssetUuid>,
+    asset_uuid: Option<AssetUuid>,
     material_instance_asset_uuid: Option<AssetUuid>,
 }
 
 impl From<PbrMaterialImporterStateUnstable> for PbrMaterialImporterStateStable {
     fn from(other: PbrMaterialImporterStateUnstable) -> Self {
         let mut stable = PbrMaterialImporterStateStable::default();
-        stable.terrain_asset_uuid = other.terrain_asset_uuid.clone();
+        stable.asset_uuid = other.asset_uuid.clone();
         stable.material_instance_asset_uuid = other.material_instance_asset_uuid.clone();
         stable
     }
@@ -31,14 +31,14 @@ impl From<PbrMaterialImporterStateUnstable> for PbrMaterialImporterStateStable {
 
 #[derive(Default)]
 pub struct PbrMaterialImporterStateUnstable {
-    terrain_asset_uuid: Option<AssetUuid>,
+    asset_uuid: Option<AssetUuid>,
     material_instance_asset_uuid: Option<AssetUuid>,
 }
 
 impl From<PbrMaterialImporterStateStable> for PbrMaterialImporterStateUnstable {
     fn from(other: PbrMaterialImporterStateStable) -> Self {
         let mut unstable = PbrMaterialImporterStateUnstable::default();
-        unstable.terrain_asset_uuid = other.terrain_asset_uuid.clone();
+        unstable.asset_uuid = other.asset_uuid.clone();
         unstable.material_instance_asset_uuid = other.material_instance_asset_uuid.clone();
         unstable
     }
@@ -73,9 +73,9 @@ impl Importer for PbrMaterialImporter {
         let mut imported_assets = Vec::<ImportedAsset>::default();
 
         let mut unstable_state: PbrMaterialImporterStateUnstable = stable_state.clone().into();
-        unstable_state.terrain_asset_uuid = Some(
+        unstable_state.asset_uuid = Some(
             unstable_state
-                .terrain_asset_uuid
+                .asset_uuid
                 .unwrap_or_else(|| AssetUuid(*uuid::Uuid::new_v4().as_bytes())),
         );
 
@@ -178,7 +178,7 @@ impl Importer for PbrMaterialImporter {
         });
 
         imported_assets.push(ImportedAsset {
-            id: unstable_state.terrain_asset_uuid.unwrap(),
+            id: unstable_state.asset_uuid.unwrap(),
             search_tags: vec![],
             build_deps: vec![],
             load_deps: vec![],

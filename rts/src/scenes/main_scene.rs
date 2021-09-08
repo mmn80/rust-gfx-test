@@ -7,7 +7,7 @@ use rafx_plugins::{assets::font::FontAsset, features::text::TextResource};
 use super::{Scene, SceneManagerAction};
 use crate::{
     camera::RTSCamera,
-    env::{env::EnvState, terrain::Simulation},
+    env::{env::EnvState, simulation::Simulation},
     input::{InputResource, KeyboardKey},
     ui::UiState,
     unit::unit::UnitsState,
@@ -74,7 +74,7 @@ impl MainScene {
         };
 
         let env = EnvState::new(resources, simulation);
-        let units = UnitsState::new(resources, env.terrain.clone());
+        let units = UnitsState::new(resources, env.universe.clone());
 
         MainScene {
             font,

@@ -25,7 +25,7 @@ use rand::{thread_rng, Rng};
 
 use crate::{
     camera::RTSCamera,
-    env::terrain::{Simulation, TerrainHandle},
+    env::simulation::{Simulation, UniverseHandle},
     input::{InputResource, MouseButton, MouseDragState},
     time::TimeState,
     ui::{SpawnMode, UiState},
@@ -82,11 +82,11 @@ impl Default for UnitUiState {
 
 pub struct UnitsState {
     meshes: HashMap<UnitType, RenderObjectHandle>,
-    terrain: TerrainHandle,
+    universe: UniverseHandle,
 }
 
 impl UnitsState {
-    pub fn new(resources: &Resources, terrain: TerrainHandle) -> Self {
+    pub fn new(resources: &Resources, universe: UniverseHandle) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
         let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
@@ -130,7 +130,7 @@ impl UnitsState {
 
         log::info!("Units meshes loaded");
 
-        UnitsState { meshes, terrain }
+        UnitsState { meshes, universe }
     }
 
     pub fn update_ui(
@@ -140,9 +140,9 @@ impl UnitsState {
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
-        let terrain = simulation.get_mut(&self.terrain);
+        let universe = simulation.get_mut(&self.universe);
 
-        self.add_debug_draw(resources, &terrain.world);
+        self.add_debug_draw(resources, &universe.world);
 
         let input = resources.get::<InputResource>().unwrap();
         let camera = resources.get::<RTSCamera>().unwrap();
@@ -238,7 +238,7 @@ impl UnitsState {
                 let cast_result = camera.ray_cast_terrain(
                     cursor_pos.x as u32,
                     cursor_pos.y as u32,
-                    terrain,
+                    universe,
                     ui_state,
                 );
                 if let Some(result) = cast_result {
@@ -247,7 +247,7 @@ impl UnitsState {
                         ui_state.unit.object_type,
                         Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 1.),
                         resources,
-                        &mut terrain.world,
+                        &mut universe.world,
                     );
                 }
                 if ui_state.unit.spawn_mode == SpawnMode::OneShot {
@@ -260,14 +260,14 @@ impl UnitsState {
             let cast_result = camera.ray_cast_terrain(
                 cursor_pos.x as u32,
                 cursor_pos.y as u32,
-                terrain,
+                universe,
                 ui_state,
             );
             if let Some(result) = cast_result {
                 let p = result.hit;
                 let mut target = Vec3::new(p.x() as f32, p.y() as f32, p.z() as f32 + 2.);
                 let mut query = <(Read<TransformComponent>, Write<UnitComponent>)>::query();
-                for (transform, dyn_object) in query.iter_mut(&mut terrain.world) {
+                for (transform, dyn_object) in query.iter_mut(&mut universe.world) {
                     if dyn_object.selected {
                         if !first {
                             target.x += transform.scale.x;
@@ -292,7 +292,7 @@ impl UnitsState {
         let view_proj = camera.view_proj();
         let dt = resources.get::<TimeState>().unwrap().previous_update_dt();
         let input = resources.get::<InputResource>().unwrap();
-        let terrain = simulation.get_mut(&self.terrain);
+        let universe = simulation.get_mut(&self.universe);
 
         let (x0, y0, x1, y1) = if let Some(MouseDragState {
             begin_position: p0,
@@ -319,48 +319,51 @@ impl UnitsState {
             Read<VisibilityComponent>,
             Write<UnitComponent>,
         )>::query();
-        query.par_for_each_mut(&mut terrain.world, |(transform, visibility, dyn_object)| {
-            if let Some(target) = dyn_object.move_target {
-                let target_dir = (target - transform.translation).normalize();
-                let orig_dir = Vec3::X;
-                if (target_dir - orig_dir).length() > 0.001 {
-                    transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
+        query.par_for_each_mut(
+            &mut universe.world,
+            |(transform, visibility, dyn_object)| {
+                if let Some(target) = dyn_object.move_target {
+                    let target_dir = (target - transform.translation).normalize();
+                    let orig_dir = Vec3::X;
+                    if (target_dir - orig_dir).length() > 0.001 {
+                        transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
+                    }
+                    if (target_dir - dyn_object.aim).length() > 0.001 {
+                        dyn_object.aim =
+                            (dyn_object.aim + (target_dir - dyn_object.aim) * dt).normalize();
+                    }
+                    const TARGET_SPEED: f32 = 10.; // m/s
+                    if dyn_object.speed < TARGET_SPEED {
+                        dyn_object.speed = (dyn_object.speed + 2. * dt).min(TARGET_SPEED);
+                    }
+                    transform.translation += dyn_object.speed * dt * target_dir;
+                    visibility.visibility_object_handle.set_transform(
+                        transform.translation,
+                        transform.rotation,
+                        transform.scale,
+                    );
+                    if (target - transform.translation).length() < 0.1 {
+                        dyn_object.move_target = None;
+                        dyn_object.speed = 0.;
+                    }
                 }
-                if (target_dir - dyn_object.aim).length() > 0.001 {
-                    dyn_object.aim =
-                        (dyn_object.aim + (target_dir - dyn_object.aim) * dt).normalize();
+                if ui_state.unit.selecting {
+                    let pos_hom: Vec4 = (transform.translation, 1.).into();
+                    let pos_view = view_proj * pos_hom;
+                    let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
+                    dyn_object.selected = pos_screen.x > x0
+                        && pos_screen.x < x1
+                        && pos_screen.y > y0
+                        && pos_screen.y < y1;
                 }
-                const TARGET_SPEED: f32 = 10.; // m/s
-                if dyn_object.speed < TARGET_SPEED {
-                    dyn_object.speed = (dyn_object.speed + 2. * dt).min(TARGET_SPEED);
-                }
-                transform.translation += dyn_object.speed * dt * target_dir;
-                visibility.visibility_object_handle.set_transform(
-                    transform.translation,
-                    transform.rotation,
-                    transform.scale,
-                );
-                if (target - transform.translation).length() < 0.1 {
-                    dyn_object.move_target = None;
-                    dyn_object.speed = 0.;
-                }
-            }
-            if ui_state.unit.selecting {
-                let pos_hom: Vec4 = (transform.translation, 1.).into();
-                let pos_view = view_proj * pos_hom;
-                let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
-                dyn_object.selected = pos_screen.x > x0
-                    && pos_screen.x < x1
-                    && pos_screen.y > y0
-                    && pos_screen.y < y1;
-            }
-        });
+            },
+        );
 
         if ui_state.unit.selecting {
             ui_state.unit.selected_count = 0;
             ui_state.unit.selected.clear();
             let mut query = <Read<UnitComponent>>::query();
-            for dyn_object in query.iter(&terrain.world) {
+            for dyn_object in query.iter(&universe.world) {
                 if dyn_object.selected {
                     ui_state.unit.selected_count += 1;
                     let entry = ui_state.unit.selected.entry(dyn_object.object_type);

@@ -4,14 +4,18 @@ use building_blocks::prelude::*;
 
 use crate::{
     assets::tile::TileAssetData,
-    env::terrain::{Terrain, TerrainVoxel},
+    env::simulation::{MaterialVoxel, Universe},
 };
 
 // don't know how to do it from distill
 pub struct TileExporter;
 
 impl TileExporter {
-    pub fn export(name: String, voxels: Array3x1<TerrainVoxel>, terrain: &Terrain) -> Option<()> {
+    pub fn export(
+        name: String,
+        voxels: Array3x1<MaterialVoxel>,
+        universe: &Universe,
+    ) -> Option<()> {
         let (min, shape) = (voxels.extent().minimum, voxels.extent().shape);
         let mut palette = vec![];
         let mut palette_builder = HashMap::new();
@@ -22,7 +26,7 @@ impl TileExporter {
                 let mut line: String = "".to_owned();
                 for x in min.x()..min.x() + shape.x() {
                     let voxel = voxels.get(PointN([x, y, z]));
-                    let voxel_str = terrain.get_pallete_voxel_string(
+                    let voxel_str = universe.get_pallete_voxel_string(
                         &voxel,
                         &mut palette,
                         &mut palette_builder,

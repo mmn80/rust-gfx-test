@@ -27,7 +27,7 @@ use rafx_plugins::{
 };
 
 use crate::{
-    env::terrain::{RayCastResult, Terrain},
+    env::simulation::{RayCastResult, Universe},
     features::dyn_mesh::{
         DynMeshNoShadowsRenderFeatureFlag, DynMeshRenderFeature, DynMeshUnlitRenderFeatureFlag,
         DynMeshUntexturedRenderFeatureFlag, DynMeshWireframeRenderFeatureFlag,
@@ -128,12 +128,12 @@ impl RTSCamera {
         &self,
         screen_x: u32,
         screen_y: u32,
-        terrain: &Terrain,
+        universe: &Universe,
         ui_state: &mut UiState,
     ) -> Option<RayCastResult> {
         let eye = self.eye();
         let ray = self.make_ray(screen_x, screen_y);
-        if let Some(result) = terrain.ray_cast(eye, ray) {
+        if let Some(result) = universe.ray_cast(eye, ray) {
             Some(result)
         } else {
             ui_state.error(format!(

@@ -51,9 +51,9 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Default)]
-pub struct TerrainVoxel(u16);
+pub struct MaterialVoxel(u16);
 
-impl TerrainVoxel {
+impl MaterialVoxel {
     pub fn empty() -> Self {
         Self(0)
     }
@@ -63,7 +63,7 @@ impl TerrainVoxel {
     }
 }
 
-impl MergeVoxel for TerrainVoxel {
+impl MergeVoxel for MaterialVoxel {
     type VoxelValue = u16;
 
     fn voxel_merge_value(&self) -> Self::VoxelValue {
@@ -71,25 +71,25 @@ impl MergeVoxel for TerrainVoxel {
     }
 }
 
-impl IsOpaque for TerrainVoxel {
+impl IsOpaque for MaterialVoxel {
     fn is_opaque(&self) -> bool {
         true
     }
 }
 
-impl IsEmpty for TerrainVoxel {
+impl IsEmpty for MaterialVoxel {
     fn is_empty(&self) -> bool {
         self.0 == 0
     }
 }
 
-struct TerrainChunkTaskMetrics {
+struct ChunkTaskMetrics {
     pub quads_time: u32, // µs
     pub mesh_time: u32,  // µs
     pub failed: bool,
 }
 
-struct TerrainChunkExtractMetrics {
+struct ChunkExtractMetrics {
     pub tasks: u32,
     pub extract_time: u32, // µs
 }
@@ -142,13 +142,13 @@ impl SingleDistributionMetrics {
     }
 }
 
-struct TerrainChunkDistributionMetrics {
+struct ChunkDistributionMetrics {
     pub extract_time: SingleDistributionMetrics,
     pub quads_time: SingleDistributionMetrics,
     pub mesh_time: SingleDistributionMetrics,
 }
 
-impl TerrainChunkDistributionMetrics {
+impl ChunkDistributionMetrics {
     pub fn info_log(&self) {
         self.extract_time.info_log("extract");
         self.quads_time.info_log("quads");
@@ -156,13 +156,13 @@ impl TerrainChunkDistributionMetrics {
     }
 }
 
-struct TerrainChunkMetrics {
+struct ChunkMetrics {
     pub start: Instant,
-    pub tasks: Vec<TerrainChunkTaskMetrics>,
-    pub extract: Vec<TerrainChunkExtractMetrics>,
+    pub tasks: Vec<ChunkTaskMetrics>,
+    pub extract: Vec<ChunkExtractMetrics>,
 }
 
-impl Default for TerrainChunkMetrics {
+impl Default for ChunkMetrics {
     fn default() -> Self {
         Self {
             start: Instant::now(),
@@ -172,12 +172,12 @@ impl Default for TerrainChunkMetrics {
     }
 }
 
-impl TerrainChunkMetrics {
+impl ChunkMetrics {
     pub fn is_empty(&self) -> bool {
         self.extract.is_empty() && self.tasks.is_empty()
     }
 
-    pub fn get_distribution_metrics(&self) -> TerrainChunkDistributionMetrics {
+    pub fn get_distribution_metrics(&self) -> ChunkDistributionMetrics {
         let extract_total = self.extract.iter().map(|m| m.tasks as usize).sum();
         let extract_time = SingleDistributionMetrics {
             samples: extract_total,
@@ -213,7 +213,7 @@ impl TerrainChunkMetrics {
                 .collect(),
         );
 
-        TerrainChunkDistributionMetrics {
+        ChunkDistributionMetrics {
             extract_time,
             quads_time,
             mesh_time,
@@ -221,73 +221,73 @@ impl TerrainChunkMetrics {
     }
 }
 
-struct TerrainChunkTaskResults {
+struct ChunkTaskResults {
     pub key: ChunkKey3,
     pub mesh: Option<DynMeshData>,
-    pub metrics: TerrainChunkTaskMetrics,
+    pub metrics: ChunkTaskMetrics,
 }
 
-struct TerrainChunk {
+struct Chunk {
     pub entity: Option<Entity>,
-    pub dyn_mesh_handle: Option<DynMeshHandle>,
-    pub render_object_handle: Option<RenderObjectHandle>,
-    pub visibility_object_handle: Option<VisibilityObjectArc>,
+    pub mesh: Option<DynMeshHandle>,
+    pub render_object: Option<RenderObjectHandle>,
+    pub visibility_object: Option<VisibilityObjectArc>,
     pub dirty: bool,
     pub builder: Option<Task<()>>,
 }
 
-impl TerrainChunk {
+impl Chunk {
     pub fn new() -> Self {
-        TerrainChunk {
+        Chunk {
             entity: None,
-            dyn_mesh_handle: None,
-            render_object_handle: None,
-            visibility_object_handle: None,
+            mesh: None,
+            render_object: None,
+            visibility_object: None,
             dirty: false,
             builder: None,
         }
     }
 
     fn clear(&mut self, world: &mut World) {
-        self.dyn_mesh_handle.take();
-        self.render_object_handle.take();
-        self.visibility_object_handle.take();
+        self.mesh.take();
+        self.render_object.take();
+        self.visibility_object.take();
         if let Some(entity) = self.entity.take() {
             world.remove(entity);
         }
     }
 }
 
-pub type TerrainVoxels = ChunkHashMap3<TerrainVoxel, ChunkMapBuilder3x1<TerrainVoxel>>;
+pub type MaterialVoxels = ChunkHashMap3<MaterialVoxel, ChunkMapBuilder3x1<MaterialVoxel>>;
 
-pub struct Terrain {
+pub struct Universe {
     initialized: bool,
     pub world: World,
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: Vec<String>,
     materials_map: HashMap<String, u16>,
-    voxels: TerrainVoxels,
+    voxels: MaterialVoxels,
     task_pool: TaskPool,
-    active_builders: usize,
-    chunks: HashMap<ChunkKey3, TerrainChunk>,
-    super_chunks: HashMap<Point3i, HashSet<ChunkKey3>>,
-    builder_tx: Sender<TerrainChunkTaskResults>,
-    builder_rx: Receiver<TerrainChunkTaskResults>,
-    metrics: TerrainChunkMetrics,
-    dyn_mesh_cmd_tx: Sender<DynMeshCommand>,
-    dyn_mesh_cmd_rx: Receiver<DynMeshCommandResults>,
-    dyn_mesh_add_requests: HashMap<usize, (ChunkKey3, VisibleBounds)>,
-    current_dyn_mesh_add_request: usize,
+    active_meshers: usize,
+    chunks: HashMap<ChunkKey3, Chunk>,
+    sectors: HashMap<Point3i, HashSet<ChunkKey3>>,
+    mesher_tx: Sender<ChunkTaskResults>,
+    mesher_rx: Receiver<ChunkTaskResults>,
+    metrics: ChunkMetrics,
+    mesh_cmd_tx: Sender<DynMeshCommand>,
+    mesh_cmd_rx: Receiver<DynMeshCommandResults>,
+    mesh_add_requests: HashMap<usize, (ChunkKey3, VisibleBounds)>,
+    current_mesh_add_request: usize,
 }
 
-const MAX_RENDER_CHUNK_JOBS: usize = 16;
-const MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME: usize = 4;
-const MAX_RENDER_CHUNK_JOBS_INIT: usize = 65536;
+const MAX_CHUNK_MESH_JOBS: usize = 16;
+const MAX_NEW_CHUNK_MESH_JOBS_PER_FRAME: usize = 4;
+const MAX_CHUNK_MESH_JOBS_INIT: usize = 65536;
 const MAX_DISTANCE_FROM_CAMERA: i32 = 256;
-const SUPER_CHUNK_SIZE: i32 = 256;
+const SECTOR_SIZE: i32 = 256;
 const TILE_EDIT_PLATFORM_SIZE: i32 = 32;
 
-impl Terrain {
+impl Universe {
     pub fn get_default_material_names() -> Vec<&'static str> {
         vec![
             "flat_red",
@@ -305,7 +305,7 @@ impl Terrain {
 
     pub fn get_pallete_voxel_string(
         &self,
-        voxel: &TerrainVoxel,
+        voxel: &MaterialVoxel,
         pallete: &mut Vec<String>,
         pallete_builder: &mut HashMap<String, u8>,
     ) -> String {
@@ -321,7 +321,7 @@ impl Terrain {
         }
     }
 
-    pub fn material_name_by_voxel(&self, voxel: &TerrainVoxel) -> String {
+    pub fn material_name_by_voxel(&self, voxel: &MaterialVoxel) -> String {
         if voxel.is_empty() {
             "".to_string()
         } else {
@@ -329,10 +329,10 @@ impl Terrain {
         }
     }
 
-    pub fn voxel_by_material(&self, material_name: &str) -> Option<TerrainVoxel> {
+    pub fn voxel_by_material(&self, material_name: &str) -> Option<MaterialVoxel> {
         self.materials_map
             .get(material_name)
-            .and_then(|idx| Some(TerrainVoxel(*idx + 1)))
+            .and_then(|idx| Some(MaterialVoxel(*idx + 1)))
     }
 
     pub fn ray_cast(&self, start: Vec3, ray: Vec3) -> Option<RayCastResult> {
@@ -355,8 +355,8 @@ impl Terrain {
         return None;
     }
 
-    pub fn update_voxel(&mut self, point: Point3i, voxel: TerrainVoxel) {
-        let vox_ref: &mut TerrainVoxel = self.voxels.get_mut_point(0, point);
+    pub fn update_voxel(&mut self, point: Point3i, voxel: MaterialVoxel) {
+        let vox_ref: &mut MaterialVoxel = self.voxels.get_mut_point(0, point);
         *vox_ref = voxel;
         let keys = self
             .voxels
@@ -369,7 +369,7 @@ impl Terrain {
     }
 
     pub fn clear_voxel(&mut self, point: Point3i) {
-        self.update_voxel(point, TerrainVoxel::empty());
+        self.update_voxel(point, MaterialVoxel::empty());
     }
 
     pub fn instance_tile(&mut self, tile: &TileAsset, position: Point3i) {
@@ -385,7 +385,7 @@ impl Terrain {
         *center.z_mut() = 0;
         voxels.set_minimum(position - center);
         let extent = voxels.extent().clone();
-        voxels.for_each_mut(&extent, |_p: Point3i, vox: &mut TerrainVoxel| {
+        voxels.for_each_mut(&extent, |_p: Point3i, vox: &mut MaterialVoxel| {
             if !vox.is_empty() {
                 *vox = pallete[vox.0 as usize - 1];
             }
@@ -436,24 +436,24 @@ impl Terrain {
         }
         let extent = Extent3i::from_min_and_max(min, max);
 
-        let mut export_voxels = Array3x1::<TerrainVoxel>::fill(extent, TerrainVoxel::empty());
+        let mut export_voxels = Array3x1::<MaterialVoxel>::fill(extent, MaterialVoxel::empty());
         copy_extent(&extent, &self.voxels.lod_view(0), &mut export_voxels);
 
         TileExporter::export(tile.to_string(), export_voxels, self)
     }
 
-    pub fn reset(&mut self, origin: Point3i, size: u32, style: TerrainFillStyle) {
-        log::info!("Resetting terrain...");
+    pub fn reset(&mut self, origin: Point3i, size: u32, style: UniverseFillStyle) {
+        log::info!("Resetting universe...");
 
         self.voxels = Self::generate_voxels(&self.materials_map, origin, size, style);
         self.reset_chunks();
 
-        log::info!("Terrain reset");
+        log::info!("Universe reset");
     }
 
     fn reset_chunks(&mut self) {
-        self.active_builders = 0;
-        self.super_chunks.clear();
+        self.active_meshers = 0;
+        self.sectors.clear();
         for chunk in self.chunks.values_mut() {
             chunk.clear(&mut self.world);
         }
@@ -472,10 +472,10 @@ impl Terrain {
         materials: &HashMap<String, u16>,
         origin: Point3i,
         size: u32,
-        style: TerrainFillStyle,
-    ) -> TerrainVoxels {
+        style: UniverseFillStyle,
+    ) -> MaterialVoxels {
         let chunk_shape = Point3i::fill(16);
-        let ambient_value = TerrainVoxel::default();
+        let ambient_value = MaterialVoxel::default();
         let builder = ChunkMapBuilder3x1::new(chunk_shape, ambient_value);
         let mut voxels = builder.build_with_hash_map_storage();
         let mut lod0 = voxels.lod_view_mut(0);
@@ -483,13 +483,13 @@ impl Terrain {
         let base_min = PointN([origin.x() - size / 2, origin.y() - size / 2, origin.z() - 1]);
         let base_extent = Extent3i::from_min_and_shape(base_min, PointN([size, size, 1]));
         match style {
-            TerrainFillStyle::FlatBoard { material } => {
-                let voxel = TerrainVoxel(materials[material] + 1);
+            UniverseFillStyle::FlatBoard { material } => {
+                let voxel = MaterialVoxel(materials[material] + 1);
                 lod0.fill_extent(&base_extent, voxel);
             }
-            TerrainFillStyle::CheckersBoard { zero, one } => {
-                let zero_voxel = TerrainVoxel(materials[zero] + 1);
-                let one_voxel = TerrainVoxel(materials[one] + 1);
+            UniverseFillStyle::CheckersBoard { zero, one } => {
+                let zero_voxel = MaterialVoxel(materials[zero] + 1);
+                let one_voxel = MaterialVoxel(materials[one] + 1);
                 for p in base_extent.iter_points() {
                     let px = p.x() % 2;
                     let py = p.y() % 2;
@@ -503,8 +503,8 @@ impl Terrain {
                     );
                 }
             }
-            TerrainFillStyle::PerlinNoise { params, material } => {
-                let voxel = TerrainVoxel(materials[material] + 1);
+            UniverseFillStyle::PerlinNoise { params, material } => {
+                let voxel = MaterialVoxel(materials[material] + 1);
                 for p in base_extent.iter_points() {
                     let noise = params.get_noise(p.x() as f64, p.y() as f64) as i32;
                     let top = PointN([p.x(), p.y(), noise - 8]);
@@ -515,10 +515,10 @@ impl Terrain {
         voxels
     }
 
-    fn get_super_chunk_key(chunk: &ChunkKey3) -> Point3i {
+    fn get_sector_key(chunk: &ChunkKey3) -> Point3i {
         let c = chunk.minimum;
-        let p = c / SUPER_CHUNK_SIZE;
-        SUPER_CHUNK_SIZE
+        let p = c / SECTOR_SIZE;
+        SECTOR_SIZE
             * PointN([
                 if c.x() < 0 { p.x() - 1 } else { p.x() },
                 if c.y() < 0 { p.y() - 1 } else { p.y() },
@@ -527,11 +527,11 @@ impl Terrain {
     }
 
     fn set_chunk_dirty(&mut self, key: ChunkKey3) {
-        self.super_chunks
-            .entry(Self::get_super_chunk_key(&key))
+        self.sectors
+            .entry(Self::get_sector_key(&key))
             .or_insert(HashSet::new())
             .insert(key);
-        let chunk = self.chunks.entry(key).or_insert(TerrainChunk::new());
+        let chunk = self.chunks.entry(key).or_insert(Chunk::new());
         chunk.dirty = true;
     }
 
@@ -546,7 +546,7 @@ impl Terrain {
     fn extract_mesh_voxels(
         &mut self,
         resources: &Resources,
-    ) -> Vec<(ChunkKey<[i32; 3]>, Array3x1<TerrainVoxel>)> {
+    ) -> Vec<(ChunkKey<[i32; 3]>, Array3x1<MaterialVoxel>)> {
         let viewports_resource = resources.get::<ViewportsResource>().unwrap();
         let eye = viewports_resource
             .main_view_meta
@@ -556,11 +556,11 @@ impl Terrain {
         let eye = PointN([eye.x as i32, eye.y as i32, eye.z as i32]);
 
         let mut changed_keys = vec![];
-        let super_center = Point3i::fill(SUPER_CHUNK_SIZE / 2);
-        for (key, chunk_set) in self.super_chunks.iter() {
-            let center = *key + super_center;
-            if (center.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA + SUPER_CHUNK_SIZE
-                && (center.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA + SUPER_CHUNK_SIZE
+        let sector_center = Point3i::fill(SECTOR_SIZE / 2);
+        for (key, chunk_set) in self.sectors.iter() {
+            let center = *key + sector_center;
+            if (center.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA + SECTOR_SIZE
+                && (center.y() - eye.y()).abs() <= MAX_DISTANCE_FROM_CAMERA + SECTOR_SIZE
             {
                 for chunk_key in chunk_set {
                     if (chunk_key.minimum.x() - eye.x()).abs() <= MAX_DISTANCE_FROM_CAMERA
@@ -585,17 +585,17 @@ impl Terrain {
             .iter()
             .take(if self.initialized {
                 min(
-                    MAX_NEW_RENDER_CHUNK_JOBS_PER_FRAME,
-                    MAX_RENDER_CHUNK_JOBS - self.active_builders,
+                    MAX_NEW_CHUNK_MESH_JOBS_PER_FRAME,
+                    MAX_CHUNK_MESH_JOBS - self.active_meshers,
                 )
             } else {
-                MAX_RENDER_CHUNK_JOBS_INIT
+                MAX_CHUNK_MESH_JOBS_INIT
             })
             .map(|key| {
                 let padded_chunk_extent = padded_greedy_quads_chunk_extent(
                     &self.voxels.indexer.extent_for_chunk_with_min(key.minimum),
                 );
-                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, TerrainVoxel::empty());
+                let mut padded_chunk = Array3x1::fill(padded_chunk_extent, MaterialVoxel::empty());
                 copy_extent(
                     &padded_chunk_extent,
                     &self.voxels.lod_view(0),
@@ -608,7 +608,7 @@ impl Terrain {
 
     #[profiling::function]
     fn start_mesh_jobs(&mut self, resources: &Resources) {
-        if !self.initialized || self.active_builders < MAX_RENDER_CHUNK_JOBS {
+        if !self.initialized || self.active_meshers < MAX_CHUNK_MESH_JOBS {
             let extract_start = Instant::now();
             let to_render = self.extract_mesh_voxels(resources);
 
@@ -619,7 +619,7 @@ impl Terrain {
                     to_render.len(),
                     extract_time
                 );
-                self.metrics.extract.push(TerrainChunkExtractMetrics {
+                self.metrics.extract.push(ChunkExtractMetrics {
                     tasks: to_render.len() as u32,
                     extract_time,
                 });
@@ -637,7 +637,7 @@ impl Terrain {
                     .collect();
 
                 for (key, padded_chunk) in to_render {
-                    let builder_tx = self.builder_tx.clone();
+                    let builder_tx = self.mesher_tx.clone();
                     let materials = materials.clone();
                     let padded_extent = padded_chunk.extent().clone();
                     let task = self.task_pool.spawn(async move {
@@ -657,10 +657,10 @@ impl Terrain {
                             (mesh, failed)
                         };
                         let mesh_duration = Instant::now() - mesh_start;
-                        let results = TerrainChunkTaskResults {
+                        let results = ChunkTaskResults {
                             key: key.clone(),
                             mesh,
-                            metrics: TerrainChunkTaskMetrics {
+                            metrics: ChunkTaskMetrics {
                                 quads_time: quads_duration.as_micros() as u32,
                                 mesh_time: mesh_duration.as_micros() as u32,
                                 failed,
@@ -671,7 +671,7 @@ impl Terrain {
                     if let Some(chunk) = self.chunks.get_mut(&key) {
                         chunk.builder = Some(task);
                         chunk.dirty = false;
-                        self.active_builders += 1;
+                        self.active_meshers += 1;
                     }
                 }
             }
@@ -684,25 +684,25 @@ impl Terrain {
         let visibility_region = resources.get::<VisibilityRegion>().unwrap();
 
         let mut cleared_chunks = vec![];
-        for result in self.builder_rx.try_iter() {
+        for result in self.mesher_rx.try_iter() {
             let mut metrics = result.metrics;
 
             if let Some(chunk) = self.chunks.get_mut(&result.key) {
                 chunk.builder = None;
-                self.active_builders -= 1;
+                self.active_meshers -= 1;
                 if let Some(mesh) = result.mesh {
-                    if let Some(handle) = &chunk.dyn_mesh_handle {
-                        let _res = self.dyn_mesh_cmd_tx.send(DynMeshCommand::Update {
+                    if let Some(handle) = &chunk.mesh {
+                        let _res = self.mesh_cmd_tx.send(DynMeshCommand::Update {
                             request_handle: 0,
                             handle: handle.clone(),
                             data: mesh,
                         });
                     } else {
-                        self.current_dyn_mesh_add_request += 1;
-                        let request_handle = self.current_dyn_mesh_add_request;
-                        self.dyn_mesh_add_requests
+                        self.current_mesh_add_request += 1;
+                        let request_handle = self.current_mesh_add_request;
+                        self.mesh_add_requests
                             .insert(request_handle, (result.key, mesh.visible_bounds.clone()));
-                        let _res = self.dyn_mesh_cmd_tx.send(DynMeshCommand::Add {
+                        let _res = self.mesh_cmd_tx.send(DynMeshCommand::Add {
                             request_handle,
                             data: mesh,
                         });
@@ -717,19 +717,19 @@ impl Terrain {
             self.metrics.tasks.push(metrics);
         }
 
-        for result in self.dyn_mesh_cmd_rx.try_iter() {
+        for result in self.mesh_cmd_rx.try_iter() {
             match result {
                 DynMeshCommandResults::Add {
                     request_handle,
                     result,
                 } => {
                     if let Some((key, visible_bounds)) =
-                        self.dyn_mesh_add_requests.remove(&request_handle)
+                        self.mesh_add_requests.remove(&request_handle)
                     {
                         if let Some(chunk) = self.chunks.get_mut(&key) {
                             match result {
                                 Ok(handle) => {
-                                    chunk.dyn_mesh_handle = Some(handle.clone());
+                                    chunk.mesh = Some(handle.clone());
 
                                     let transform_component = TransformComponent {
                                         translation: Vec3::ZERO,
@@ -772,8 +772,8 @@ impl Terrain {
                                         visibility_object_handle: visibility_object_handle.clone(),
                                     });
 
-                                    chunk.visibility_object_handle = Some(visibility_object_handle);
-                                    chunk.render_object_handle = Some(render_object_handle);
+                                    chunk.visibility_object = Some(visibility_object_handle);
+                                    chunk.render_object = Some(render_object_handle);
                                 }
                                 Err(err) => log::error!("{}", err),
                             }
@@ -792,11 +792,11 @@ impl Terrain {
         }
 
         for chunk in cleared_chunks {
-            let super_key = Self::get_super_chunk_key(&chunk);
-            if let Some(super_chunk) = self.super_chunks.get_mut(&super_key) {
+            let super_key = Self::get_sector_key(&chunk);
+            if let Some(super_chunk) = self.sectors.get_mut(&super_key) {
                 super_chunk.remove(&chunk);
                 if super_chunk.is_empty() {
-                    self.super_chunks.remove(&super_key);
+                    self.sectors.remove(&super_key);
                 }
             }
         }
@@ -806,7 +806,7 @@ impl Terrain {
         &mut self,
         interval_secs: f64,
         info_log: bool,
-    ) -> Option<TerrainChunkDistributionMetrics> {
+    ) -> Option<ChunkDistributionMetrics> {
         if self.metrics.is_empty() {
             self.metrics.start = Instant::now();
             return None;
@@ -826,7 +826,7 @@ impl Terrain {
 
     #[profiling::function]
     fn make_dyn_mesh_data(
-        voxels: &Array3x1<TerrainVoxel>,
+        voxels: &Array3x1<MaterialVoxel>,
         quads: &GreedyQuadsBuffer,
         materials: &Vec<Option<PbrMaterialAsset>>,
     ) -> Option<DynMeshData> {
@@ -989,7 +989,7 @@ pub struct RayCastResult {
 
 struct PerMaterialGreedyQuadsBuffer {
     pub quad_groups: [QuadGroup; 6],
-    pub material: TerrainVoxel,
+    pub material: MaterialVoxel,
 }
 
 impl PerMaterialGreedyQuadsBuffer {
@@ -1004,7 +1004,7 @@ impl PerMaterialGreedyQuadsBuffer {
 }
 
 impl PerMaterialGreedyQuadsBuffer {
-    pub fn new(material: TerrainVoxel) -> Self {
+    pub fn new(material: MaterialVoxel) -> Self {
         PerMaterialGreedyQuadsBuffer {
             quad_groups: RIGHT_HANDED_Y_UP_CONFIG.quad_groups(),
             material,
@@ -1013,12 +1013,12 @@ impl PerMaterialGreedyQuadsBuffer {
 }
 
 #[derive(Clone, Debug)]
-pub struct TerrainHandle {
+pub struct UniverseHandle {
     handle: GenericDropSlabKey,
 }
 
 #[derive(Clone)]
-pub enum TerrainFillStyle {
+pub enum UniverseFillStyle {
     FlatBoard {
         material: &'static str,
     },
@@ -1033,31 +1033,31 @@ pub enum TerrainFillStyle {
 }
 
 pub struct Simulation {
-    terrain: DropSlab<Terrain>,
-    active_terrain: Option<TerrainHandle>,
+    multiverse: DropSlab<Universe>,
+    active_universe: Option<UniverseHandle>,
     default_world: World,
 }
 
 impl Simulation {
     pub fn new() -> Self {
         Self {
-            terrain: Default::default(),
-            active_terrain: None,
+            multiverse: Default::default(),
+            active_universe: None,
             default_world: World::default(),
         }
     }
 
-    pub fn new_terrain(
+    pub fn new_universe(
         &mut self,
         dyn_mesh_manager: &DynMeshManager,
         materials: Vec<(&'static str, Handle<PbrMaterialAsset>)>,
         origin: Point3i,
         size: u32,
-        style: TerrainFillStyle,
-    ) -> TerrainHandle {
-        log::info!("Creating terrain...");
+        style: UniverseFillStyle,
+    ) -> UniverseHandle {
+        log::info!("Inflating universe...");
 
-        let mut terrain = {
+        let mut universe = {
             let material_names = materials
                 .iter()
                 .map(|(name, _h)| name.to_string())
@@ -1068,10 +1068,10 @@ impl Simulation {
                 .map(|(idx, v)| (v.0.to_string(), idx as u16))
                 .collect();
             let materials = materials.iter().map(|v| v.1.clone()).collect();
-            let voxels = Terrain::generate_voxels(&materials_map, origin, size, style);
-            let (render_tx, render_rx) = unbounded();
-            let (dyn_mesh_cmd_tx, dyn_mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
-            Terrain {
+            let voxels = Universe::generate_voxels(&materials_map, origin, size, style);
+            let (mesher_tx, mesher_rx) = unbounded();
+            let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
+            Universe {
                 initialized: false,
                 world: Default::default(),
                 materials,
@@ -1079,69 +1079,59 @@ impl Simulation {
                 materials_map,
                 voxels,
                 task_pool: TaskPoolBuilder::new().build(),
-                active_builders: 0,
+                active_meshers: 0,
                 chunks: HashMap::new(),
-                super_chunks: HashMap::new(),
-                builder_tx: render_tx,
-                builder_rx: render_rx,
+                sectors: HashMap::new(),
+                mesher_tx,
+                mesher_rx,
                 metrics: Default::default(),
-                dyn_mesh_cmd_tx,
-                dyn_mesh_cmd_rx,
-                dyn_mesh_add_requests: HashMap::new(),
-                current_dyn_mesh_add_request: 0,
+                mesh_cmd_tx,
+                mesh_cmd_rx,
+                mesh_add_requests: HashMap::new(),
+                current_mesh_add_request: 0,
             }
         };
 
-        terrain.reset_chunks();
+        universe.reset_chunks();
 
-        let terrain_handle = self.register_terrain(terrain);
-        self.active_terrain = Some(terrain_handle.clone());
+        let universe_handle = self.register_universe(universe);
+        self.active_universe = Some(universe_handle.clone());
 
-        log::info!("Terrain created");
+        log::info!("Universe inflated");
 
-        terrain_handle
+        universe_handle
     }
 
-    fn register_terrain(&mut self, terrain: Terrain) -> TerrainHandle {
-        self.terrain.process_drops();
+    fn register_universe(&mut self, terrain: Universe) -> UniverseHandle {
+        self.multiverse.process_drops();
 
-        let drop_slab_key = self.terrain.allocate(terrain);
-        TerrainHandle {
+        let drop_slab_key = self.multiverse.allocate(terrain);
+        UniverseHandle {
             handle: drop_slab_key.generic_drop_slab_key(),
         }
     }
 
-    pub fn get(&self, terrain_handle: &TerrainHandle) -> &Terrain {
-        self.terrain
-            .get(&terrain_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "TerrainStorage did not contain handle {:?}.",
-                    terrain_handle
-                )
-            })
+    pub fn get(&self, universe_handle: &UniverseHandle) -> &Universe {
+        self.multiverse
+            .get(&universe_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| panic!("Multiverse did not contain handle {:?}.", universe_handle))
     }
 
-    pub fn get_mut(&mut self, terrain_handle: &TerrainHandle) -> &mut Terrain {
-        self.terrain
-            .get_mut(&terrain_handle.handle.drop_slab_key())
-            .unwrap_or_else(|| {
-                panic!(
-                    "TerrainStorage did not contain handle {:?}.",
-                    terrain_handle
-                )
-            })
+    pub fn get_mut(&mut self, universe_handle: &UniverseHandle) -> &mut Universe {
+        self.multiverse
+            .get_mut(&universe_handle.handle.drop_slab_key())
+            .unwrap_or_else(|| panic!("Multiverse did not contain handle {:?}.", universe_handle))
     }
 
-    pub fn get_active_terrain(&mut self) -> Option<&mut Terrain> {
-        let h = self.active_terrain.as_ref().map(|h| h.clone())?;
+    pub fn get_active_universe(&mut self) -> Option<&mut Universe> {
+        let h = self.active_universe.as_ref().map(|h| h.clone())?;
         Some(self.get_mut(&h))
     }
 
     pub fn get_active_world(&mut self) -> &mut World {
-        if self.active_terrain.is_none() {
+        if self.active_universe.is_none() {
             return &mut self.default_world;
         };
-        &mut self.get_active_terrain().unwrap().world
+        &mut self.get_active_universe().unwrap().world
     }
 }

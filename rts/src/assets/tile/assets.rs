@@ -8,7 +8,7 @@ use rafx::{
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
-use crate::env::terrain::TerrainVoxel;
+use crate::env::simulation::MaterialVoxel;
 
 #[derive(TypeUuid, Serialize, Deserialize, Debug, Clone)]
 #[uuid = "e0b18b31-dcff-4e31-85dd-2e224bb1d04b"]
@@ -21,7 +21,7 @@ pub struct TileAssetData {
 pub struct TileAssetInner {
     pub name: String,
     pub palette: Vec<String>,
-    pub voxels: Array3x1<TerrainVoxel>,
+    pub voxels: Array3x1<MaterialVoxel>,
 }
 
 #[derive(TypeUuid, Clone)]
@@ -62,9 +62,9 @@ impl DefaultAssetTypeLoadHandler<TileAssetData, TileAsset> for TileLoadHandler {
             .unwrap_or_default() as i32;
         let z_max = asset_data.voxels.len() as i32;
 
-        let mut voxels = Array3x1::<TerrainVoxel>::fill(
+        let mut voxels = Array3x1::<MaterialVoxel>::fill(
             Extent3i::from_min_and_shape(Point3i::ZERO, PointN([x_max, y_max, z_max])),
-            TerrainVoxel::empty(),
+            MaterialVoxel::empty(),
         );
 
         for (z, slice) in asset_data.voxels.iter().enumerate() {
@@ -89,7 +89,7 @@ impl DefaultAssetTypeLoadHandler<TileAssetData, TileAsset> for TileLoadHandler {
                             )));
                         }
                         *voxels.get_mut(PointN([x as i32, y, z])) =
-                            TerrainVoxel::from_material_index(mat);
+                            MaterialVoxel::from_material_index(mat);
                     } else {
                         return Err(RafxError::StringError(format!(
                             "Invalid voxel characters '{}'. Hex string expected.",

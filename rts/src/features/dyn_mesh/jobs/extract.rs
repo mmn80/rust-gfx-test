@@ -16,7 +16,7 @@ pub struct DynMeshExtractJob<'extract> {
     asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: DynMeshRenderObjectSet,
-    meshes: DynMeshManagerExtractRef,
+    mesh_manager: DynMeshManagerExtractRef,
 }
 
 impl<'extract> DynMeshExtractJob<'extract> {
@@ -26,7 +26,7 @@ impl<'extract> DynMeshExtractJob<'extract> {
         depth_material: Handle<MaterialAsset>,
         render_objects: DynMeshRenderObjectSet,
     ) -> Arc<dyn RenderFeatureExtractJob<'extract> + 'extract> {
-        let meshes = unsafe {
+        let mesh_manager = unsafe {
             let dyn_mesh_manager = extract_context.extract_resources.fetch::<DynMeshManager>();
             DynMeshManagerExtractRef::new(&dyn_mesh_manager)
         };
@@ -39,7 +39,7 @@ impl<'extract> DynMeshExtractJob<'extract> {
                     .extract_ref(),
                 depth_material,
                 render_objects,
-                meshes,
+                mesh_manager,
             },
             frame_packet,
         ))
@@ -71,7 +71,7 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
             .get_id(context.render_object_id());
 
         context.set_render_object_instance_data({
-            self.meshes
+            self.mesh_manager
                 .get_dyn_mesh(&render_object_static_data.mesh)
                 .and_then(|dyn_mesh| {
                     let entry = self.world.entry_ref(context.object_id().into()).unwrap();

@@ -1,7 +1,7 @@
 // There's a decent amount of code that's just for example and isn't called
 #![allow(dead_code)]
 
-use env::terrain::Simulation;
+use env::simulation::Simulation;
 use legion::*;
 use rafx::{
     api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},

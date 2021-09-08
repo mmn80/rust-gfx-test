@@ -1,4 +1,4 @@
 pub mod env;
 pub mod perlin;
-pub mod terrain;
+pub mod simulation;
 pub mod ui;

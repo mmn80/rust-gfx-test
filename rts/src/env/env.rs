@@ -19,7 +19,7 @@ use crate::{
         tilesets::{TileSetsAsset, TileSetsExportData, TileSetsExporter},
     },
     camera::RTSCamera,
-    env::terrain::{Simulation, Terrain, TerrainFillStyle, TerrainHandle},
+    env::simulation::{Simulation, Universe, UniverseFillStyle, UniverseHandle},
     features::dyn_mesh::DynMeshManager,
     input::{InputResource, KeyboardKey, MouseButton},
     time::TimeState,
@@ -39,7 +39,7 @@ const TILESETS_PATH: &str = "tiles/main.tilesets";
 pub struct EnvState {
     main_view_frustum: ViewFrustumArc,
     main_light: Entity,
-    pub terrain: TerrainHandle,
+    pub universe: UniverseHandle,
     tilesets: Handle<TileSetsAsset>,
 }
 
@@ -47,8 +47,8 @@ impl EnvState {
     pub fn new(resources: &Resources, simulation: &mut Simulation) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
         let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
-        let terrain = {
-            let material_names = Terrain::get_default_material_names();
+        let universe = {
+            let material_names = Universe::get_default_material_names();
             let terrain_materials: Vec<_> = material_names
                 .iter()
                 .map(|name| {
@@ -59,12 +59,12 @@ impl EnvState {
                 })
                 .collect();
             let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
-            simulation.new_terrain(
+            simulation.new_universe(
                 &dyn_mesh_manager,
                 terrain_materials,
                 Point3i::ZERO,
                 4096,
-                TerrainFillStyle::FlatBoard {
+                UniverseFillStyle::FlatBoard {
                     material: "basic_tile",
                 },
             )
@@ -76,8 +76,8 @@ impl EnvState {
             let light_from = Vec3::new(0.0, 5.0, 4.0);
             let light_to = Vec3::ZERO;
             let light_direction = (light_to - light_from).normalize();
-            let terrain = simulation.get_mut(&terrain);
-            terrain.world.push((DirectionalLightComponent {
+            let universe = simulation.get_mut(&universe);
+            universe.world.push((DirectionalLightComponent {
                 direction: light_direction,
                 intensity: 5.0,
                 color: [1.0, 1.0, 1.0, 1.0].into(),
@@ -88,7 +88,7 @@ impl EnvState {
         EnvState {
             main_view_frustum,
             main_light,
-            terrain,
+            universe,
             tilesets,
         }
     }
@@ -116,10 +116,10 @@ impl EnvState {
             );
         }
 
-        let terrain = simulation.get_mut(&self.terrain);
+        let universe = simulation.get_mut(&self.universe);
 
         {
-            if let Some(mut entry) = terrain.world.entry(self.main_light) {
+            if let Some(mut entry) = universe.world.entry(self.main_light) {
                 if let Ok(light) = entry.get_component_mut::<DirectionalLightComponent>() {
                     if ui_state.main_light_rotates {
                         let time_state = resources.get::<TimeState>().unwrap();
@@ -152,7 +152,7 @@ impl EnvState {
             }
         }
 
-        terrain.update_chunks(resources);
+        universe.update_chunks(resources);
     }
 
     pub fn update_ui(
@@ -196,14 +196,14 @@ impl EnvState {
             if input.is_mouse_just_down(MouseButton::LEFT) {
                 let cursor_pos = input.mouse_position();
                 let (cast_result, default_material) = {
-                    let terrain = simulation.get(&self.terrain);
+                    let universe = simulation.get(&self.universe);
                     let cast_result = camera.ray_cast_terrain(
                         cursor_pos.x as u32,
                         cursor_pos.y as u32,
-                        terrain,
+                        universe,
                         ui_state,
                     );
-                    let default_material = terrain
+                    let default_material = universe
                         .voxel_by_material(ui_state.env.terrain_edit.material)
                         .unwrap();
                     (cast_result, default_material)
@@ -218,11 +218,11 @@ impl EnvState {
                             simulation,
                         );
                     } else if ui_state.env.terrain_edit.active {
-                        let terrain = simulation.get_mut(&self.terrain);
+                        let universe = simulation.get_mut(&self.universe);
                         if input.is_key_down(KeyboardKey::LControl) {
-                            terrain.clear_voxel(result.hit);
+                            universe.clear_voxel(result.hit);
                         } else {
-                            terrain.update_voxel(result.before_hit, default_material);
+                            universe.update_voxel(result.before_hit, default_material);
                         }
                     }
                 }
@@ -239,14 +239,14 @@ impl EnvState {
         simulation: &mut Simulation,
         resources: &mut Resources,
     ) -> Option<()> {
-        let terrain = simulation.get_mut(&self.terrain);
+        let universe = simulation.get_mut(&self.universe);
         match command {
             EnvUiCmd::SaveEditedTile {
                 tileset_name,
                 tile_name,
             } => {
                 {
-                    terrain.save_edited_tile(&tile_name)?;
+                    universe.save_edited_tile(&tile_name)?;
                 }
                 if let Some(tileset_name) = tileset_name {
                     let tilesets = {
@@ -271,10 +271,10 @@ impl EnvState {
                 tile_name,
             } => {
                 {
-                    let terrain_style = TerrainFillStyle::FlatBoard {
+                    let terrain_style = UniverseFillStyle::FlatBoard {
                         material: "basic_tile",
                     };
-                    terrain.reset(Point3i::ZERO, TILE_EDIT_PLATFORM_SIZE as u32, terrain_style);
+                    universe.reset(Point3i::ZERO, TILE_EDIT_PLATFORM_SIZE as u32, terrain_style);
                 }
                 if !tile_name.is_empty() {
                     self.spawn(
@@ -288,7 +288,7 @@ impl EnvState {
                 Some(())
             }
             EnvUiCmd::ResetTerrain(params) => {
-                terrain.reset(Point3i::ZERO, params.size, params.style.clone());
+                universe.reset(Point3i::ZERO, params.size, params.style.clone());
                 Some(())
             }
         }
@@ -302,7 +302,7 @@ impl EnvState {
         resources: &Resources,
         simulation: &mut Simulation,
     ) {
-        let terrain = simulation.get_mut(&self.terrain);
+        let universe = simulation.get_mut(&self.universe);
 
         // transform component
         let translation = Vec3::new(
@@ -328,7 +328,7 @@ impl EnvState {
 
         // entity
         log::info!("Spawn tile {} at: {}", tile_name, translation);
-        let _entity = terrain.world.push((transform_component, tile_component));
+        let _entity = universe.world.push((transform_component, tile_component));
 
         // update voxels
         let tile = {
@@ -355,7 +355,7 @@ impl EnvState {
                 .clone()
         };
 
-        terrain.instance_tile(&tile, position);
+        universe.instance_tile(&tile, position);
     }
 }
 

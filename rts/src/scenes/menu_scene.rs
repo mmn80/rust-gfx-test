@@ -17,7 +17,7 @@ use rafx_plugins::{
 use super::SceneManagerAction;
 use crate::{
     camera::RTSCamera,
-    env::terrain::Simulation,
+    env::simulation::Simulation,
     input::{InputResource, KeyboardKey},
     scenes::Scene,
     ui::UiState,
