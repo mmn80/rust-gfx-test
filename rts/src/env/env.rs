@@ -1,7 +1,7 @@
 use building_blocks::core::prelude::*;
 use distill::loader::handle::Handle;
 use glam::{Quat, Vec3};
-use legion::{Entity, Resources};
+use legion::Resources;
 use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
@@ -36,7 +36,6 @@ pub struct TileComponent {
 const TILESETS_PATH: &str = "tiles/main.tilesets";
 
 pub struct EnvState {
-    main_light: Entity,
     tilesets: Handle<TileSetsAsset>,
 }
 
@@ -66,29 +65,8 @@ impl EnvState {
                 },
             );
         }
-        let main_light = {
-            let light_from = Vec3::new(0.0, 5.0, 4.0);
-            let light_to = Vec3::ZERO;
-            let light_direction = (light_to - light_from).normalize();
-            let view_frustum = simulation
-                .universe()
-                .visibility_region
-                .register_view_frustum();
-            simulation
-                .universe()
-                .world
-                .push((DirectionalLightComponent {
-                    direction: light_direction,
-                    intensity: 5.0,
-                    color: [1.0, 1.0, 1.0, 1.0].into(),
-                    view_frustum,
-                },))
-        };
 
-        EnvState {
-            main_light,
-            tilesets,
-        }
+        EnvState { tilesets }
     }
 
     #[profiling::function]
@@ -99,6 +77,7 @@ impl EnvState {
         ui_state: &mut UiState,
     ) {
         let universe = simulation.universe();
+
         {
             let input = resources.get::<InputResource>().unwrap();
             let time_state = resources.get::<TimeState>().unwrap();
@@ -115,8 +94,8 @@ impl EnvState {
             );
         }
 
-        {
-            if let Some(mut entry) = universe.world.entry(self.main_light) {
+        if let Some(main_light) = universe.main_light {
+            if let Some(mut entry) = universe.world.entry(main_light) {
                 if let Ok(light) = entry.get_component_mut::<DirectionalLightComponent>() {
                     if ui_state.main_light_rotates {
                         let time_state = resources.get::<TimeState>().unwrap();

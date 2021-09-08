@@ -31,7 +31,9 @@ use rafx::{
     visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityObjectArc, VisibilityRegion},
 };
 use rafx_plugins::{
-    components::{MeshComponent, TransformComponent, VisibilityComponent},
+    components::{
+        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
+    },
     features::mesh::MeshVertex,
 };
 
@@ -263,6 +265,7 @@ pub struct Universe {
     pub world: World,
     pub visibility_region: VisibilityRegion,
     pub main_view_frustum: ViewFrustumArc,
+    pub main_light: Option<Entity>,
     materials: Vec<Handle<PbrMaterialAsset>>,
     material_names: Vec<String>,
     materials_map: HashMap<String, u16>,
@@ -1058,6 +1061,7 @@ impl Simulation {
                 world: Default::default(),
                 visibility_region,
                 main_view_frustum,
+                main_light: None,
                 materials: Default::default(),
                 material_names: Default::default(),
                 materials_map: Default::default(),
@@ -1114,12 +1118,26 @@ impl Simulation {
             let (mesh_cmd_tx, mesh_cmd_rx) = dyn_mesh_manager.get_command_channels();
             let visibility_region = VisibilityRegion::new();
             let main_view_frustum = visibility_region.register_view_frustum();
+            let mut world: World = Default::default();
+            let main_light = {
+                let light_from = Vec3::new(0.0, 5.0, 4.0);
+                let light_to = Vec3::ZERO;
+                let light_direction = (light_to - light_from).normalize();
+                let view_frustum = visibility_region.register_view_frustum();
+                Some(world.push((DirectionalLightComponent {
+                    direction: light_direction,
+                    intensity: 5.0,
+                    color: [1.0, 1.0, 1.0, 1.0].into(),
+                    view_frustum,
+                },)))
+            };
             let mut universe = Universe {
                 id: universe_id,
                 initialized: false,
-                world: Default::default(),
+                world,
                 visibility_region,
                 main_view_frustum,
+                main_light,
                 materials,
                 material_names,
                 materials_map,
