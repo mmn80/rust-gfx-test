@@ -1099,7 +1099,7 @@ impl Simulation {
     ) -> UniverseId {
         let universe_id = self.next_universe_id;
 
-        log::info!("Inflating universe #{:?}...", universe_id);
+        log::info!("Inflating universe #{}...", universe_id.0);
 
         self.next_universe_id = UniverseId(universe_id.0 + 1);
         let universe = {
@@ -1158,11 +1158,14 @@ impl Simulation {
             universe
         };
         self.multiverse.insert(universe_id, universe);
-        self.active_universe_id = universe_id;
 
         log::info!("Universe inflated");
 
         universe_id
+    }
+
+    pub fn set_active_universe(&mut self, id: UniverseId) {
+        self.active_universe_id = id;
     }
 
     pub fn get_universe(&self, id: UniverseId) -> &Universe {

@@ -16,6 +16,7 @@ pub enum EnvUiCmd {
         tileset_name: Option<String>,
         tile_name: String,
     },
+    FinishEditTile,
     ResetTerrain(TerrainResetUiState),
 }
 
@@ -175,7 +176,7 @@ impl TileEditUiState {
                     ed.new_tile = false;
                     ed.tileset = "".to_string();
                     ed.tile = "".to_string();
-                    cmd_exec(EnvUiCmd::ResetTerrain(ui_state.env.terrain_reset.clone()));
+                    cmd_exec(EnvUiCmd::FinishEditTile);
                 }
                 if editing_failed {
                     ui_state.error(format!("Exporting tile failed."));

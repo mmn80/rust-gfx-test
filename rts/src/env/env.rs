@@ -8,8 +8,9 @@ use rafx::{
 };
 use rafx_plugins::components::{DirectionalLightComponent, TransformComponent};
 
-use super::ui::{
-    EnvUiCmd, TerrainEditUiState, TerrainResetUiState, TileEditUiState, TileSpawnUiState,
+use super::{
+    simulation::UniverseId,
+    ui::{EnvUiCmd, TerrainEditUiState, TerrainResetUiState, TileEditUiState, TileSpawnUiState},
 };
 use crate::{
     assets::{
@@ -37,36 +38,53 @@ const TILESETS_PATH: &str = "tiles/main.tilesets";
 
 pub struct EnvState {
     tilesets: Handle<TileSetsAsset>,
+    main_universe: UniverseId,
+    tile_edit_universe: UniverseId,
 }
 
 impl EnvState {
     pub fn new(resources: &Resources, simulation: &mut Simulation) -> Self {
         let asset_resource = resources.get::<AssetResource>().unwrap();
-        let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
-        {
-            let material_names = Universe::get_default_material_names();
-            let terrain_materials: Vec<_> = material_names
-                .iter()
-                .map(|name| {
-                    let path = format!("materials/terrain/{}.pbrmaterial", *name);
-                    let material_handle =
-                        asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
-                    (*name, material_handle.clone())
-                })
-                .collect();
-            let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
-            simulation.new_universe(
-                &dyn_mesh_manager,
-                terrain_materials,
-                Point3i::ZERO,
-                4096,
-                UniverseFillStyle::FlatBoard {
-                    material: "basic_tile",
-                },
-            );
-        }
+        let dyn_mesh_manager = resources.get::<DynMeshManager>().unwrap();
 
-        EnvState { tilesets }
+        let tilesets = asset_resource.load_asset_path(TILESETS_PATH);
+        let material_names = Universe::get_default_material_names();
+        let terrain_materials: Vec<_> = material_names
+            .iter()
+            .map(|name| {
+                let path = format!("materials/terrain/{}.pbrmaterial", *name);
+                let material_handle = asset_resource.load_asset_path::<PbrMaterialAsset, _>(path);
+                (*name, material_handle.clone())
+            })
+            .collect();
+
+        let main_universe = simulation.new_universe(
+            &dyn_mesh_manager,
+            terrain_materials.clone(),
+            Point3i::ZERO,
+            4096,
+            UniverseFillStyle::FlatBoard {
+                material: "basic_tile",
+            },
+        );
+
+        let tile_edit_universe = simulation.new_universe(
+            &dyn_mesh_manager,
+            terrain_materials,
+            Point3i::ZERO,
+            TILE_EDIT_PLATFORM_SIZE as u32,
+            UniverseFillStyle::FlatBoard {
+                material: "basic_tile",
+            },
+        );
+
+        simulation.set_active_universe(main_universe);
+
+        EnvState {
+            tilesets,
+            main_universe,
+            tile_edit_universe,
+        }
     }
 
     #[profiling::function]
@@ -214,15 +232,28 @@ impl EnvState {
         simulation: &mut Simulation,
         resources: &mut Resources,
     ) -> Option<()> {
-        let universe = simulation.universe();
         match command {
+            EnvUiCmd::StartEditTile {
+                tileset_name,
+                tile_name,
+            } => {
+                if !tile_name.is_empty() {
+                    simulation.set_active_universe(self.tile_edit_universe);
+                    self.spawn(
+                        &tileset_name,
+                        &tile_name,
+                        Point3i::ZERO,
+                        resources,
+                        simulation.universe(),
+                    );
+                }
+                Some(())
+            }
             EnvUiCmd::SaveEditedTile {
                 tileset_name,
                 tile_name,
             } => {
-                {
-                    universe.save_edited_tile(&tile_name)?;
-                }
+                simulation.universe().save_edited_tile(&tile_name)?;
                 if let Some(tileset_name) = tileset_name {
                     let tilesets = {
                         let asset_manager = resources.get::<AssetManager>().unwrap();
@@ -241,29 +272,21 @@ impl EnvState {
                     Some(())
                 }
             }
-            EnvUiCmd::StartEditTile {
-                tileset_name,
-                tile_name,
-            } => {
-                {
-                    let terrain_style = UniverseFillStyle::FlatBoard {
+            EnvUiCmd::FinishEditTile => {
+                simulation.universe().reset(
+                    Point3i::ZERO,
+                    TILE_EDIT_PLATFORM_SIZE as u32,
+                    UniverseFillStyle::FlatBoard {
                         material: "basic_tile",
-                    };
-                    universe.reset(Point3i::ZERO, TILE_EDIT_PLATFORM_SIZE as u32, terrain_style);
-                }
-                if !tile_name.is_empty() {
-                    self.spawn(
-                        &tileset_name,
-                        &tile_name,
-                        Point3i::ZERO,
-                        resources,
-                        universe,
-                    );
-                }
+                    },
+                );
+                simulation.set_active_universe(self.main_universe);
                 Some(())
             }
             EnvUiCmd::ResetTerrain(params) => {
-                universe.reset(Point3i::ZERO, params.size, params.style.clone());
+                simulation
+                    .universe()
+                    .reset(Point3i::ZERO, params.size, params.style.clone());
                 Some(())
             }
         }
