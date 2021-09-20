@@ -319,45 +319,41 @@ impl UnitsState {
             Read<VisibilityComponent>,
             Write<UnitComponent>,
         )>::query();
-        query.par_for_each_mut(
-            &mut universe.world,
-            |(transform, visibility, dyn_object)| {
-                if let Some(target) = dyn_object.move_target {
-                    let target_dir = (target - transform.translation).normalize();
-                    let orig_dir = Vec3::X;
-                    if (target_dir - orig_dir).length() > 0.001 {
-                        transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
-                    }
-                    if (target_dir - dyn_object.aim).length() > 0.001 {
-                        dyn_object.aim =
-                            (dyn_object.aim + (target_dir - dyn_object.aim) * dt).normalize();
-                    }
-                    const TARGET_SPEED: f32 = 10.; // m/s
-                    if dyn_object.speed < TARGET_SPEED {
-                        dyn_object.speed = (dyn_object.speed + 2. * dt).min(TARGET_SPEED);
-                    }
-                    transform.translation += dyn_object.speed * dt * target_dir;
-                    visibility.visibility_object_handle.set_transform(
-                        transform.translation,
-                        transform.rotation,
-                        transform.scale,
-                    );
-                    if (target - transform.translation).length() < 0.1 {
-                        dyn_object.move_target = None;
-                        dyn_object.speed = 0.;
-                    }
+        query.par_for_each_mut(&mut universe.world, |(transform, visibility, unit)| {
+            if let Some(target) = unit.move_target {
+                let target_dir = (target - transform.translation).normalize();
+                let orig_dir = Vec3::X;
+                if (target_dir - orig_dir).length() > 0.001 {
+                    transform.rotation = Quat::from_rotation_arc(orig_dir, target_dir);
                 }
-                if ui_state.unit.selecting {
-                    let pos_hom: Vec4 = (transform.translation, 1.).into();
-                    let pos_view = view_proj * pos_hom;
-                    let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
-                    dyn_object.selected = pos_screen.x > x0
-                        && pos_screen.x < x1
-                        && pos_screen.y > y0
-                        && pos_screen.y < y1;
+                if (target_dir - unit.aim).length() > 0.001 {
+                    unit.aim = (unit.aim + (target_dir - unit.aim) * dt).normalize();
                 }
-            },
-        );
+                const TARGET_SPEED: f32 = 10.; // m/s
+                if unit.speed < TARGET_SPEED {
+                    unit.speed = (unit.speed + 2. * dt).min(TARGET_SPEED);
+                }
+                transform.translation += unit.speed * dt * target_dir;
+                visibility.visibility_object_handle.set_transform(
+                    transform.translation,
+                    transform.rotation,
+                    transform.scale,
+                );
+                if (target - transform.translation).length() < 0.1 {
+                    unit.move_target = None;
+                    unit.speed = 0.;
+                }
+            }
+            if ui_state.unit.selecting {
+                let pos_hom: Vec4 = (transform.translation, 1.).into();
+                let pos_view = view_proj * pos_hom;
+                let pos_screen = Vec2::new(pos_view.x / pos_view.w, pos_view.y / pos_view.w);
+                unit.selected = pos_screen.x > x0
+                    && pos_screen.x < x1
+                    && pos_screen.y > y0
+                    && pos_screen.y < y1;
+            }
+        });
 
         if ui_state.unit.selecting {
             ui_state.unit.selected_count = 0;
@@ -399,7 +395,7 @@ impl UnitsState {
             render_object_handle: mesh_render_object.clone(),
         };
 
-        // dyn object component
+        // unit component
         let unit_component = UnitComponent {
             object_type: unit_type,
             health: 1.,
