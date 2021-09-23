@@ -238,8 +238,8 @@ impl EnvState {
                 tileset_name,
                 tile_name,
             } => {
+                simulation.set_active_universe(self.tile_edit_universe);
                 if !tile_name.is_empty() {
-                    simulation.set_active_universe(self.tile_edit_universe);
                     self.spawn(
                         &tileset_name,
                         &tile_name,
@@ -247,7 +247,7 @@ impl EnvState {
                         resources,
                         simulation.universe(),
                     );
-                }
+                };
                 Some(())
             }
             EnvUiCmd::SaveEditedTile {
