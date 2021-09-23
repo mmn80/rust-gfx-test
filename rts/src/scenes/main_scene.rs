@@ -23,12 +23,17 @@ impl MainState {
     pub fn update_ui(
         &mut self,
         _simulation: &mut Simulation,
-        _resources: &mut Resources,
+        resources: &mut Resources,
         ui_state: &mut UiState,
         ui: &mut egui::Ui,
     ) {
+        {
+            let mut camera = resources.get_mut::<RTSCamera>().unwrap();
+            camera.update_ui(ui_state, ui);
+        }
+
         egui::CollapsingHeader::new("Directional light")
-            .default_open(true)
+            .default_open(false)
             .show(ui, |ui| {
                 let ck = egui::Checkbox::new(&mut ui_state.main_light_rotates, "Auto rotates");
                 ui.add(ck);

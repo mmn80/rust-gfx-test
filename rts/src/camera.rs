@@ -1,4 +1,4 @@
-use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+use std::f32::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 
 use glam::{Mat4, Quat, Vec3, Vec4Swizzles};
 use rafx::{
@@ -40,6 +40,9 @@ use crate::{
 
 #[derive(Clone, Copy)]
 pub struct RTSCamera {
+    pub pitch_default: f32,
+    pub pitch_zero_height: f32,
+    pub pitch_height_power: i32,
     pub look_at: Vec3,
     pub look_at_dist: f32,
     pub yaw: f32,
@@ -60,10 +63,13 @@ pub struct RTSCamera {
 impl Default for RTSCamera {
     fn default() -> Self {
         Self {
+            pitch_default: 45.,
+            pitch_zero_height: 100.,
+            pitch_height_power: 2,
             look_at: Vec3::new(0., 0., 0.),
             look_at_dist: 40.,
             yaw: 0.,
-            pitch: RTSCamera::pitch_by_distance(20.),
+            pitch: FRAC_PI_4,
             move_speed: 20.,
             yaw_speed: 5.,
             scroll_speed: 50.,
@@ -107,8 +113,13 @@ impl RTSCamera {
         self.projection_matrix * self.view_matrix
     }
 
-    fn pitch_by_distance(distance: f32) -> f32 {
-        (1.0 - (distance / 100.0).powi(2)).min(1.0).max(0.0) * FRAC_PI_4
+    fn pitch_by_distance(&self) -> f32 {
+        (1.0 - (self.look_at_dist / self.pitch_zero_height).powi(self.pitch_height_power))
+            .min(1.0)
+            .max(0.0)
+            * self.pitch_default
+            * PI
+            / 180.
     }
 
     pub fn make_ray(&self, screen_x: u32, screen_y: u32) -> Vec3 {
@@ -178,7 +189,7 @@ impl RTSCamera {
                     * (self.look_at_dist / 10.0))
                 .max(1.)
                 .min(1000.);
-            self.pitch = RTSCamera::pitch_by_distance(self.look_at_dist);
+            self.pitch = self.pitch_by_distance();
         }
     }
 
@@ -293,5 +304,28 @@ impl RTSCamera {
             &projection,
             eye,
         );
+    }
+
+    pub fn update_ui(&mut self, _ui_state: &mut UiState, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("RTS Camera")
+            .default_open(false)
+            .show(ui, |ui| {
+                let old_pitch_default = self.pitch_default;
+                let old_pitch_zero_height = self.pitch_zero_height;
+                let old_pitch_height_power = self.pitch_height_power;
+                ui.add(egui::Slider::new(&mut self.pitch_default, 0.0..=90.).text("default pitch"));
+                ui.add(
+                    egui::Slider::new(&mut self.pitch_zero_height, 10.0..=500.).text("pitch max h"),
+                );
+                ui.add(
+                    egui::Slider::new(&mut self.pitch_height_power, 1..=8).text("pitch h power"),
+                );
+                if old_pitch_default != self.pitch_default
+                    || old_pitch_zero_height != self.pitch_zero_height
+                    || old_pitch_height_power != self.pitch_height_power
+                {
+                    self.pitch = self.pitch_by_distance();
+                }
+            });
     }
 }

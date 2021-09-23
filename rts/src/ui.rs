@@ -63,8 +63,8 @@ impl UiState {
         simulation: &mut Simulation,
         resources: &mut Resources,
         main_state: Option<&mut MainState>,
-        kin_state: Option<&mut EnvState>,
-        dyn_state: Option<&mut UnitsState>,
+        env_state: Option<&mut EnvState>,
+        units_state: Option<&mut UnitsState>,
     ) {
         let context = resources.get::<EguiContextResource>().unwrap().context();
         profiling::scope!("egui");
@@ -160,11 +160,11 @@ impl UiState {
             if let Some(main_state) = main_state {
                 main_state.update_ui(simulation, resources, self, ui);
             }
-            if let Some(kin_state) = kin_state {
-                kin_state.update_ui(simulation, resources, self, ui);
+            if let Some(env_state) = env_state {
+                env_state.update_ui(simulation, resources, self, ui);
             }
-            if let Some(dyn_state) = dyn_state {
-                dyn_state.update_ui(simulation, resources, self, ui);
+            if let Some(units_state) = units_state {
+                units_state.update_ui(simulation, resources, self, ui);
             }
 
             if !self.error.is_empty() {
