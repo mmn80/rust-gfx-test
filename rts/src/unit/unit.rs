@@ -197,6 +197,10 @@ impl UnitsState {
                 ..
             }) = input.mouse_drag_in_progress(MouseButton::LEFT)
             {
+                let (p0, p1) = {
+                    let scale_factor = ui.ctx().pixels_per_point();
+                    (p0 / scale_factor, p1 / scale_factor)
+                };
                 let w = (p1.x as f32 - p0.x as f32).abs();
                 let h = (p1.y as f32 - p0.y as f32).abs();
                 let x = p0.x.min(p1.x) as f32;
