@@ -5,7 +5,10 @@ use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
 };
-use rafx_plugins::{assets::font::FontAsset, features::text::TextResource};
+use rafx_plugins::{
+    assets::font::FontAsset,
+    features::{mesh::MeshRenderOptions, text::TextResource},
+};
 
 use super::{Scene, SceneManagerAction};
 use crate::{
@@ -75,6 +78,9 @@ impl MainScene {
     pub(super) fn new(simulation: &mut Simulation, resources: &Resources) -> Self {
         let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
         *render_options = RenderOptions::default_3d();
+
+        let mut mesh_render_options = resources.get_mut::<MeshRenderOptions>().unwrap();
+        mesh_render_options.ambient_light = glam::Vec3::new(0.02, 0.02, 0.02);
 
         let font = {
             let asset_resource = resources.get_mut::<AssetResource>().unwrap();

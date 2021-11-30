@@ -1,9 +1,9 @@
 (
     version: 2,
     importer_options: (
-        format: None,
-        color_space: Some(Linear),
-        mip_generation: None,
+        mip_generation: NoMips,
+        color_space: Linear,
+        data_format: Uncompressed,
     ),
     importer_state: (Some("29a2db02-4e4a-469b-8ad0-39b2ec85fe14")),
 )

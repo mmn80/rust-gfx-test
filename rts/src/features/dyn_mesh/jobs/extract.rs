@@ -13,6 +13,7 @@ use super::*;
 
 pub struct DynMeshExtractJob<'extract> {
     world: ResourceRefBorrow<'extract, World>,
+    mesh_render_options: Option<ResourceRefBorrow<'extract, MeshRenderOptions>>,
     asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: DynMeshRenderObjectSet,
@@ -33,6 +34,9 @@ impl<'extract> DynMeshExtractJob<'extract> {
         Arc::new(ExtractJob::new(
             Self {
                 world: extract_context.extract_resources.fetch::<World>(),
+                mesh_render_options: extract_context
+                    .extract_resources
+                    .try_fetch::<MeshRenderOptions>(),
                 asset_manager: extract_context
                     .render_resources
                     .fetch::<AssetManagerRenderResource>()
@@ -129,6 +133,12 @@ impl<'extract> ExtractJobEntryPoints<'extract> for DynMeshExtractJob<'extract> {
             let next_index = per_view.num_spot_lights;
             per_view.spot_lights[next_index as usize] = Some(light);
             per_view.num_spot_lights += 1;
+        }
+
+        if let Some(mesh_render_options) = &self.mesh_render_options {
+            per_view.ambient_light = mesh_render_options.ambient_light;
+        } else {
+            per_view.ambient_light = glam::Vec3::ZERO;
         }
 
         context.view_packet().per_view_data().set(per_view);

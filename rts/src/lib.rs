@@ -337,6 +337,10 @@ impl DemoApp {
                 let mut renderer = self.resources.get_mut::<Renderer>().unwrap();
                 renderer.clear_temporary_work();
             }
+
+            *self.resources.get_mut::<MeshRenderOptions>().unwrap() = Default::default();
+            *self.resources.get_mut::<RenderOptions>().unwrap() = RenderOptions::default_3d();
+
             self.scene_manager
                 .try_load_scene(&mut self.simulation, &self.resources, scene);
         }
@@ -540,6 +544,11 @@ impl DemoApp {
                 } => {
                     //log::trace!("Key Down {:?} {:?}", keycode, modifiers);
 
+                    if *virtual_keycode == VirtualKeyCode::G {
+                        window
+                            .set_cursor_grab(true)
+                            .expect("Failed to grab mouse cursor");
+                    }
                     if *virtual_keycode == VirtualKeyCode::M {
                         let metrics = resources.get::<AssetManager>().unwrap().metrics();
                         println!("{:#?}", metrics);
