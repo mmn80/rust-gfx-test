@@ -1,7 +1,7 @@
 (
     version: 2,
     importer_options: (
-        mip_generation: NoMips,
+        mip_generation: Runtime,
         color_space: Srgb,
         data_format: Uncompressed,
     ),
