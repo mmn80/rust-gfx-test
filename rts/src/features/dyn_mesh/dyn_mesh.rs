@@ -17,8 +17,10 @@ pub use super::buffer_upload::BufferUploaderConfig;
 #[derive(Clone)]
 pub struct DynMeshDataPart {
     pub material_instance: MaterialInstanceAsset,
-    pub vertex_buffer_offset_in_bytes: u32,
-    pub vertex_buffer_size_in_bytes: u32,
+    pub vertex_full_buffer_offset_in_bytes: u32,
+    pub vertex_full_buffer_size_in_bytes: u32,
+    pub vertex_position_buffer_offset_in_bytes: u32,
+    pub vertex_position_buffer_size_in_bytes: u32,
     pub index_buffer_offset_in_bytes: u32,
     pub index_buffer_size_in_bytes: u32,
     pub index_type: RafxIndexType,
@@ -27,16 +29,17 @@ pub struct DynMeshDataPart {
 #[derive(Clone)]
 pub struct DynMeshData {
     pub mesh_parts: Vec<DynMeshDataPart>,
-    pub vertex_buffer: Option<Vec<u8>>,
+    pub vertex_full_buffer: Option<Vec<u8>>,
+    pub vertex_position_buffer: Option<Vec<u8>>,
     pub index_buffer: Option<Vec<u8>>,
     pub visible_bounds: VisibleBounds,
 }
 
 impl std::fmt::Display for DynMeshData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let vtx_sz = self.vertex_buffer.as_ref().unwrap().len();
+        let vtx_sz = self.vertex_full_buffer.as_ref().unwrap().len();
         let idx_sz = self.index_buffer.as_ref().unwrap().len();
-        let vtx_q = 4 * std::mem::size_of::<rafx_plugins::features::mesh::MeshVertex>() as u32;
+        let vtx_q = 4 * std::mem::size_of::<rafx_plugins::features::mesh::MeshVertexFull>() as u32;
         let idx_q = 6 * std::mem::size_of::<u16>() as u32;
         write!(
             f,
@@ -54,10 +57,10 @@ impl std::fmt::Display for DynMeshData {
                         }) as u32;
                     format!(
                         "vx: [{} ({}q) += {} ({}q)], ix: [{} ({}q) += {} ({}q)]",
-                        p.vertex_buffer_offset_in_bytes,
-                        p.vertex_buffer_offset_in_bytes / vtx_q,
-                        p.vertex_buffer_size_in_bytes,
-                        p.vertex_buffer_size_in_bytes / vtx_q,
+                        p.vertex_full_buffer_offset_in_bytes,
+                        p.vertex_full_buffer_offset_in_bytes / vtx_q,
+                        p.vertex_full_buffer_size_in_bytes,
+                        p.vertex_full_buffer_size_in_bytes / vtx_q,
                         p.index_buffer_offset_in_bytes,
                         p.index_buffer_offset_in_bytes / idx_q,
                         p.index_buffer_size_in_bytes,
@@ -75,8 +78,10 @@ pub struct DynMeshPart {
     pub textured_pass_index: usize,
     pub untextured_pass_index: usize,
     pub wireframe_pass_index: usize,
-    pub vertex_buffer_offset_in_bytes: u32,
-    pub vertex_buffer_size_in_bytes: u32,
+    pub vertex_full_buffer_offset_in_bytes: u32,
+    pub vertex_full_buffer_size_in_bytes: u32,
+    pub vertex_position_buffer_offset_in_bytes: u32,
+    pub vertex_position_buffer_size_in_bytes: u32,
     pub index_buffer_offset_in_bytes: u32,
     pub index_buffer_size_in_bytes: u32,
     pub index_type: RafxIndexType,
@@ -132,7 +137,8 @@ impl DynMeshPart {
 
 pub struct DynMeshInner {
     pub mesh_parts: Vec<Option<DynMeshPart>>,
-    pub vertex_buffer: ResourceArc<BufferResource>,
+    pub vertex_full_buffer: ResourceArc<BufferResource>,
+    pub vertex_position_buffer: ResourceArc<BufferResource>,
     pub index_buffer: ResourceArc<BufferResource>,
     pub visible_bounds: VisibleBounds,
 }

@@ -20,10 +20,14 @@ use super::{
 
 struct DynMeshUpload {
     pub mesh_data: DynMeshData,
-    pub vertex_upload_id: BufferUploadId,
-    pub vertex_rx: Receiver<BufferUploadResult>,
-    pub vertex_buffer: Option<RafxBuffer>,
-    pub vertex_buffer_uploaded: bool,
+    pub vertex_full_upload_id: BufferUploadId,
+    pub vertex_full_rx: Receiver<BufferUploadResult>,
+    pub vertex_full_buffer: Option<RafxBuffer>,
+    pub vertex_full_buffer_uploaded: bool,
+    pub vertex_position_upload_id: BufferUploadId,
+    pub vertex_position_rx: Receiver<BufferUploadResult>,
+    pub vertex_position_buffer: Option<RafxBuffer>,
+    pub vertex_position_buffer_uploaded: bool,
     pub index_upload_id: BufferUploadId,
     pub index_rx: Receiver<BufferUploadResult>,
     pub index_buffer: Option<RafxBuffer>,
@@ -77,9 +81,12 @@ pub struct DynMeshManager {
     cmd_out_tx: Sender<DynMeshCommandResults>,
     cmd_out_rx: Receiver<DynMeshCommandResults>,
     uploader: Option<BufferUploader>,
-    vertex_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
-    vertex_tx: Sender<BufferUploadResult>,
-    vertex_rx: Receiver<BufferUploadResult>,
+    vertex_full_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
+    vertex_full_tx: Sender<BufferUploadResult>,
+    vertex_full_rx: Receiver<BufferUploadResult>,
+    vertex_position_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
+    vertex_position_tx: Sender<BufferUploadResult>,
+    vertex_position_rx: Receiver<BufferUploadResult>,
     index_uploads: FnvHashMap<BufferUploadId, DynMeshHandle>,
     index_tx: Sender<BufferUploadResult>,
     index_rx: Receiver<BufferUploadResult>,
@@ -89,7 +96,8 @@ impl DynMeshManager {
     pub fn new() -> Self {
         let (cmd_in_tx, cmd_in_rx) = crossbeam_channel::unbounded();
         let (cmd_out_tx, cmd_out_rx) = crossbeam_channel::unbounded();
-        let (vertex_tx, vertex_rx) = crossbeam_channel::unbounded();
+        let (vertex_full_tx, vertex_full_rx) = crossbeam_channel::unbounded();
+        let (vertex_position_tx, vertex_position_rx) = crossbeam_channel::unbounded();
         let (index_tx, index_rx) = crossbeam_channel::unbounded();
         Self {
             storage: Default::default(),
@@ -98,9 +106,12 @@ impl DynMeshManager {
             cmd_out_tx,
             cmd_out_rx,
             uploader: None,
-            vertex_uploads: Default::default(),
-            vertex_tx,
-            vertex_rx,
+            vertex_full_uploads: Default::default(),
+            vertex_full_tx,
+            vertex_full_rx,
+            vertex_position_uploads: Default::default(),
+            vertex_position_tx,
+            vertex_position_rx,
             index_uploads: Default::default(),
             index_tx,
             index_rx,
@@ -138,25 +149,34 @@ impl DynMeshManager {
         mut mesh_data: DynMeshData,
         handle: Option<&DynMeshHandle>,
     ) -> RafxResult<DynMeshState> {
-        if mesh_data.vertex_buffer.is_none() || mesh_data.index_buffer.is_none() {
+        if mesh_data.vertex_full_buffer.is_none()
+            || mesh_data.vertex_position_buffer.is_none()
+            || mesh_data.index_buffer.is_none()
+        {
             return Err(RafxError::StringError(
                 "Dyn mesh data is not initialized".to_string(),
             ));
         }
-        let vertex_data = std::mem::take(&mut mesh_data.vertex_buffer).unwrap();
+        let vertex_full_data = std::mem::take(&mut mesh_data.vertex_full_buffer).unwrap();
+        let vertex_position_data = std::mem::take(&mut mesh_data.vertex_position_buffer).unwrap();
         let index_data = std::mem::take(&mut mesh_data.index_buffer).unwrap();
 
-        if vertex_data.is_empty() || index_data.is_empty() {
+        if vertex_full_data.is_empty() || vertex_position_data.is_empty() || index_data.is_empty() {
             return Err(RafxError::StringError(
                 "Dyn mesh data does not contain data".to_string(),
             ));
         }
 
         let uploader = self.uploader.as_ref().unwrap();
-        let vertex_upload_id = uploader.upload_buffer(
+        let vertex_full_upload_id = uploader.upload_buffer(
             RafxResourceType::VERTEX_BUFFER,
-            vertex_data,
-            self.vertex_tx.clone(),
+            vertex_full_data,
+            self.vertex_full_tx.clone(),
+        )?;
+        let vertex_position_upload_id = uploader.upload_buffer(
+            RafxResourceType::VERTEX_BUFFER,
+            vertex_position_data,
+            self.vertex_position_tx.clone(),
         )?;
         let index_upload_id = uploader.upload_buffer(
             RafxResourceType::INDEX_BUFFER,
@@ -175,10 +195,14 @@ impl DynMeshManager {
         Ok(DynMeshState::Uploading(
             DynMeshUpload {
                 mesh_data,
-                vertex_upload_id,
-                vertex_rx: self.vertex_rx.clone(),
-                vertex_buffer: None,
-                vertex_buffer_uploaded: false,
+                vertex_full_upload_id,
+                vertex_full_rx: self.vertex_full_rx.clone(),
+                vertex_full_buffer: None,
+                vertex_full_buffer_uploaded: false,
+                vertex_position_upload_id,
+                vertex_position_rx: self.vertex_position_rx.clone(),
+                vertex_position_buffer: None,
+                vertex_position_buffer_uploaded: false,
                 index_upload_id,
                 index_rx: self.index_rx.clone(),
                 index_buffer: None,
@@ -190,18 +214,18 @@ impl DynMeshManager {
 
     #[profiling::function]
     fn process_upload_results(&mut self, asset_manager: &mut AssetManager) {
-        for upload_result in self.vertex_rx.try_iter().collect::<Vec<_>>() {
+        for upload_result in self.vertex_full_rx.try_iter().collect::<Vec<_>>() {
             let (upload_id, buffer) = match upload_result {
                 BufferUploadResult::UploadError(upload_id) => (upload_id, None),
                 BufferUploadResult::UploadDrop(upload_id) => (upload_id, None),
                 BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
             };
-            let handle = self.vertex_uploads.get(&upload_id).unwrap().clone();
+            let handle = self.vertex_full_uploads.get(&upload_id).unwrap().clone();
             if let (Some(buffer), DynMeshState::Uploading(ref mut upload, _)) =
                 (buffer, self.get_mut(&handle))
             {
-                upload.vertex_buffer = Some(buffer);
-                upload.vertex_buffer_uploaded = true;
+                upload.vertex_full_buffer = Some(buffer);
+                upload.vertex_full_buffer_uploaded = true;
             } else {
                 log::error!(
                     "Vertex buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
@@ -210,7 +234,34 @@ impl DynMeshManager {
                 );
                 let _old = std::mem::replace(self.get_mut(&handle), DynMeshState::UploadError);
             }
-            self.vertex_uploads.remove(&upload_id);
+            self.vertex_full_uploads.remove(&upload_id);
+            self.check_finished_upload(&handle, asset_manager);
+        }
+        for upload_result in self.vertex_position_rx.try_iter().collect::<Vec<_>>() {
+            let (upload_id, buffer) = match upload_result {
+                BufferUploadResult::UploadError(upload_id) => (upload_id, None),
+                BufferUploadResult::UploadDrop(upload_id) => (upload_id, None),
+                BufferUploadResult::UploadComplete(upload_id, buffer) => (upload_id, Some(buffer)),
+            };
+            let handle = self
+                .vertex_position_uploads
+                .get(&upload_id)
+                .unwrap()
+                .clone();
+            if let (Some(buffer), DynMeshState::Uploading(ref mut upload, _)) =
+                (buffer, self.get_mut(&handle))
+            {
+                upload.vertex_position_buffer = Some(buffer);
+                upload.vertex_position_buffer_uploaded = true;
+            } else {
+                log::error!(
+                    "Vertex buffer upload error (upload id: {:?}) for dyn mesh: {:?}",
+                    upload_id,
+                    handle
+                );
+                let _old = std::mem::replace(self.get_mut(&handle), DynMeshState::UploadError);
+            }
+            self.vertex_position_uploads.remove(&upload_id);
             self.check_finished_upload(&handle, asset_manager);
         }
         for upload_result in self.index_rx.try_iter().collect::<Vec<_>>() {
@@ -241,14 +292,23 @@ impl DynMeshManager {
     fn check_finished_upload(&mut self, handle: &DynMeshHandle, asset_manager: &mut AssetManager) {
         let mesh_state = self.get_mut(handle);
         if let DynMeshState::Uploading(upload, _) = mesh_state {
-            if !upload.vertex_buffer_uploaded || !upload.index_buffer_uploaded {
+            if !upload.vertex_full_buffer_uploaded
+                || !upload.vertex_position_buffer_uploaded
+                || !upload.index_buffer_uploaded
+            {
                 return;
             }
-            if let (Some(vertex_buffer), Some(index_buffer)) =
-                (upload.vertex_buffer.take(), upload.index_buffer.take())
-            {
+            if let (Some(vertex_full_buffer), Some(vertex_position_buffer), Some(index_buffer)) = (
+                upload.vertex_full_buffer.take(),
+                upload.vertex_position_buffer.take(),
+                upload.index_buffer.take(),
+            ) {
                 let visible_bounds = upload.mesh_data.visible_bounds;
-                let vertex_buffer = asset_manager.resources().insert_buffer(vertex_buffer);
+                let vertex_full_buffer =
+                    asset_manager.resources().insert_buffer(vertex_full_buffer);
+                let vertex_position_buffer = asset_manager
+                    .resources()
+                    .insert_buffer(vertex_position_buffer);
                 let index_buffer = asset_manager.resources().insert_buffer(index_buffer);
                 let mesh_parts: Vec<_> = upload
                     .mesh_data
@@ -301,8 +361,14 @@ impl DynMeshManager {
                             textured_pass_index,
                             untextured_pass_index,
                             wireframe_pass_index,
-                            vertex_buffer_offset_in_bytes: mesh_part.vertex_buffer_offset_in_bytes,
-                            vertex_buffer_size_in_bytes: mesh_part.vertex_buffer_size_in_bytes,
+                            vertex_full_buffer_offset_in_bytes: mesh_part
+                                .vertex_full_buffer_offset_in_bytes,
+                            vertex_full_buffer_size_in_bytes: mesh_part
+                                .vertex_full_buffer_size_in_bytes,
+                            vertex_position_buffer_offset_in_bytes: mesh_part
+                                .vertex_position_buffer_offset_in_bytes,
+                            vertex_position_buffer_size_in_bytes: mesh_part
+                                .vertex_position_buffer_size_in_bytes,
                             index_buffer_offset_in_bytes: mesh_part.index_buffer_offset_in_bytes,
                             index_buffer_size_in_bytes: mesh_part.index_buffer_size_in_bytes,
                             index_type: mesh_part.index_type,
@@ -311,7 +377,8 @@ impl DynMeshManager {
                     .collect();
 
                 let inner = DynMeshInner {
-                    vertex_buffer,
+                    vertex_full_buffer,
+                    vertex_position_buffer,
                     index_buffer,
                     mesh_parts,
                     visible_bounds,
@@ -339,8 +406,10 @@ impl DynMeshManager {
 
         let mesh_state = self.storage.get(&drop_slab_key).unwrap();
         if let DynMeshState::Uploading(upload, _) = mesh_state {
-            self.vertex_uploads
-                .insert(upload.vertex_upload_id.clone(), handle.clone());
+            self.vertex_full_uploads
+                .insert(upload.vertex_full_upload_id.clone(), handle.clone());
+            self.vertex_position_uploads
+                .insert(upload.vertex_position_upload_id.clone(), handle.clone());
             self.index_uploads
                 .insert(upload.index_upload_id.clone(), handle.clone());
         } else {
@@ -401,8 +470,12 @@ impl DynMeshManager {
                     let result = match self.start_upload(data, Some(&handle)) {
                         Ok(mesh_state) => {
                             if let DynMeshState::Uploading(ref upload, _) = mesh_state {
-                                self.vertex_uploads
-                                    .insert(upload.vertex_upload_id.clone(), handle.clone());
+                                self.vertex_full_uploads
+                                    .insert(upload.vertex_full_upload_id.clone(), handle.clone());
+                                self.vertex_position_uploads.insert(
+                                    upload.vertex_position_upload_id.clone(),
+                                    handle.clone(),
+                                );
                                 self.index_uploads
                                     .insert(upload.index_upload_id.clone(), handle.clone());
                             } else {

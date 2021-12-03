@@ -34,7 +34,8 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
     },
-    features::mesh::MeshVertex,
+    features::mesh::MeshVertexFull,
+    features::mesh::MeshVertexPosition,
 };
 
 use crate::{
@@ -868,7 +869,10 @@ impl Universe {
         }
 
         let num_quads = quads.num_quads();
-        let mut all_vertices = PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertex>());
+        let mut all_vertices_full =
+            PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertexFull>());
+        let mut all_vertices_position =
+            PushBuffer::new(num_quads * 4 * std::mem::size_of::<MeshVertexPosition>());
         let mut all_indices = PushBuffer::new(
             num_quads
                 * 6
@@ -890,7 +894,8 @@ impl Universe {
                     } else {
                         RafxIndexType::Uint16
                     };
-                    let vertex_offset = all_vertices.len();
+                    let vertex_full_offset = all_vertices_full.len();
+                    let vertex_position_offset = all_vertices_position.len();
                     let indices_offset = all_indices.len();
                     for group in quads.quad_groups.iter() {
                         let face = &group.face;
@@ -907,8 +912,12 @@ impl Universe {
                                 flipped_u.x() as f32,
                                 flipped_u.y() as f32,
                                 flipped_u.z() as f32,
-                                1., // right handed
                             ]
+                        };
+                        let binormal = {
+                            let normal = Vec3::from(normal);
+                            let tangent = Vec3::from(tangent);
+                            normal.cross(tangent).normalize().into()
                         };
                         for quad in group.quads.iter() {
                             let mut positions: Vec<[f32; 3]> = Vec::new();
@@ -921,14 +930,21 @@ impl Universe {
                             ));
                             let indices_u32 = &face.quad_mesh_indices(vertices_num);
                             for i in 0..4 {
-                                all_vertices.push(
-                                    &[MeshVertex {
+                                all_vertices_full.push(
+                                    &[MeshVertexFull {
                                         position: positions[i],
                                         normal,
                                         tangent,
+                                        binormal,
                                         tex_coord: uvs[i],
                                     }],
-                                    4,
+                                    1,
+                                );
+                                all_vertices_position.push(
+                                    &[MeshVertexPosition {
+                                        position: positions[i],
+                                    }],
+                                    1,
                                 );
                             }
                             match index_type {
@@ -946,16 +962,19 @@ impl Universe {
                             vertices_num += 4;
                         }
                     }
-                    let vertex_size = all_vertices.len() - vertex_offset;
+                    let vertex_full_size = all_vertices_full.len() - vertex_full_offset;
+                    let vertex_position_size = all_vertices_position.len() - vertex_position_offset;
                     let indices_size = all_indices.len() - indices_offset;
 
-                    if vertex_size == 0 || indices_size == 0 {
+                    if vertex_full_size == 0 || vertex_position_size == 0 || indices_size == 0 {
                         None
                     } else {
                         Some(DynMeshDataPart {
                             material_instance: pbr_material.get_material_instance(),
-                            vertex_buffer_offset_in_bytes: vertex_offset as u32,
-                            vertex_buffer_size_in_bytes: vertex_size as u32,
+                            vertex_full_buffer_offset_in_bytes: vertex_full_offset as u32,
+                            vertex_full_buffer_size_in_bytes: vertex_full_size as u32,
+                            vertex_position_buffer_offset_in_bytes: vertex_position_offset as u32,
+                            vertex_position_buffer_size_in_bytes: vertex_position_size as u32,
                             index_buffer_offset_in_bytes: indices_offset as u32,
                             index_buffer_size_in_bytes: indices_size as u32,
                             index_type,
@@ -983,7 +1002,8 @@ impl Universe {
 
         Some(DynMeshData {
             mesh_parts,
-            vertex_buffer: Some(all_vertices.into_data()),
+            vertex_full_buffer: Some(all_vertices_full.into_data()),
+            vertex_position_buffer: Some(all_vertices_position.into_data()),
             index_buffer: Some(all_indices.into_data()),
             visible_bounds: Self::make_visible_bounds(&voxels.extent().padded(-1), 0),
         })

@@ -8,22 +8,14 @@ use rafx::{
     framework::{MaterialPassResource, ResourceArc, VertexDataLayout, VertexDataSetLayout},
     render_feature_write_job_prelude::*,
 };
+use rafx_plugins::{
+    features::mesh::{MeshVertexFull, MeshVertexPosition},
+    phases::OpaqueRenderPhase,
+};
 use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::phases::{DepthPrepassRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase};
-
-/// Vertex format for vertices sent to the GPU
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
-#[repr(C)]
-pub struct DynMeshVertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    // w component is a sign value (-1 or +1) indicating handedness of the tangent basis
-    // see GLTF spec for more info
-    pub tangent: [f32; 4],
-    pub tex_coord: [f32; 2],
-}
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
 #[repr(C)]
@@ -32,14 +24,32 @@ pub struct DynMeshModelMatrix {
 }
 
 lazy_static::lazy_static! {
-    pub static ref MESH_VERTEX_LAYOUT : VertexDataSetLayout = {
+    pub static ref MESH_VERTEX_FULL_LAYOUT : VertexDataSetLayout = {
         use rafx::api::RafxFormat;
 
-        let per_vertex = VertexDataLayout::build_vertex_layout(&DynMeshVertex::default(), RafxVertexAttributeRate::Vertex, |builder, vertex| {
+        let per_vertex = VertexDataLayout::build_vertex_layout(&MeshVertexFull::default(), RafxVertexAttributeRate::Vertex, |builder, vertex| {
             builder.add_member(&vertex.position, "POSITION", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.normal, "NORMAL", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.tangent, "TANGENT", RafxFormat::R32G32B32A32_SFLOAT);
+            builder.add_member(&vertex.binormal, "BINORMAL", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.tex_coord, "TEXCOORD", RafxFormat::R32G32_SFLOAT);
+        });
+
+        let per_instance = VertexDataLayout::build_vertex_layout(&DynMeshModelMatrix::default(), RafxVertexAttributeRate::Instance,  |builder, vertex| {
+            builder.add_member(&vertex.model_matrix[0], "MODELMATRIX0", RafxFormat::R32G32B32A32_SFLOAT);
+            builder.add_member(&vertex.model_matrix[1], "MODELMATRIX1", RafxFormat::R32G32B32A32_SFLOAT);
+            builder.add_member(&vertex.model_matrix[2], "MODELMATRIX2", RafxFormat::R32G32B32A32_SFLOAT);
+            builder.add_member(&vertex.model_matrix[3], "MODELMATRIX3", RafxFormat::R32G32B32A32_SFLOAT);
+        });
+
+        VertexDataSetLayout::new(vec![per_vertex, per_instance], RafxPrimitiveTopology::TriangleList)
+    };
+
+    pub static ref MESH_VERTEX_POSITION_LAYOUT : VertexDataSetLayout = {
+        use rafx::api::RafxFormat;
+
+        let per_vertex = VertexDataLayout::build_vertex_layout(&MeshVertexPosition::default(), RafxVertexAttributeRate::Vertex, |builder, vertex| {
+            builder.add_member(&vertex.position, "POSITION", RafxFormat::R32G32B32_SFLOAT);
         });
 
         let per_instance = VertexDataLayout::build_vertex_layout(&DynMeshModelMatrix::default(), RafxVertexAttributeRate::Instance,  |builder, vertex| {
@@ -139,6 +149,21 @@ impl<'write> RenderFeatureWriteJob<'write> for DynMeshWriteJob<'write> {
 
         // Bind the correct pipeline.
 
+        let (mesh_vertex_layout, vertex_buffer, vertex_buffer_offset_in_bytes) =
+            if render_phase_index == OpaqueRenderPhase::render_phase_index() {
+                (
+                    &*MESH_VERTEX_FULL_LAYOUT,
+                    &dyn_mesh.inner.vertex_full_buffer,
+                    mesh_part.vertex_full_buffer_offset_in_bytes,
+                )
+            } else {
+                (
+                    &*MESH_VERTEX_POSITION_LAYOUT,
+                    &dyn_mesh.inner.vertex_position_buffer,
+                    mesh_part.vertex_position_buffer_offset_in_bytes,
+                )
+            };
+
         let pipeline = write_context
             .resource_context
             .graphics_pipeline_cache()
@@ -146,7 +171,7 @@ impl<'write> RenderFeatureWriteJob<'write> for DynMeshWriteJob<'write> {
                 render_phase_index,
                 material_pass,
                 &write_context.render_target_meta,
-                &*MESH_VERTEX_LAYOUT,
+                mesh_vertex_layout,
             )?;
 
         command_buffer.cmd_bind_pipeline(&pipeline.get_raw().pipeline)?;
@@ -176,8 +201,8 @@ impl<'write> RenderFeatureWriteJob<'write> for DynMeshWriteJob<'write> {
             &[
                 // NOTE(dvd): Bind the mesh vertex data.
                 RafxVertexBufferBinding {
-                    buffer: &dyn_mesh.inner.vertex_buffer.get_raw().buffer,
-                    byte_offset: mesh_part.vertex_buffer_offset_in_bytes as u64,
+                    buffer: &vertex_buffer.get_raw().buffer,
+                    byte_offset: vertex_buffer_offset_in_bytes as u64,
                 },
                 // NOTE(dvd): Bind the mesh model matrices. We pass these through instanced vertex
                 // attributes instead of descriptor sets so that we don't spend CPU time managing

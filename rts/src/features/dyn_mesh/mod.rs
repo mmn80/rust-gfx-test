@@ -28,8 +28,6 @@ rafx::declare_render_feature_flag!(
 mod plugin;
 pub use plugin::*;
 
-pub use jobs::DynMeshVertex;
-
 mod buffer_upload;
 mod dyn_mesh;
 pub use dyn_mesh::*;

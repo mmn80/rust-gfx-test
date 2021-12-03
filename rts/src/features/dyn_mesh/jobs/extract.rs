@@ -5,8 +5,11 @@ use rafx::{
     distill::loader::handle::Handle,
     render_feature_extract_job_predule::*,
 };
-use rafx_plugins::components::{
-    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+use rafx_plugins::{
+    components::{
+        DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+    },
+    features::mesh::MeshRenderOptions,
 };
 
 use super::*;
