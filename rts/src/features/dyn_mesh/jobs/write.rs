@@ -30,7 +30,7 @@ lazy_static::lazy_static! {
         let per_vertex = VertexDataLayout::build_vertex_layout(&MeshVertexFull::default(), RafxVertexAttributeRate::Vertex, |builder, vertex| {
             builder.add_member(&vertex.position, "POSITION", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.normal, "NORMAL", RafxFormat::R32G32B32_SFLOAT);
-            builder.add_member(&vertex.tangent, "TANGENT", RafxFormat::R32G32B32A32_SFLOAT);
+            builder.add_member(&vertex.tangent, "TANGENT", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.binormal, "BINORMAL", RafxFormat::R32G32B32_SFLOAT);
             builder.add_member(&vertex.tex_coord, "TEXCOORD", RafxFormat::R32G32_SFLOAT);
         });
