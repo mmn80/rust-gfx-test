@@ -10,7 +10,7 @@ pub struct PbrMaterialAssetTypeRendererPlugin;
 
 impl RendererAssetPlugin for PbrMaterialAssetTypeRendererPlugin {
     fn configure_asset_daemon(&self, asset_daemon: AssetDaemon) -> AssetDaemon {
-        asset_daemon.with_importer("pbrmaterial", PbrMaterialImporter)
+        asset_daemon.with_importer(&["pbrmaterial"], PbrMaterialImporter)
     }
 
     fn register_asset_types(

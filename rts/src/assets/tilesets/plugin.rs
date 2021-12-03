@@ -10,7 +10,7 @@ pub struct TileSetsAssetTypeRendererPlugin;
 
 impl RendererAssetPlugin for TileSetsAssetTypeRendererPlugin {
     fn configure_asset_daemon(&self, asset_daemon: AssetDaemon) -> AssetDaemon {
-        asset_daemon.with_importer("tilesets", TileSetsImporter)
+        asset_daemon.with_importer(&["tilesets"], TileSetsImporter)
     }
 
     fn register_asset_types(
