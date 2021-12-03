@@ -80,7 +80,7 @@ impl MainScene {
         *render_options = RenderOptions::default_3d();
 
         let mut mesh_render_options = resources.get_mut::<MeshRenderOptions>().unwrap();
-        mesh_render_options.ambient_light = glam::Vec3::new(0.02, 0.02, 0.02);
+        mesh_render_options.ambient_light = glam::Vec3::new(0.005, 0.005, 0.005);
 
         let font = {
             let asset_resource = resources.get_mut::<AssetResource>().unwrap();
