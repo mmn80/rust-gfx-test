@@ -70,160 +70,167 @@ impl UiState {
     ) {
         let context = resources.get::<EguiContextResource>().unwrap().context();
         profiling::scope!("egui");
-        egui::SidePanel::left("ui_panel", 250.0).show(&context, |ui| {
-            {
-                let time_state = resources.get::<TimeState>().unwrap();
-                let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
-                let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
-                let tonemap_debug_data = resources.get::<BasicPipelineTonemapDebugData>().unwrap();
-                let asset_manager = resources.get::<AssetResource>().unwrap();
+        egui::SidePanel::left("ui_panel")
+            .default_width(250.)
+            .show(&context, |ui| {
+                {
+                    let time_state = resources.get::<TimeState>().unwrap();
+                    let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
+                    let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
+                    let tonemap_debug_data =
+                        resources.get::<BasicPipelineTonemapDebugData>().unwrap();
+                    let asset_manager = resources.get::<AssetResource>().unwrap();
 
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(), |ui| {
-                        ui.label(format!("Frame: {}", time_state.update_count()));
-                        ui.separator();
-                        ui.label(format!(
-                            "FPS: {:.1}",
-                            time_state.updates_per_second_smoothed()
-                        ));
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(), |ui| {
+                            ui.label(format!("Frame: {}", time_state.update_count()));
+                            ui.separator();
+                            ui.label(format!(
+                                "FPS: {:.1}",
+                                time_state.updates_per_second_smoothed()
+                            ));
+                        });
                     });
-                });
 
-                egui::CollapsingHeader::new("Options")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.checkbox(&mut debug_ui_state.show_render_options, "Render options");
-                        ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset list");
-                        ui.checkbox(&mut debug_ui_state.show_tonemap_debug, "Tonemap debug");
+                    egui::CollapsingHeader::new("Options")
+                        .default_open(true)
+                        .show(ui, |ui| {
+                            ui.checkbox(&mut debug_ui_state.show_render_options, "Render options");
+                            ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset list");
+                            ui.checkbox(&mut debug_ui_state.show_tonemap_debug, "Tonemap debug");
 
-                        #[cfg(feature = "profile-with-puffin")]
-                        if ui
-                            .checkbox(&mut debug_ui_state.show_profiler, "Profiler")
-                            .changed()
-                        {
-                            log::info!(
-                                "Setting puffin profiler enabled: {:?}",
-                                debug_ui_state.show_profiler
-                            );
-                            profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
+                            #[cfg(feature = "profile-with-puffin")]
+                            if ui
+                                .checkbox(&mut debug_ui_state.show_profiler, "Profiler")
+                                .changed()
+                            {
+                                log::info!(
+                                    "Setting puffin profiler enabled: {:?}",
+                                    debug_ui_state.show_profiler
+                                );
+                                profiling::puffin::set_scopes_on(debug_ui_state.show_profiler);
+                            }
+                        });
+
+                    if debug_ui_state.show_render_options {
+                        egui::CollapsingHeader::new("Render options")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                render_options.ui(ui);
+                            });
+                    }
+
+                    if debug_ui_state.show_asset_list {
+                        egui::CollapsingHeader::new("Asset list")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .max_height(400.)
+                                    .show(ui, |ui| {
+                                        let loader = asset_manager.loader();
+                                        let mut asset_info = loader
+                                            .get_active_loads()
+                                            .into_iter()
+                                            .map(|item| loader.get_load_info(item))
+                                            .collect::<Vec<_>>();
+                                        asset_info.sort_by(|x, y| {
+                                            x.as_ref()
+                                                .map(|x| &x.path)
+                                                .cmp(&y.as_ref().map(|y| &y.path))
+                                        });
+                                        for info in asset_info {
+                                            if let Some(info) = info {
+                                                let id = info.asset_id;
+                                                let _res = ui.selectable_label(
+                                                    false,
+                                                    format!(
+                                                        "{}:{} .. {}",
+                                                        info.file_name
+                                                            .unwrap_or_else(|| "???".to_string()),
+                                                        info.asset_name
+                                                            .unwrap_or_else(|| format!("{}", id)),
+                                                        info.refs
+                                                    ),
+                                                );
+                                            } else {
+                                                ui.label("NO INFO");
+                                            }
+                                        }
+                                    });
+                            });
+                    }
+
+                    if debug_ui_state.show_tonemap_debug {
+                        egui::Window::new("Tonemap Debug")
+                            .open(&mut debug_ui_state.show_tonemap_debug)
+                            .show(&context, |ui| {
+                                let data = tonemap_debug_data.inner.lock().unwrap();
+
+                                ui.add(egui::Label::new(format!(
+                                    "histogram_sample_count: {}",
+                                    data.histogram_sample_count
+                                )));
+                                ui.add(egui::Label::new(format!(
+                                    "histogram_max_value: {}",
+                                    data.histogram_max_value
+                                )));
+
+                                use egui::plot::{Line, Plot, VLine, Value, Values};
+                                let line_values: Vec<_> = data
+                                    .histogram
+                                    .iter()
+                                    //.skip(1) // don't include index 0
+                                    .enumerate()
+                                    .map(|(i, value)| Value::new(i as f64, *value as f64))
+                                    .collect();
+                                let line =
+                                    Line::new(Values::from_values_iter(line_values.into_iter()))
+                                        .fill(0.0);
+                                let average_line = VLine::new(data.result_average_bin);
+                                let low_line = VLine::new(data.result_low_bin);
+                                let high_line = VLine::new(data.result_high_bin);
+                                Some(
+                                    ui.add(
+                                        Plot::new("my_plot")
+                                            .line(line)
+                                            .vline(average_line)
+                                            .vline(low_line)
+                                            .vline(high_line)
+                                            .include_y(0.0)
+                                            .include_y(1.0)
+                                            .show_axes([false, false]),
+                                    ),
+                                )
+                            });
+                    }
+
+                    #[cfg(feature = "profile-with-puffin")]
+                    if debug_ui_state.show_profiler {
+                        profiling::scope!("puffin profiler");
+                        puffin_egui::profiler_window(&context);
+                    }
+                }
+
+                if let Some(main_state) = main_state {
+                    main_state.update_ui(simulation, resources, self, ui);
+                }
+                if let Some(env_state) = env_state {
+                    env_state.update_ui(simulation, resources, self, ui);
+                }
+                if let Some(units_state) = units_state {
+                    units_state.update_ui(simulation, resources, self, ui);
+                }
+
+                if !self.error.is_empty() {
+                    ui.with_layout(egui::Layout::bottom_up(Align::Center), |ui| {
+                        ui.visuals_mut().override_text_color = Some(Color32::RED);
+                        ui.style_mut().body_text_style = egui::TextStyle::Heading;
+                        if ui.selectable_label(false, &self.error).clicked() {
+                            self.error.clear();
                         }
                     });
-
-                if debug_ui_state.show_render_options {
-                    egui::CollapsingHeader::new("Render options")
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            render_options.ui(ui);
-                        });
                 }
-
-                if debug_ui_state.show_asset_list {
-                    egui::CollapsingHeader::new("Asset list")
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            egui::ScrollArea::from_max_height(400.).show(ui, |ui| {
-                                let loader = asset_manager.loader();
-                                let mut asset_info = loader
-                                    .get_active_loads()
-                                    .into_iter()
-                                    .map(|item| loader.get_load_info(item))
-                                    .collect::<Vec<_>>();
-                                asset_info.sort_by(|x, y| {
-                                    x.as_ref()
-                                        .map(|x| &x.path)
-                                        .cmp(&y.as_ref().map(|y| &y.path))
-                                });
-                                for info in asset_info {
-                                    if let Some(info) = info {
-                                        let id = info.asset_id;
-                                        let _res = ui.selectable_label(
-                                            false,
-                                            format!(
-                                                "{}:{} .. {}",
-                                                info.file_name.unwrap_or_else(|| "???".to_string()),
-                                                info.asset_name
-                                                    .unwrap_or_else(|| format!("{}", id)),
-                                                info.refs
-                                            ),
-                                        );
-                                    } else {
-                                        ui.label("NO INFO");
-                                    }
-                                }
-                            });
-                        });
-                }
-
-                if debug_ui_state.show_tonemap_debug {
-                    egui::Window::new("Tonemap Debug")
-                        .open(&mut debug_ui_state.show_tonemap_debug)
-                        .show(&ctx, |ui| {
-                            let data = tonemap_debug_data.inner.lock().unwrap();
-
-                            ui.add(egui::Label::new(format!(
-                                "histogram_sample_count: {}",
-                                data.histogram_sample_count
-                            )));
-                            ui.add(egui::Label::new(format!(
-                                "histogram_max_value: {}",
-                                data.histogram_max_value
-                            )));
-
-                            use egui::plot::{Line, Plot, VLine, Value, Values};
-                            let line_values: Vec<_> = data
-                                .histogram
-                                .iter()
-                                //.skip(1) // don't include index 0
-                                .enumerate()
-                                .map(|(i, value)| Value::new(i as f64, *value as f64))
-                                .collect();
-                            let line = Line::new(Values::from_values_iter(line_values.into_iter()))
-                                .fill(0.0);
-                            let average_line = VLine::new(data.result_average_bin);
-                            let low_line = VLine::new(data.result_low_bin);
-                            let high_line = VLine::new(data.result_high_bin);
-                            Some(
-                                ui.add(
-                                    Plot::new("my_plot")
-                                        .line(line)
-                                        .vline(average_line)
-                                        .vline(low_line)
-                                        .vline(high_line)
-                                        .include_y(0.0)
-                                        .include_y(1.0)
-                                        .show_axes([false, false]),
-                                ),
-                            )
-                        });
-                }
-
-                #[cfg(feature = "profile-with-puffin")]
-                if debug_ui_state.show_profiler {
-                    profiling::scope!("puffin profiler");
-                    puffin_egui::profiler_window(&context);
-                }
-            }
-
-            if let Some(main_state) = main_state {
-                main_state.update_ui(simulation, resources, self, ui);
-            }
-            if let Some(env_state) = env_state {
-                env_state.update_ui(simulation, resources, self, ui);
-            }
-            if let Some(units_state) = units_state {
-                units_state.update_ui(simulation, resources, self, ui);
-            }
-
-            if !self.error.is_empty() {
-                ui.with_layout(egui::Layout::bottom_up(Align::Center), |ui| {
-                    ui.visuals_mut().override_text_color = Some(Color32::RED);
-                    ui.style_mut().body_text_style = egui::TextStyle::Heading;
-                    if ui.selectable_label(false, &self.error).clicked() {
-                        self.error.clear();
-                    }
-                });
-            }
-        });
+            });
     }
 
     pub fn error(&mut self, message: String) {
