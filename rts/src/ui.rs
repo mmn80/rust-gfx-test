@@ -2,7 +2,9 @@ use egui::{Align, Checkbox, Color32};
 use glam::Vec4;
 use legion::Resources;
 use rafx::render_feature_renderer_prelude::AssetResource;
-use rafx_plugins::features::egui::EguiContextResource;
+use rafx_plugins::{
+    features::egui::EguiContextResource, pipelines::basic::BasicPipelineTonemapDebugData,
+};
 
 use crate::{
     env::{env::EnvState, simulation::Simulation, ui::EnvUiState},
@@ -73,6 +75,7 @@ impl UiState {
                 let time_state = resources.get::<TimeState>().unwrap();
                 let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
                 let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
+                let tonemap_debug_data = resources.get::<BasicPipelineTonemapDebugData>().unwrap();
                 let asset_manager = resources.get::<AssetResource>().unwrap();
 
                 ui.horizontal(|ui| {
@@ -91,6 +94,7 @@ impl UiState {
                     .show(ui, |ui| {
                         ui.checkbox(&mut debug_ui_state.show_render_options, "Render options");
                         ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset list");
+                        ui.checkbox(&mut debug_ui_state.show_tonemap_debug, "Tonemap debug");
 
                         #[cfg(feature = "profile-with-puffin")]
                         if ui
@@ -147,6 +151,49 @@ impl UiState {
                                     }
                                 }
                             });
+                        });
+                }
+
+                if debug_ui_state.show_tonemap_debug {
+                    egui::Window::new("Tonemap Debug")
+                        .open(&mut debug_ui_state.show_tonemap_debug)
+                        .show(&ctx, |ui| {
+                            let data = tonemap_debug_data.inner.lock().unwrap();
+
+                            ui.add(egui::Label::new(format!(
+                                "histogram_sample_count: {}",
+                                data.histogram_sample_count
+                            )));
+                            ui.add(egui::Label::new(format!(
+                                "histogram_max_value: {}",
+                                data.histogram_max_value
+                            )));
+
+                            use egui::plot::{Line, Plot, VLine, Value, Values};
+                            let line_values: Vec<_> = data
+                                .histogram
+                                .iter()
+                                //.skip(1) // don't include index 0
+                                .enumerate()
+                                .map(|(i, value)| Value::new(i as f64, *value as f64))
+                                .collect();
+                            let line = Line::new(Values::from_values_iter(line_values.into_iter()))
+                                .fill(0.0);
+                            let average_line = VLine::new(data.result_average_bin);
+                            let low_line = VLine::new(data.result_low_bin);
+                            let high_line = VLine::new(data.result_high_bin);
+                            Some(
+                                ui.add(
+                                    Plot::new("my_plot")
+                                        .line(line)
+                                        .vline(average_line)
+                                        .vline(low_line)
+                                        .vline(high_line)
+                                        .include_y(0.0)
+                                        .include_y(1.0)
+                                        .show_axes([false, false]),
+                                ),
+                            )
                         });
                 }
 

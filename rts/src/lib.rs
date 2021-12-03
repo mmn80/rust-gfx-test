@@ -13,7 +13,7 @@ use rafx::{
 use rafx_plugins::{
     features::{egui::WinitEguiManager, mesh::MeshRenderOptions},
     phases,
-    pipelines::basic::{BasicPipelineRenderOptions, TonemapperType},
+    pipelines::basic::{BasicPipelineRenderOptions, BasicPipelineTonemapDebugData, TonemapperType},
 };
 use structopt::StructOpt;
 use time::PeriodicEvent;
@@ -131,7 +131,7 @@ impl RenderOptions {
             show_shadows: true,
             show_feature_toggles: true,
             blur_pass_count: 5,
-            tonemapper_type: TonemapperType::LogDerivative,
+            tonemapper_type: TonemapperType::AutoExposureOld,
             enable_visibility_update: true,
         }
     }
@@ -205,6 +205,7 @@ impl RenderOptions {
 pub struct DebugUiState {
     show_render_options: bool,
     show_asset_list: bool,
+    show_tonemap_debug: bool,
 
     #[cfg(feature = "profile-with-puffin")]
     show_profiler: bool,
@@ -258,6 +259,7 @@ impl DemoApp {
         resources.insert(RenderOptions::default_2d());
         resources.insert(MeshRenderOptions::default());
         resources.insert(BasicPipelineRenderOptions::default());
+        resources.insert(BasicPipelineTonemapDebugData::default());
         resources.insert(DebugUiState::default());
         resources.insert(InputResource::new());
 
@@ -432,6 +434,12 @@ impl DemoApp {
         // Redraw
         //
         {
+            let dt = self
+                .resources
+                .get::<TimeState>()
+                .unwrap()
+                .previous_update_time();
+
             profiling::scope!("Start next frame render");
             let renderer = self.resources.get::<Renderer>().unwrap();
 
@@ -460,6 +468,7 @@ impl DemoApp {
             add_to_extract_resources!(TimeState);
             add_to_extract_resources!(RenderOptions);
             add_to_extract_resources!(BasicPipelineRenderOptions);
+            add_to_extract_resources!(BasicPipelineTonemapDebugData);
             add_to_extract_resources!(MeshRenderOptions);
             add_to_extract_resources!(RendererConfigResource);
             add_to_extract_resources!(
@@ -484,7 +493,7 @@ impl DemoApp {
             }
 
             renderer
-                .start_rendering_next_frame(&mut extract_resources)
+                .start_rendering_next_frame(&mut extract_resources, dt)
                 .unwrap();
         }
 
