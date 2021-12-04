@@ -160,12 +160,17 @@ impl UiState {
                             });
                     }
 
-                    if debug_ui_state.show_tonemap_debug {
-                        egui::Window::new("Tonemap Debug")
-                            .open(&mut debug_ui_state.show_tonemap_debug)
-                            .show(&context, |ui| {
-                                let data = tonemap_debug_data.inner.lock().unwrap();
+                    tonemap_debug_data
+                        .inner
+                        .lock()
+                        .unwrap()
+                        .enable_debug_data_collection = debug_ui_state.show_tonemap_debug;
 
+                    if debug_ui_state.show_tonemap_debug {
+                        egui::CollapsingHeader::new("Tonemap debug")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                let data = tonemap_debug_data.inner.lock().unwrap();
                                 ui.add(egui::Label::new(format!(
                                     "histogram_sample_count: {}",
                                     data.histogram_sample_count
@@ -174,7 +179,6 @@ impl UiState {
                                     "histogram_max_value: {}",
                                     data.histogram_max_value
                                 )));
-
                                 use egui::plot::{Line, Plot, VLine, Value, Values};
                                 let line_values: Vec<_> = data
                                     .histogram
@@ -189,18 +193,17 @@ impl UiState {
                                 let average_line = VLine::new(data.result_average_bin);
                                 let low_line = VLine::new(data.result_low_bin);
                                 let high_line = VLine::new(data.result_high_bin);
-                                Some(
-                                    ui.add(
-                                        Plot::new("my_plot")
-                                            .line(line)
-                                            .vline(average_line)
-                                            .vline(low_line)
-                                            .vline(high_line)
-                                            .include_y(0.0)
-                                            .include_y(1.0)
-                                            .show_axes([false, false]),
-                                    ),
-                                )
+                                ui.add(
+                                    Plot::new("my_plot")
+                                        .height(150.)
+                                        .line(line)
+                                        .vline(average_line)
+                                        .vline(low_line)
+                                        .vline(high_line)
+                                        .include_y(0.0)
+                                        .include_y(1.0)
+                                        .show_axes([false, false]),
+                                );
                             });
                     }
 
