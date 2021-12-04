@@ -131,7 +131,7 @@ impl RenderOptions {
             show_shadows: true,
             show_feature_toggles: true,
             blur_pass_count: 5,
-            tonemapper_type: TonemapperType::AutoExposureOld,
+            tonemapper_type: TonemapperType::Bergstrom,
             enable_visibility_update: true,
         }
     }
