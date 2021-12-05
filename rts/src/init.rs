@@ -13,13 +13,13 @@ use rafx::{
 use rafx_plugins::{
     assets::{
         anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin,
-        mesh::GltfAssetTypeRendererPlugin,
+        mesh_basic::MeshBasicAssetTypeRendererPlugin,
     },
     features::{
-        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin, mesh::MeshRendererPlugin,
-        text::TextRendererPlugin,
+        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin,
+        mesh_basic::MeshBasicRendererPlugin, text::TextRendererPlugin,
     },
-    pipelines::basic::{BasicPipelineRendererPlugin, BasicRenderGraphGenerator},
+    pipelines::basic::{BasicPipelineRenderGraphGenerator, BasicPipelineRendererPlugin},
 };
 use raw_window_handle::HasRawWindowHandle;
 
@@ -42,7 +42,7 @@ pub fn rendering_init(
     resources.insert(ViewportsResource::default());
     resources.insert(RTSCamera::default());
 
-    let mesh_renderer_plugin = Arc::new(MeshRendererPlugin::new(Some(32)));
+    let mesh_renderer_plugin = Arc::new(MeshBasicRendererPlugin::new(Some(32)));
     let dyn_mesh_renderer_plugin = Arc::new(DynMeshRendererPlugin::new(Some(32)));
     let debug3d_renderer_plugin = Arc::new(Debug3DRendererPlugin::default());
     let text_renderer_plugin = Arc::new(TextRendererPlugin::default());
@@ -73,7 +73,7 @@ pub fn rendering_init(
         .add_asset(Arc::new(TileAssetTypeRendererPlugin))
         .add_asset(Arc::new(TileSetsAssetTypeRendererPlugin))
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
-        .add_asset(Arc::new(GltfAssetTypeRendererPlugin))
+        .add_asset(Arc::new(MeshBasicAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))
         .add_asset(Arc::new(BasicPipelineRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
@@ -86,7 +86,7 @@ pub fn rendering_init(
     let mut renderer_builder_result = {
         let extract_resources = ExtractResources::default();
 
-        let render_graph_generator = Box::new(BasicRenderGraphGenerator);
+        let render_graph_generator = Box::new(BasicPipelineRenderGraphGenerator);
 
         renderer_builder.build(
             extract_resources,
@@ -154,7 +154,7 @@ pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
 
         resources.remove::<Renderer>();
 
-        MeshRendererPlugin::legion_destroy(resources);
+        MeshBasicRendererPlugin::legion_destroy(resources);
         DynMeshRendererPlugin::legion_destroy(resources);
         Debug3DRendererPlugin::legion_destroy(resources);
         TextRendererPlugin::legion_destroy(resources);

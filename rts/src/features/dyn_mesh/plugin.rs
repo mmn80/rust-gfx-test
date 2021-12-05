@@ -1,6 +1,6 @@
 use distill::loader::handle::Handle;
 use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
-use rafx_plugins::features::mesh::ShadowMapResource;
+use rafx_plugins::features::mesh_basic::MeshBasicShadowMapResource;
 
 use super::*;
 use crate::phases::{
@@ -84,7 +84,7 @@ impl RenderFeaturePlugin for DynMeshRendererPlugin {
 
         render_resources.insert(DynMeshStaticResources { depth_material });
 
-        let mut shadow_map_resource = render_resources.fetch_mut::<ShadowMapResource>();
+        let mut shadow_map_resource = render_resources.fetch_mut::<MeshBasicShadowMapResource>();
         shadow_map_resource.add_shadow_map_feature::<DynMeshRenderFeature>();
 
         Ok(())

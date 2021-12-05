@@ -13,12 +13,12 @@ use rafx::{
     visibility::CullModel,
 };
 use rafx_plugins::{
-    assets::mesh::MeshAsset,
+    assets::mesh_basic::MeshBasicAsset,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
     features::{
         debug3d::Debug3DResource,
         egui::EguiContextResource,
-        mesh::{MeshRenderObject, MeshRenderObjectSet},
+        mesh_basic::{MeshBasicRenderObject, MeshBasicRenderObjectSet},
     },
 };
 use rand::{thread_rng, Rng};
@@ -88,14 +88,14 @@ impl UnitsState {
     pub fn new(resources: &Resources) -> Self {
         let mut asset_manager = resources.get_mut::<AssetManager>().unwrap();
         let mut asset_resource = resources.get_mut::<AssetResource>().unwrap();
-        let mut mesh_render_objects = resources.get_mut::<MeshRenderObjectSet>().unwrap();
+        let mut mesh_render_objects = resources.get_mut::<MeshBasicRenderObjectSet>().unwrap();
 
         log::info!("Loading units meshes...");
 
         let container_1_asset = asset_resource.load_asset_path("blender/storage_container1.glb");
         let container_2_asset = asset_resource.load_asset_path("blender/storage_container2.glb");
-        let blue_icosphere_asset =
-            asset_resource.load_asset::<MeshAsset>("d5aed900-1e31-4f47-94ba-e356b0b0b8b0".into());
+        let blue_icosphere_asset = asset_resource
+            .load_asset::<MeshBasicAsset>("d5aed900-1e31-4f47-94ba-e356b0b0b8b0".into());
 
         asset_manager
             .wait_for_asset_to_load(&container_1_asset, &mut asset_resource, "")
@@ -110,19 +110,19 @@ impl UnitsState {
         let mut meshes = HashMap::new();
         meshes.insert(
             UnitType::Container1,
-            mesh_render_objects.register_render_object(MeshRenderObject {
+            mesh_render_objects.register_render_object(MeshBasicRenderObject {
                 mesh: container_1_asset,
             }),
         );
         meshes.insert(
             UnitType::Container2,
-            mesh_render_objects.register_render_object(MeshRenderObject {
+            mesh_render_objects.register_render_object(MeshBasicRenderObject {
                 mesh: container_2_asset,
             }),
         );
         meshes.insert(
             UnitType::BlueIcosphere,
-            mesh_render_objects.register_render_object(MeshRenderObject {
+            mesh_render_objects.register_render_object(MeshBasicRenderObject {
                 mesh: blue_icosphere_asset,
             }),
         );
@@ -415,7 +415,7 @@ impl UnitsState {
 
         // visibility component
         let asset_manager = resources.get::<AssetManager>().unwrap();
-        let mesh_render_objects = resources.get::<MeshRenderObjectSet>().unwrap();
+        let mesh_render_objects = resources.get::<MeshBasicRenderObjectSet>().unwrap();
         let mesh_render_objects = mesh_render_objects.read();
         let asset_handle = &mesh_render_objects.get(&mesh_render_object).mesh;
         let mut entry = world.entry(entity).unwrap();

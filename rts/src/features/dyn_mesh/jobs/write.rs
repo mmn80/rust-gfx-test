@@ -9,7 +9,7 @@ use rafx::{
     render_feature_write_job_prelude::*,
 };
 use rafx_plugins::{
-    features::mesh::{MeshVertexFull, MeshVertexPosition},
+    features::mesh_basic::{MeshVertexFull, MeshVertexPosition},
     phases::OpaqueRenderPhase,
 };
 use serde::{Deserialize, Serialize};

@@ -7,7 +7,7 @@ use rafx::{
 };
 use rafx_plugins::{
     assets::font::FontAsset,
-    features::{mesh::MeshRenderOptions, text::TextResource},
+    features::{mesh_basic::MeshBasicRenderOptions, text::TextResource},
 };
 
 use super::{Scene, SceneManagerAction};
@@ -79,7 +79,7 @@ impl MainScene {
         let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
         *render_options = RenderOptions::default_3d();
 
-        let mut mesh_render_options = resources.get_mut::<MeshRenderOptions>().unwrap();
+        let mut mesh_render_options = resources.get_mut::<MeshBasicRenderOptions>().unwrap();
         mesh_render_options.ambient_light = glam::Vec3::new(0.005, 0.005, 0.005);
 
         let font = {

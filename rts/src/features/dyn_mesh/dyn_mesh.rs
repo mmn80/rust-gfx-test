@@ -8,7 +8,7 @@ use rafx::{
     render_features::{RenderPhase, RenderPhaseIndex, RenderView},
 };
 use rafx_plugins::{
-    features::mesh::MeshUntexturedRenderFeatureFlag,
+    features::mesh_basic::MeshBasicUntexturedRenderFeatureFlag,
     phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
 };
 
@@ -39,7 +39,8 @@ impl std::fmt::Display for DynMeshData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let vtx_sz = self.vertex_full_buffer.as_ref().unwrap().len();
         let idx_sz = self.index_buffer.as_ref().unwrap().len();
-        let vtx_q = 4 * std::mem::size_of::<rafx_plugins::features::mesh::MeshVertexFull>() as u32;
+        let vtx_q =
+            4 * std::mem::size_of::<rafx_plugins::features::mesh_basic::MeshVertexFull>() as u32;
         let idx_q = 6 * std::mem::size_of::<u16>() as u32;
         write!(
             f,
@@ -97,7 +98,7 @@ impl DynMeshPart {
     ) -> usize {
         if render_phase_index == OpaqueRenderPhase::render_phase_index() {
             let offset = !view.phase_is_relevant::<DepthPrepassRenderPhase>() as usize;
-            return if view.feature_flag_is_relevant::<MeshUntexturedRenderFeatureFlag>() {
+            return if view.feature_flag_is_relevant::<MeshBasicUntexturedRenderFeatureFlag>() {
                 self.untextured_pass_index + offset
             } else {
                 self.textured_pass_index + offset

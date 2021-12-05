@@ -9,14 +9,14 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     },
-    features::mesh::MeshRenderOptions,
+    features::mesh_basic::MeshBasicRenderOptions,
 };
 
 use super::*;
 
 pub struct DynMeshExtractJob<'extract> {
     world: ResourceRefBorrow<'extract, World>,
-    mesh_render_options: Option<ResourceRefBorrow<'extract, MeshRenderOptions>>,
+    mesh_render_options: Option<ResourceRefBorrow<'extract, MeshBasicRenderOptions>>,
     asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: DynMeshRenderObjectSet,
@@ -39,7 +39,7 @@ impl<'extract> DynMeshExtractJob<'extract> {
                 world: extract_context.extract_resources.fetch::<World>(),
                 mesh_render_options: extract_context
                     .extract_resources
-                    .try_fetch::<MeshRenderOptions>(),
+                    .try_fetch::<MeshBasicRenderOptions>(),
                 asset_manager: extract_context
                     .render_resources
                     .fetch::<AssetManagerRenderResource>()

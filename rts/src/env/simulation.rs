@@ -34,8 +34,7 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
     },
-    features::mesh::MeshVertexFull,
-    features::mesh::MeshVertexPosition,
+    features::mesh_basic::{MeshVertexFull, MeshVertexPosition},
 };
 
 use crate::{

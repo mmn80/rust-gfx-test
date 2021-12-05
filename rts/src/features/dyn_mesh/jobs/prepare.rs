@@ -10,22 +10,25 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     },
-    features::mesh::{LightId, ShadowMapRenderView, ShadowMapResource},
+    features::mesh_basic::{
+        MeshBasicLightId, MeshBasicShadowMapRenderView, MeshBasicShadowMapResource,
+    },
     phases::{
         DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
     },
     shaders::{
-        depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
-        mesh_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
+        depth::depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
+        mesh_basic::mesh_basic_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
     },
 };
 
 use super::*;
 
 const PER_VIEW_DESCRIPTOR_SET_INDEX: u32 =
-    rafx_plugins::shaders::mesh_textured_frag::PER_VIEW_DATA_DESCRIPTOR_SET_INDEX as u32;
+    rafx_plugins::shaders::mesh_basic::mesh_basic_textured_frag::PER_VIEW_DATA_DESCRIPTOR_SET_INDEX
+        as u32;
 const PER_MATERIAL_DESCRIPTOR_SET_INDEX: u32 =
-    rafx_plugins::shaders::mesh_textured_frag::PER_MATERIAL_DATA_DESCRIPTOR_SET_INDEX as u32;
+    rafx_plugins::shaders::mesh_basic::mesh_basic_textured_frag::PER_MATERIAL_DATA_DESCRIPTOR_SET_INDEX as u32;
 
 struct PreparedDirectionalLight<'a> {
     light: &'a DirectionalLightComponent,
@@ -50,7 +53,7 @@ pub struct DynMeshPrepareJob<'prepare> {
     requires_textured_descriptor_sets: bool,
     requires_untextured_descriptor_sets: bool,
     depth_material_pass: Option<ResourceArc<MaterialPassResource>>,
-    shadow_map_data: ReadBorrow<'prepare, ShadowMapResource>,
+    shadow_map_data: ReadBorrow<'prepare, MeshBasicShadowMapResource>,
     invalid_resources: ReadBorrow<'prepare, InvalidResources>,
     render_object_instance_transforms: Arc<AtomicOnceCellStack<[[f32; 4]; 4]>>,
     render_objects: DynMeshRenderObjectSet,
@@ -97,7 +100,7 @@ impl<'prepare> DynMeshPrepareJob<'prepare> {
                 shadow_map_data: {
                     prepare_context
                         .render_resources
-                        .fetch::<ShadowMapResource>()
+                        .fetch::<MeshBasicShadowMapResource>()
                 },
                 requires_textured_descriptor_sets,
                 requires_untextured_descriptor_sets,
@@ -146,7 +149,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                 shadow_map_data.shadow_map_render_views().iter().enumerate()
             {
                 match shadow_map_render_view {
-                    ShadowMapRenderView::Single(shadow_view) => {
+                    MeshBasicShadowMapRenderView::Single(shadow_view) => {
                         let num_shadow_map_2d = per_frame_submit_data.num_shadow_map_2d;
                         if num_shadow_map_2d >= MAX_SHADOW_MAPS_2D {
                             log::warn!("More 2D shadow maps than the mesh shader can support");
@@ -154,7 +157,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                         }
 
                         per_frame_submit_data.shadow_map_2d_data[num_shadow_map_2d] =
-                            rafx_plugins::shaders::mesh_textured_frag::ShadowMap2DDataStd140 {
+                            rafx_plugins::shaders::mesh_basic::mesh_basic_textured_frag::ShadowMap2DDataStd140 {
                                 shadow_map_view_proj: shadow_view.view_proj().to_cols_array_2d(),
                                 shadow_map_light_dir: shadow_view.view_dir().into(),
                                 ..Default::default()
@@ -167,7 +170,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
 
                         per_frame_submit_data.num_shadow_map_2d += 1;
                     }
-                    ShadowMapRenderView::Cube(shadow_views) => {
+                    MeshBasicShadowMapRenderView::Cube(shadow_views) => {
                         let num_shadow_map_cube = per_frame_submit_data.num_shadow_map_cube;
                         if num_shadow_map_cube >= MAX_SHADOW_MAPS_CUBE {
                             log::warn!("More cube shadow maps than the mesh shader can support");
@@ -181,7 +184,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                             .unwrap();
 
                         per_frame_submit_data.shadow_map_cube_data[num_shadow_map_cube] =
-                            rafx_plugins::shaders::mesh_textured_frag::ShadowMapCubeDataStd140 {
+                            rafx_plugins::shaders::mesh_basic::mesh_basic_textured_frag::ShadowMapCubeDataStd140 {
                                 cube_map_projection_near_z: near,
                                 cube_map_projection_far_z: far,
                                 ..Default::default()
@@ -391,7 +394,9 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let light = directional_light;
                     let shadow_map_index = shadow_map_data
                         .shadow_map_lookup()
-                        .get(&LightId::DirectionalLight(directional_light.object_id))
+                        .get(&MeshBasicLightId::DirectionalLight(
+                            directional_light.object_id,
+                        ))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();
 
@@ -431,7 +436,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let light = point_light;
                     let shadow_map_index = shadow_map_data
                         .shadow_map_lookup()
-                        .get(&LightId::PointLight(point_light.object_id))
+                        .get(&MeshBasicLightId::PointLight(point_light.object_id))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();
 
@@ -467,7 +472,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     let light = spot_light;
                     let shadow_map_index = shadow_map_data
                         .shadow_map_lookup()
-                        .get(&LightId::SpotLight(spot_light.object_id))
+                        .get(&MeshBasicLightId::SpotLight(spot_light.object_id))
                         .map(|x| per_frame_submit_data.shadow_map_image_index_remap[*x])
                         .flatten();
 
@@ -559,7 +564,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                     descriptor_set_allocator
                         .create_descriptor_set(
                             &per_view_descriptor_set_layout,
-                            rafx_plugins::shaders::mesh_textured_frag::DescriptorSet0Args {
+                            rafx_plugins::shaders::mesh_basic::mesh_basic_textured_frag::DescriptorSet0Args {
                                 shadow_map_images,
                                 shadow_map_images_cube,
                                 per_view_data: &per_view_frag_data,
@@ -588,7 +593,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
             descriptor_set_allocator
                 .create_descriptor_set(
                     per_instance_descriptor_set_layout,
-                    rafx_plugins::shaders::depth_vert::DescriptorSet0Args {
+                    rafx_plugins::shaders::depth::depth_vert::DescriptorSet0Args {
                         per_view_data: &per_view_data,
                     },
                 )
