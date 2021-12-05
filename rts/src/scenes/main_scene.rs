@@ -63,6 +63,10 @@ impl MainState {
                             Vec4::new(r as f32 / 256., g as f32 / 256., b as f32 / 256., 1.);
                     }
                 });
+                ui.add(
+                    egui::Slider::new(&mut ui_state.main_light_intensity, 0.0..=10.0)
+                        .text("Intensity"),
+                );
             });
     }
 }

@@ -1166,7 +1166,7 @@ impl Simulation {
                 let view_frustum = visibility_region.register_view_frustum();
                 Some(world.push((DirectionalLightComponent {
                     direction: light_direction,
-                    intensity: 5.0,
+                    intensity: 2.0,
                     color: [1.0, 1.0, 1.0, 1.0].into(),
                     view_frustum,
                 },)))

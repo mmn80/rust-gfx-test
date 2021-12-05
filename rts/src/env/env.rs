@@ -142,6 +142,7 @@ impl EnvState {
                         light.direction = q.mul_vec3(Vec3::Y);
                     }
                     light.color = ui_state.main_light_color;
+                    light.intensity = ui_state.main_light_intensity;
                 }
             }
         }
