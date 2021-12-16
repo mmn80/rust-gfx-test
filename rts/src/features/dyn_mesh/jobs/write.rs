@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use rafx::{
     api::{
-        RafxIndexBufferBinding, RafxPrimitiveTopology, RafxVertexAttributeRate,
+        RafxIndexBufferBinding, RafxIndexType, RafxPrimitiveTopology, RafxVertexAttributeRate,
         RafxVertexBufferBinding,
     },
     framework::{MaterialPassResource, ResourceArc, VertexDataLayout, VertexDataSetLayout},
@@ -224,15 +224,12 @@ impl<'write> RenderFeatureWriteJob<'write> for DynMeshWriteJob<'write> {
             index_type: mesh_part.index_type,
         })?;
 
-        command_buffer.cmd_draw_indexed(
-            mesh_part.index_buffer_size_in_bytes
-                / (match mesh_part.index_type {
-                    rafx::api::RafxIndexType::Uint32 => 4,
-                    rafx::api::RafxIndexType::Uint16 => 2,
-                }),
-            0,
-            0,
-        )?;
+        let index_size = match mesh_part.index_type {
+            RafxIndexType::Uint16 => std::mem::size_of::<u16>(),
+            RafxIndexType::Uint32 => std::mem::size_of::<u32>(),
+        } as u32;
+
+        command_buffer.cmd_draw_indexed(mesh_part.index_buffer_size_in_bytes / index_size, 0, 0)?;
 
         Ok(())
     }

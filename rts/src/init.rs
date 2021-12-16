@@ -131,8 +131,8 @@ pub fn rendering_init(
             &device_context,
             BufferUploaderConfig {
                 max_bytes_per_transfer: 64 * 1024 * 1024,
-                max_concurrent_transfers: 4,
-                max_new_transfers_in_single_frame: 4,
+                max_concurrent_transfers: 2,
+                max_new_transfers_in_single_frame: 1,
             },
             renderer.graphics_queue().clone(),
             renderer.transfer_queue().clone(),

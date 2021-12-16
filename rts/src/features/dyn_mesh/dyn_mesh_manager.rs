@@ -126,12 +126,15 @@ impl DynMeshManager {
         transfer_queue: RafxQueue,
     ) {
         if self.uploader.is_none() {
-            self.uploader = Some(BufferUploader::new(
+            match BufferUploader::new(
                 device_context,
                 upload_queue_config,
                 graphics_queue,
                 transfer_queue,
-            ))
+            ) {
+                Ok(uploader) => self.uploader = Some(uploader),
+                Err(err) => log::error!("BufferUploadManager: {}", err),
+            }
         } else {
             log::error!("BufferUploadManager already initialized");
         }

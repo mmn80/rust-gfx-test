@@ -212,6 +212,8 @@ struct UploadQueue {
 
     transfers_in_progress: Vec<InProgressTransfer>,
 
+    upload_buffer_pool: RafxUploadBufferPool,
+
     graphics_queue: RafxQueue,
     transfer_queue: RafxQueue,
 
@@ -235,10 +237,15 @@ impl UploadQueue {
         config: BufferUploaderConfig,
         graphics_queue: RafxQueue,
         transfer_queue: RafxQueue,
-    ) -> Self {
+    ) -> RafxResult<Self> {
         let (pending_tx, pending_rx) = crossbeam_channel::unbounded();
+        let upload_buffer_pool = RafxUploadBufferPool::new(
+            device_context,
+            config.max_concurrent_transfers as u32,
+            config.max_bytes_per_transfer as u64,
+        )?;
 
-        UploadQueue {
+        Ok(UploadQueue {
             device_context: device_context.clone(),
             config,
             pending_tx,
@@ -246,9 +253,10 @@ impl UploadQueue {
             next_upload: None,
             transfers_in_progress: Default::default(),
             next_transfer_id: 1,
+            upload_buffer_pool,
             graphics_queue,
             transfer_queue,
-        }
+        })
     }
 
     pub fn pending_tx(&self) -> &Sender<PendingUpload> {
@@ -290,6 +298,7 @@ impl UploadQueue {
                 &self.transfer_queue,
                 &self.graphics_queue,
                 self.config.max_bytes_per_transfer as u64,
+                Some(&mut self.upload_buffer_pool),
             )?
         };
 
@@ -450,20 +459,20 @@ impl BufferUploader {
         upload_queue_config: BufferUploaderConfig,
         graphics_queue: RafxQueue,
         transfer_queue: RafxQueue,
-    ) -> Self {
+    ) -> RafxResult<Self> {
         let (result_tx, result_rx) = crossbeam_channel::unbounded();
 
-        BufferUploader {
+        Ok(BufferUploader {
             upload_queue: UploadQueue::new(
                 device_context,
                 upload_queue_config,
                 graphics_queue,
                 transfer_queue,
-            ),
+            )?,
             current_id: AtomicU64::new(0),
             result_rx,
             result_tx,
-        }
+        })
     }
 
     #[profiling::function]
