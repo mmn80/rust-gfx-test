@@ -7,16 +7,11 @@ use rafx::{
     rafx_visibility::VisibleBounds,
     render_features::{RenderPhase, RenderPhaseIndex, RenderView},
 };
-use rafx_plugins::phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase};
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::{
-    MeshBasicUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag, MeshVertexFull,
-};
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::{
-    MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag, MeshVertexFull,
+use rafx_plugins::{
+    features::mesh_adv::{
+        MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag, MeshVertexFull,
+    },
+    phases::{DepthPrepassRenderPhase, OpaqueRenderPhase, WireframeRenderPhase},
 };
 
 pub use super::buffer_upload::BufferUploaderConfig;

@@ -10,6 +10,9 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     },
+    features::mesh_adv::{
+        MeshAdvLightId as MeshLightId, MeshAdvShadowMapResource as MeshShadowMapResource,
+    },
     phases::{
         DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
     },
@@ -17,18 +20,6 @@ use rafx_plugins::{
         depth::depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
         mesh_basic::mesh_basic_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
     },
-};
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::{
-    MeshBasicLightId as MeshLightId, MeshBasicShadowMapRenderView as MeshShadowMapRenderView,
-    MeshBasicShadowMapResource as MeshShadowMapResource,
-};
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::{
-    MeshAdvLightId as MeshLightId, MeshAdvShadowMapRenderView as MeshShadowMapRenderView,
-    MeshAdvShadowMapResource as MeshShadowMapResource,
 };
 
 use super::*;

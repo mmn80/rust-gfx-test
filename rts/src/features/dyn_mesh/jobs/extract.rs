@@ -5,15 +5,12 @@ use rafx::{
     distill::loader::handle::Handle,
     render_feature_extract_job_predule::*,
 };
-use rafx_plugins::components::{
-    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+use rafx_plugins::{
+    components::{
+        DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
+    },
+    features::mesh_adv::MeshAdvRenderOptions as MeshRenderOptions,
 };
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::MeshBasicRenderOptions as MeshRenderOptions;
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::MeshAdvRenderOptions as MeshRenderOptions;
 
 use super::*;
 

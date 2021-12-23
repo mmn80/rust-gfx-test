@@ -4,14 +4,10 @@ use crossbeam_channel::{bounded, unbounded};
 use rafx::framework::render_features::render_features_prelude::*;
 use rafx::render_feature_renderer_prelude::RenderFeaturePlugin;
 use rafx::renderer::{RenderFrameJob, Renderer, RendererThreadPool};
+use rafx_plugins::features::mesh_adv::MeshAdvRenderFeature as MeshRenderFeature;
+
 use std::collections::HashMap;
 use std::sync::Arc;
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::MeshBasicRenderFeature as MeshRenderFeature;
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::MeshAdvRenderFeature as MeshRenderFeature;
 
 #[derive(Clone)]
 pub struct DemoRendererThreadPool {

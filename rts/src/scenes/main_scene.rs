@@ -5,13 +5,10 @@ use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
 };
-use rafx_plugins::{assets::font::FontAsset, features::text::TextResource};
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::MeshBasicRenderOptions as MeshRenderOptions;
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::MeshAdvRenderOptions as MeshRenderOptions;
+use rafx_plugins::{
+    assets::font::FontAsset,
+    features::{mesh_adv::MeshAdvRenderOptions as MeshRenderOptions, text::TextResource},
+};
 
 use super::{Scene, SceneManagerAction};
 use crate::{

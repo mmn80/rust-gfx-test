@@ -13,24 +13,17 @@ use rafx::{
     visibility::CullModel,
 };
 use rafx_plugins::{
+    assets::mesh_adv::MeshAdvAsset as MeshAsset,
     components::{MeshComponent, TransformComponent, VisibilityComponent},
-    features::{debug3d::Debug3DResource, egui::EguiContextResource},
+    features::{
+        debug3d::Debug3DResource,
+        egui::EguiContextResource,
+        mesh_adv::{
+            MeshAdvRenderObject as MeshRenderObject, MeshAdvRenderObjectSet as MeshRenderObjectSet,
+        },
+    },
 };
 use rand::{thread_rng, Rng};
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::assets::mesh_basic::MeshBasicAsset as MeshAsset;
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::{
-    MeshBasicRenderObject as MeshRenderObject, MeshBasicRenderObjectSet as MeshRenderObjectSet,
-};
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::assets::mesh_adv::MeshAdvAsset as MeshAsset;
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::{
-    MeshAdvRenderObject as MeshRenderObject, MeshAdvRenderObjectSet as MeshRenderObjectSet,
-};
 
 use crate::{
     camera::RTSCamera,

@@ -12,29 +12,21 @@ use rafx::{
 };
 use rafx_plugins::{
     features::{
-        debug3d::Debug3DRenderFeature, debug_pip::DebugPipRenderFeature, egui::EguiRenderFeature,
+        debug3d::Debug3DRenderFeature,
+        debug_pip::DebugPipRenderFeature,
+        egui::EguiRenderFeature,
+        mesh_adv::{
+            MeshAdvNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
+            MeshAdvUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
+            MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
+            MeshAdvWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
+        },
         text::TextRenderFeature,
     },
     phases::{
         DebugPipRenderPhase, DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase,
         UiRenderPhase, WireframeRenderPhase,
     },
-};
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::{
-    MeshBasicNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
-    MeshBasicUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
-    MeshBasicUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
-    MeshBasicWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
-};
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::{
-    MeshAdvNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
-    MeshAdvUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
-    MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
-    MeshAdvWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
 };
 
 use crate::{

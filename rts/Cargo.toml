@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 rafx = { path = "../../rafx/rafx", features = ["renderer", "basis-universal", "ddsfile"] }
-rafx-plugins = { path = "../../rafx/rafx-plugins", features = ["legion", "egui", "egui-winit"] }
+rafx-plugins = { path = "../../rafx/rafx-plugins", features = ["legion", "egui", "egui-winit", "modern-pipeline"] }
 distill = { version = "=0.0.3", features = ["serde_importers"] }
 uuid = "0.8"
 type-uuid = "0.1"
@@ -49,7 +49,6 @@ building-blocks = "0.7"
 
 [features]
 default = [
-    "modern-pipeline",
     "profile-with-puffin",
     "rafx-vulkan",
     #"stats_alloc", # Cannot be enabled with "profile-with-tracy-memory". Will run renderer / game loop single-threaded.
@@ -58,8 +57,6 @@ default = [
     #"profile-with-tracy-memory", # Cannot be enabled with "stats_alloc".
     #"profile-with-superluminal"
 ]
-basic-pipeline = ["rafx-plugins/basic-pipeline"]
-modern-pipeline = ["rafx-plugins/modern-pipeline"]
 rafx-empty = ["rafx/rafx-empty"]
 rafx-vulkan = ["rafx/rafx-vulkan"]
 rafx-metal = ["rafx/rafx-metal"]

@@ -1,15 +1,12 @@
 use distill::loader::handle::Handle;
 use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
-use rafx_plugins::phases::{
-    DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, TransparentRenderPhase,
-    WireframeRenderPhase,
+use rafx_plugins::{
+    features::mesh_adv::MeshAdvShadowMapResource as MeshShadowMapResource,
+    phases::{
+        DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, TransparentRenderPhase,
+        WireframeRenderPhase,
+    },
 };
-
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::MeshBasicShadowMapResource as MeshShadowMapResource;
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::MeshAdvShadowMapResource as MeshShadowMapResource;
 
 use super::*;
 

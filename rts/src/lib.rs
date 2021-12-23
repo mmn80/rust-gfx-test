@@ -1,7 +1,6 @@
 // There's a decent amount of code that's just for example and isn't called
 #![allow(dead_code)]
 
-use env::simulation::Simulation;
 use legion::*;
 use rafx::{
     api::{RafxExtents2D, RafxResult, RafxSwapchainHelper},
@@ -10,41 +9,31 @@ use rafx::{
     render_features::ExtractResources,
     renderer::{AssetSource, Renderer, RendererConfigResource, ViewportsResource},
 };
-use rafx_plugins::features::egui::WinitEguiManager;
+use rafx_plugins::{
+    features::{
+        egui::WinitEguiManager,
+        mesh_adv::{
+            MeshAdvRenderObjectSet as MeshRenderObjectSet,
+            MeshAdvRenderOptions as MeshRenderOptions,
+        },
+    },
+    pipelines::modern::{
+        ModernPipelineRenderOptions as PipelineRenderOptions,
+        ModernPipelineTonemapDebugData as PipelineTonemapDebugData,
+        TonemapperTypeAdv as TonemapperType,
+    },
+};
 use structopt::StructOpt;
-use time::PeriodicEvent;
 use winit::{
     event::Event,
     event_loop::{ControlFlow, EventLoop},
     window::{Fullscreen, Window},
 };
 
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::features::mesh_basic::{
-    MeshBasicRenderObjectSet as MeshRenderObjectSet, MeshBasicRenderOptions as MeshRenderOptions,
-};
-#[cfg(feature = "basic-pipeline")]
-use rafx_plugins::pipelines::basic::{
-    BasicPipelineRenderOptions as PipelineRenderOptions,
-    BasicPipelineTonemapDebugData as PipelineTonemapDebugData,
-    TonemapperTypeBasic as TonemapperType,
-};
-
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::features::mesh_adv::{
-    MeshAdvRenderObjectSet as MeshRenderObjectSet, MeshAdvRenderOptions as MeshRenderOptions,
-};
-#[cfg(not(feature = "basic-pipeline"))]
-use rafx_plugins::pipelines::modern::{
-    ModernPipelineRenderOptions as PipelineRenderOptions,
-    ModernPipelineTonemapDebugData as PipelineTonemapDebugData,
-    TonemapperTypeAdv as TonemapperType,
-};
-
 use crate::{
-    camera::RTSCamera, daemon_args::AssetDaemonArgs, features::dyn_mesh::DynMeshManager,
-    input::InputResource, scenes::SceneManager, scenes::SceneManagerAction, time::TimeState,
-    ui::UiState,
+    camera::RTSCamera, daemon_args::AssetDaemonArgs, env::simulation::Simulation,
+    features::dyn_mesh::DynMeshManager, input::InputResource, scenes::SceneManager,
+    scenes::SceneManagerAction, time::PeriodicEvent, time::TimeState, ui::UiState,
 };
 
 mod assets;
@@ -224,7 +213,6 @@ pub struct DebugUiState {
     show_render_options: bool,
     show_asset_list: bool,
     show_tonemap_debug: bool,
-    #[cfg(not(feature = "basic-pipeline"))]
     show_shadow_map_debug: bool,
 
     #[cfg(feature = "profile-with-puffin")]
@@ -279,7 +267,6 @@ impl DemoApp {
         resources.insert(RenderOptions::default_2d());
         resources.insert(MeshRenderOptions::default());
         resources.insert(PipelineRenderOptions::default());
-        #[cfg(not(feature = "basic-pipeline"))]
         resources.insert(PipelineTonemapDebugData::default());
         resources.insert(DebugUiState::default());
         resources.insert(InputResource::new());

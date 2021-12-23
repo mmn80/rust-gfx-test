@@ -41,17 +41,8 @@ fn create_daemon(args: &CliArgs) -> AssetDaemon {
         .with_address(args.daemon_args.address)
         .with_asset_dirs(args.daemon_args.asset_dirs.clone());
 
-    #[cfg(feature = "basic-pipeline")]
-    {
-        asset_daemon = rafx_plugins::assets::mesh_basic::MeshBasicAssetTypeRendererPlugin
-            .configure_asset_daemon(asset_daemon);
-    }
-
-    #[cfg(not(feature = "basic-pipeline"))]
-    {
-        asset_daemon = rafx_plugins::assets::mesh_adv::MeshAdvAssetTypeRendererPlugin
-            .configure_asset_daemon(asset_daemon);
-    }
+    asset_daemon = rafx_plugins::assets::mesh_adv::MeshAdvAssetTypeRendererPlugin
+        .configure_asset_daemon(asset_daemon);
 
     asset_daemon = FontAssetTypeRendererPlugin.configure_asset_daemon(asset_daemon);
     asset_daemon = AnimAssetTypeRendererPlugin.configure_asset_daemon(asset_daemon);
