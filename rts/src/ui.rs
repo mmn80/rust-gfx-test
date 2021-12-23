@@ -81,7 +81,7 @@ impl UiState {
                     let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
                     let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
                     let tonemap_debug_data = resources.get::<PipelineTonemapDebugData>().unwrap();
-                    let asset_resource = self.resources.get::<AssetResource>().unwrap();
+                    let asset_resource = resources.get::<AssetResource>().unwrap();
 
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(), |ui| {

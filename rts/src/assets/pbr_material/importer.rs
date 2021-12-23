@@ -7,7 +7,7 @@ use distill::{
     make_handle, make_handle_from_str,
 };
 use rafx::assets::{ImageAsset, MaterialInstanceAssetData, MaterialInstanceSlotAssignment};
-use rafx_plugins::assets::mesh_basic::MeshBasicMaterialDataShaderParam;
+use rafx_plugins::assets::mesh_adv::MeshAdvMaterialDataShaderParam;
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
@@ -99,7 +99,7 @@ impl Importer for PbrMaterialImporter {
 
         let mut slot_assignments = vec![];
 
-        let material_data_shader_param: MeshBasicMaterialDataShaderParam = source.clone().into();
+        let material_data_shader_param: MeshAdvMaterialDataShaderParam = source.clone().into();
         slot_assignments.push(MaterialInstanceSlotAssignment {
             slot_name: "per_material_data".to_string(),
             array_index: 0,

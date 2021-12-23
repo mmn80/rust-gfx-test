@@ -17,6 +17,7 @@ use rafx_plugins::{
         egui::EguiRenderFeature,
         mesh_adv::{
             MeshAdvNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
+            MeshAdvRenderFeature as MeshRenderFeature,
             MeshAdvUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
             MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
             MeshAdvWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
@@ -213,7 +214,7 @@ impl RTSCamera {
             .add_render_phase::<UiRenderPhase>();
 
         let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
-            .add_render_feature::<MeshBasicRenderFeature>()
+            .add_render_feature::<MeshRenderFeature>()
             .add_render_feature::<DynMeshRenderFeature>()
             .add_render_feature::<EguiRenderFeature>()
             .add_render_feature::<DebugPipRenderFeature>();

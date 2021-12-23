@@ -10,13 +10,7 @@ use rafx::{
     renderer::{AssetSource, Renderer, RendererConfigResource, ViewportsResource},
 };
 use rafx_plugins::{
-    features::{
-        egui::WinitEguiManager,
-        mesh_adv::{
-            MeshAdvRenderObjectSet as MeshRenderObjectSet,
-            MeshAdvRenderOptions as MeshRenderOptions,
-        },
-    },
+    features::{egui::WinitEguiManager, mesh_adv::MeshAdvRenderOptions as MeshRenderOptions},
     pipelines::modern::{
         ModernPipelineRenderOptions as PipelineRenderOptions,
         ModernPipelineTonemapDebugData as PipelineTonemapDebugData,
@@ -477,7 +471,7 @@ impl DemoApp {
             add_to_extract_resources!(MeshRenderOptions);
             add_to_extract_resources!(RendererConfigResource);
             add_to_extract_resources!(
-                rafx_plugins::features::mesh_basic::MeshRenderObjectSet,
+                rafx_plugins::features::mesh_adv::MeshAdvRenderObjectSet,
                 mesh_render_object_set
             );
             add_to_extract_resources!(

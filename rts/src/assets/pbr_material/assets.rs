@@ -8,7 +8,7 @@ use rafx::{
         MaterialInstanceAsset,
     },
 };
-use rafx_plugins::assets::mesh_basic::MeshBasicMaterialDataShaderParam;
+use rafx_plugins::assets::mesh_adv::MeshAdvMaterialDataShaderParam;
 use serde::{Deserialize, Serialize};
 use type_uuid::*;
 
@@ -52,9 +52,9 @@ impl Default for PbrMaterialSource {
     }
 }
 
-impl Into<MeshBasicMaterialDataShaderParam> for PbrMaterialSource {
-    fn into(self) -> MeshBasicMaterialDataShaderParam {
-        MeshBasicMaterialDataShaderParam {
+impl Into<MeshAdvMaterialDataShaderParam> for PbrMaterialSource {
+    fn into(self) -> MeshAdvMaterialDataShaderParam {
+        MeshAdvMaterialDataShaderParam {
             base_color_factor: self.base_color_factor.into(),
             emissive_factor: self.emissive_factor.into(),
             metallic_factor: self.metallic_factor,
