@@ -30,12 +30,15 @@ use rafx::{
     renderer::ViewportsResource,
     visibility::{CullModel, ObjectId, ViewFrustumArc, VisibilityObjectArc, VisibilityRegion},
 };
-use rafx_plugins::{
-    components::{
-        DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
-    },
-    features::mesh_basic::{MeshVertexFull, MeshVertexPosition},
+use rafx_plugins::components::{
+    DirectionalLightComponent, MeshComponent, TransformComponent, VisibilityComponent,
 };
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::{MeshVertexFull, MeshVertexPosition};
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::{MeshVertexFull, MeshVertexPosition};
 
 use crate::{
     assets::{

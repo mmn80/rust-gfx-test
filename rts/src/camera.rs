@@ -12,19 +12,29 @@ use rafx::{
 };
 use rafx_plugins::{
     features::{
-        debug3d::Debug3DRenderFeature,
-        egui::EguiRenderFeature,
-        mesh_basic::{
-            MeshBasicNoShadowsRenderFeatureFlag, MeshBasicRenderFeature,
-            MeshBasicUnlitRenderFeatureFlag, MeshBasicUntexturedRenderFeatureFlag,
-            MeshBasicWireframeRenderFeatureFlag,
-        },
+        debug3d::Debug3DRenderFeature, debug_pip::DebugPipRenderFeature, egui::EguiRenderFeature,
         text::TextRenderFeature,
     },
     phases::{
-        DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase, UiRenderPhase,
-        WireframeRenderPhase,
+        DebugPipRenderPhase, DepthPrepassRenderPhase, OpaqueRenderPhase, TransparentRenderPhase,
+        UiRenderPhase, WireframeRenderPhase,
     },
+};
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::{
+    MeshBasicNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
+    MeshBasicUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
+    MeshBasicUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
+    MeshBasicWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
+};
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::{
+    MeshAdvNoShadowsRenderFeatureFlag as MeshNoShadowsRenderFeatureFlag,
+    MeshAdvUnlitRenderFeatureFlag as MeshUnlitRenderFeatureFlag,
+    MeshAdvUntexturedRenderFeatureFlag as MeshUntexturedRenderFeatureFlag,
+    MeshAdvWireframeRenderFeatureFlag as MeshWireframeRenderFeatureFlag,
 };
 
 use crate::{
@@ -207,12 +217,14 @@ impl RTSCamera {
             .add_render_phase::<OpaqueRenderPhase>()
             .add_render_phase::<TransparentRenderPhase>()
             .add_render_phase::<WireframeRenderPhase>()
+            .add_render_phase::<DebugPipRenderPhase>()
             .add_render_phase::<UiRenderPhase>();
 
         let mut feature_mask_builder = RenderFeatureMaskBuilder::default()
             .add_render_feature::<MeshBasicRenderFeature>()
             .add_render_feature::<DynMeshRenderFeature>()
-            .add_render_feature::<EguiRenderFeature>();
+            .add_render_feature::<EguiRenderFeature>()
+            .add_render_feature::<DebugPipRenderFeature>();
 
         if render_options.show_text {
             feature_mask_builder = feature_mask_builder.add_render_feature::<TextRenderFeature>();
@@ -227,31 +239,28 @@ impl RTSCamera {
 
         if render_options.show_wireframes {
             feature_flag_mask_builder = feature_flag_mask_builder
-                .add_render_feature_flag::<MeshBasicWireframeRenderFeatureFlag>(
-            );
+                .add_render_feature_flag::<MeshWireframeRenderFeatureFlag>();
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<DynMeshWireframeRenderFeatureFlag>();
         }
 
         if !render_options.enable_lighting {
-            feature_flag_mask_builder = feature_flag_mask_builder
-                .add_render_feature_flag::<MeshBasicUnlitRenderFeatureFlag>();
+            feature_flag_mask_builder =
+                feature_flag_mask_builder.add_render_feature_flag::<MeshUnlitRenderFeatureFlag>();
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<DynMeshUnlitRenderFeatureFlag>();
         }
 
         if !render_options.enable_textures {
             feature_flag_mask_builder = feature_flag_mask_builder
-                .add_render_feature_flag::<MeshBasicUntexturedRenderFeatureFlag>(
-            );
+                .add_render_feature_flag::<MeshUntexturedRenderFeatureFlag>();
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<DynMeshUntexturedRenderFeatureFlag>();
         }
 
         if !render_options.show_shadows {
             feature_flag_mask_builder = feature_flag_mask_builder
-                .add_render_feature_flag::<MeshBasicNoShadowsRenderFeatureFlag>(
-            );
+                .add_render_feature_flag::<MeshNoShadowsRenderFeatureFlag>();
             feature_flag_mask_builder = feature_flag_mask_builder
                 .add_render_feature_flag::<DynMeshNoShadowsRenderFeatureFlag>();
         }

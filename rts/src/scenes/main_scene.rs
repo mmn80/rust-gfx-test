@@ -5,10 +5,13 @@ use rafx::{
     assets::{distill_impl::AssetResource, AssetManager},
     renderer::ViewportsResource,
 };
-use rafx_plugins::{
-    assets::font::FontAsset,
-    features::{mesh_basic::MeshBasicRenderOptions, text::TextResource},
-};
+use rafx_plugins::{assets::font::FontAsset, features::text::TextResource};
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::MeshBasicRenderOptions as MeshRenderOptions;
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::MeshAdvRenderOptions as MeshRenderOptions;
 
 use super::{Scene, SceneManagerAction};
 use crate::{
@@ -83,7 +86,7 @@ impl MainScene {
         let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
         *render_options = RenderOptions::default_3d();
 
-        let mut mesh_render_options = resources.get_mut::<MeshBasicRenderOptions>().unwrap();
+        let mut mesh_render_options = resources.get_mut::<MeshRenderOptions>().unwrap();
         mesh_render_options.ambient_light = glam::Vec3::new(0.005, 0.005, 0.005);
 
         let font = {

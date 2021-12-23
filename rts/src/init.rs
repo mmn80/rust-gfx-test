@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use legion::Resources;
 use rafx::{
-    api::{RafxApi, RafxDeviceContext, RafxResult, RafxSwapchainHelper},
+    api::{RafxApi, RafxApiDef, RafxDeviceContext, RafxResult, RafxSwapchainHelper},
     assets::{distill_impl::AssetResource, AssetManager},
     render_features::{ExtractResources, RenderRegistry},
     renderer::{
@@ -11,17 +11,31 @@ use rafx::{
     },
 };
 use rafx_plugins::{
-    assets::{
-        anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin,
-        mesh_basic::MeshBasicAssetTypeRendererPlugin,
-    },
+    assets::{anim::AnimAssetTypeRendererPlugin, font::FontAssetTypeRendererPlugin},
     features::{
-        debug3d::Debug3DRendererPlugin, egui::EguiRendererPlugin,
-        mesh_basic::MeshBasicRendererPlugin, text::TextRendererPlugin,
+        debug3d::Debug3DRendererPlugin, debug_pip::DebugPipRendererPlugin,
+        egui::EguiRendererPlugin, text::TextRendererPlugin,
     },
-    pipelines::basic::{BasicPipelineRenderGraphGenerator, BasicPipelineRendererPlugin},
 };
 use raw_window_handle::HasRawWindowHandle;
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::assets::mesh_basic::MeshBasicAssetTypeRendererPlugin;
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::MeshBasicRendererPlugin;
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::pipelines::basic::{
+    BasicPipelineRenderGraphGenerator, BasicPipelineRendererPlugin,
+};
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::assets::mesh_adv::MeshAdvAssetTypeRendererPlugin;
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::MeshAdvRendererPlugin;
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::pipelines::modern::{
+    ModernPipelineRenderGraphGenerator, ModernPipelineRendererPlugin,
+};
 
 use crate::{
     assets::{
@@ -42,15 +56,20 @@ pub fn rendering_init(
     resources.insert(ViewportsResource::default());
     resources.insert(RTSCamera::default());
 
+    #[cfg(feature = "basic-pipeline")]
     let mesh_renderer_plugin = Arc::new(MeshBasicRendererPlugin::new(Some(32)));
+    #[cfg(not(feature = "basic-pipeline"))]
+    let mesh_renderer_plugin = Arc::new(MeshAdvRendererPlugin::new(Some(32)));
     let dyn_mesh_renderer_plugin = Arc::new(DynMeshRendererPlugin::new(Some(32)));
     let debug3d_renderer_plugin = Arc::new(Debug3DRendererPlugin::default());
+    let debug_pip_renderer_plugin = Arc::new(DebugPipRendererPlugin::default());
     let text_renderer_plugin = Arc::new(TextRendererPlugin::default());
     let egui_renderer_plugin = Arc::new(EguiRendererPlugin::default());
 
     mesh_renderer_plugin.legion_init(resources);
     dyn_mesh_renderer_plugin.legion_init(resources);
     debug3d_renderer_plugin.legion_init(resources);
+    debug_pip_renderer_plugin.legion_init(resources);
     text_renderer_plugin.legion_init(resources);
     egui_renderer_plugin.legion_init_winit(resources);
 
@@ -59,7 +78,30 @@ pub fn rendering_init(
     // considered unsafe. However, rafx APIs are only gated by unsafe if they can cause undefined
     // behavior on the CPU for reasons other than interacting with the GPU.
     //
-    let rafx_api = unsafe { rafx::api::RafxApi::new(window, &Default::default())? };
+
+    #[allow(unused_mut)]
+    let mut api_def = RafxApiDef::default();
+
+    // For vulkan on the modern pipeline, we need to enable shader_clip_distance. The default-enabled
+    // options in rafx-api are fine for the basic pipeline
+    #[cfg(all(not(feature = "basic-pipeline"), feature = "rafx-vulkan"))]
+    {
+        let physical_device_features = rafx::api::ash::vk::PhysicalDeviceFeatures::builder()
+            .sampler_anisotropy(true)
+            .sample_rate_shading(true)
+            // Used for debug drawing lines/points
+            .fill_mode_non_solid(true)
+            // Used for user clipping in shadow atlas generation
+            .shader_clip_distance(true)
+            .build();
+
+        api_def.vk_options = Some(rafx::api::RafxApiDefVulkan {
+            physical_device_features: Some(physical_device_features),
+            ..Default::default()
+        });
+    }
+
+    let rafx_api = unsafe { rafx::api::RafxApi::new(window, &api_def)? };
 
     let allow_use_render_thread = if cfg!(feature = "stats_alloc") {
         false
@@ -73,20 +115,34 @@ pub fn rendering_init(
         .add_asset(Arc::new(TileAssetTypeRendererPlugin))
         .add_asset(Arc::new(TileSetsAssetTypeRendererPlugin))
         .add_asset(Arc::new(FontAssetTypeRendererPlugin))
-        .add_asset(Arc::new(MeshBasicAssetTypeRendererPlugin))
         .add_asset(Arc::new(AnimAssetTypeRendererPlugin))
-        .add_asset(Arc::new(BasicPipelineRendererPlugin))
         .add_render_feature(mesh_renderer_plugin)
         .add_render_feature(dyn_mesh_renderer_plugin)
         .add_render_feature(debug3d_renderer_plugin)
+        .add_render_feature(debug_pip_renderer_plugin)
         .add_render_feature(text_renderer_plugin)
         .add_render_feature(egui_renderer_plugin)
         .allow_use_render_thread(allow_use_render_thread);
 
+    #[cfg(feature = "basic-pipeline")]
+    {
+        renderer_builder = renderer_builder.add_asset(Arc::new(MeshBasicAssetTypeRendererPlugin));
+        renderer_builder = renderer_builder.add_asset(Arc::new(BasicPipelineRendererPlugin));
+    }
+
+    #[cfg(not(feature = "basic-pipeline"))]
+    {
+        renderer_builder = renderer_builder.add_asset(Arc::new(MeshAdvAssetTypeRendererPlugin));
+        renderer_builder = renderer_builder.add_asset(Arc::new(ModernPipelineRendererPlugin));
+    }
+
     let mut renderer_builder_result = {
         let extract_resources = ExtractResources::default();
 
+        #[cfg(feature = "basic-pipeline")]
         let render_graph_generator = Box::new(BasicPipelineRenderGraphGenerator);
+        #[cfg(not(feature = "basic-pipeline"))]
+        let render_graph_generator = Box::new(ModernPipelineRenderGraphGenerator);
 
         renderer_builder.build(
             extract_resources,
@@ -154,9 +210,13 @@ pub fn rendering_destroy(resources: &mut Resources) -> RafxResult<()> {
 
         resources.remove::<Renderer>();
 
+        #[cfg(feature = "basic-pipeline")]
         MeshBasicRendererPlugin::legion_destroy(resources);
+        #[cfg(not(feature = "basic-pipeline"))]
+        MeshAdvRendererPlugin::legion_destroy(resources);
         DynMeshRendererPlugin::legion_destroy(resources);
         Debug3DRendererPlugin::legion_destroy(resources);
+        DebugPipRendererPlugin::legion_destroy(resources);
         TextRendererPlugin::legion_destroy(resources);
         EguiRendererPlugin::legion_destroy(resources);
 

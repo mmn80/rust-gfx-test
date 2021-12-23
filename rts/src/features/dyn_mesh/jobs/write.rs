@@ -8,14 +8,18 @@ use rafx::{
     framework::{MaterialPassResource, ResourceArc, VertexDataLayout, VertexDataSetLayout},
     render_feature_write_job_prelude::*,
 };
-use rafx_plugins::{
-    features::mesh_basic::{MeshVertexFull, MeshVertexPosition},
-    phases::OpaqueRenderPhase,
+use rafx_plugins::phases::{
+    DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::{MeshVertexFull, MeshVertexPosition};
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::{MeshVertexFull, MeshVertexPosition};
+
 use super::*;
-use crate::phases::{DepthPrepassRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase};
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, Default)]
 #[repr(C)]

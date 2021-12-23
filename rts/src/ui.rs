@@ -2,9 +2,12 @@ use egui::{Align, Checkbox, Color32};
 use glam::Vec4;
 use legion::Resources;
 use rafx::render_feature_renderer_prelude::AssetResource;
-use rafx_plugins::{
-    features::egui::EguiContextResource, pipelines::basic::BasicPipelineTonemapDebugData,
-};
+use rafx_plugins::features::egui::EguiContextResource;
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::pipelines::basic::BasicPipelineTonemapDebugData as PipelineTonemapDebugData;
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::pipelines::modern::ModernPipelineTonemapDebugData as PipelineTonemapDebugData;
 
 use crate::{
     env::{env::EnvState, simulation::Simulation, ui::EnvUiState},
@@ -79,9 +82,9 @@ impl UiState {
                     let time_state = resources.get::<TimeState>().unwrap();
                     let mut debug_ui_state = resources.get_mut::<DebugUiState>().unwrap();
                     let mut render_options = resources.get_mut::<RenderOptions>().unwrap();
-                    let tonemap_debug_data =
-                        resources.get::<BasicPipelineTonemapDebugData>().unwrap();
-                    let asset_manager = resources.get::<AssetResource>().unwrap();
+                    #[cfg(not(feature = "basic-pipeline"))]
+                    let tonemap_debug_data = resources.get::<PipelineTonemapDebugData>().unwrap();
+                    let asset_resource = self.resources.get::<AssetResource>().unwrap();
 
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(), |ui| {
@@ -99,7 +102,12 @@ impl UiState {
                         .show(ui, |ui| {
                             ui.checkbox(&mut debug_ui_state.show_render_options, "Render options");
                             ui.checkbox(&mut debug_ui_state.show_asset_list, "Asset list");
+                            #[cfg(not(feature = "basic-pipeline"))]
                             ui.checkbox(&mut debug_ui_state.show_tonemap_debug, "Tonemap debug");
+                            ui.checkbox(
+                                &mut debug_ui_state.show_shadow_map_debug,
+                                "Shadow map debug",
+                            );
 
                             #[cfg(feature = "profile-with-puffin")]
                             if ui
@@ -122,6 +130,15 @@ impl UiState {
                             });
                     }
 
+                    if debug_ui_state.show_shadow_map_debug {
+                        egui::CollapsingHeader::new("Shadow map debug")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                //TODO: Build a UI for this
+                                ui.add(egui::Label::new("test"));
+                            });
+                    }
+
                     if debug_ui_state.show_asset_list {
                         egui::CollapsingHeader::new("Asset list")
                             .default_open(true)
@@ -129,7 +146,7 @@ impl UiState {
                                 egui::ScrollArea::vertical()
                                     .max_height(400.)
                                     .show(ui, |ui| {
-                                        let loader = asset_manager.loader();
+                                        let loader = asset_resource.loader();
                                         let mut asset_info = loader
                                             .get_active_loads()
                                             .into_iter()
@@ -162,12 +179,16 @@ impl UiState {
                             });
                     }
 
-                    tonemap_debug_data
-                        .inner
-                        .lock()
-                        .unwrap()
-                        .enable_debug_data_collection = debug_ui_state.show_tonemap_debug;
+                    #[cfg(not(feature = "basic-pipeline"))]
+                    {
+                        tonemap_debug_data
+                            .inner
+                            .lock()
+                            .unwrap()
+                            .enable_debug_data_collection = debug_ui_state.show_tonemap_debug;
+                    }
 
+                    #[cfg(not(feature = "basic-pipeline"))]
                     if debug_ui_state.show_tonemap_debug {
                         egui::CollapsingHeader::new("Tonemap debug")
                             .default_open(true)

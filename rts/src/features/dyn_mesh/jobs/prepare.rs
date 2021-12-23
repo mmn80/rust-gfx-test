@@ -10,9 +10,6 @@ use rafx_plugins::{
     components::{
         DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
     },
-    features::mesh_basic::{
-        MeshBasicLightId, MeshBasicShadowMapRenderView, MeshBasicShadowMapResource,
-    },
     phases::{
         DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, WireframeRenderPhase,
     },
@@ -20,6 +17,18 @@ use rafx_plugins::{
         depth::depth_vert::PerViewDataUniform as ShadowPerViewShaderParam,
         mesh_basic::mesh_basic_textured_frag::PerViewDataUniform as MeshPerViewFragmentShaderParam,
     },
+};
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::{
+    MeshBasicLightId as MeshLightId, MeshBasicShadowMapRenderView as MeshShadowMapRenderView,
+    MeshBasicShadowMapResource as MeshShadowMapResource,
+};
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::{
+    MeshAdvLightId as MeshLightId, MeshAdvShadowMapRenderView as MeshShadowMapRenderView,
+    MeshAdvShadowMapResource as MeshShadowMapResource,
 };
 
 use super::*;
@@ -53,7 +62,7 @@ pub struct DynMeshPrepareJob<'prepare> {
     requires_textured_descriptor_sets: bool,
     requires_untextured_descriptor_sets: bool,
     depth_material_pass: Option<ResourceArc<MaterialPassResource>>,
-    shadow_map_data: ReadBorrow<'prepare, MeshBasicShadowMapResource>,
+    shadow_map_data: ReadBorrow<'prepare, MeshShadowMapResource>,
     invalid_resources: ReadBorrow<'prepare, InvalidResources>,
     render_object_instance_transforms: Arc<AtomicOnceCellStack<[[f32; 4]; 4]>>,
     render_objects: DynMeshRenderObjectSet,
@@ -100,7 +109,7 @@ impl<'prepare> DynMeshPrepareJob<'prepare> {
                 shadow_map_data: {
                     prepare_context
                         .render_resources
-                        .fetch::<MeshBasicShadowMapResource>()
+                        .fetch::<MeshShadowMapResource>()
                 },
                 requires_textured_descriptor_sets,
                 requires_untextured_descriptor_sets,
@@ -149,7 +158,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
                 shadow_map_data.shadow_map_render_views().iter().enumerate()
             {
                 match shadow_map_render_view {
-                    MeshBasicShadowMapRenderView::Single(shadow_view) => {
+                    MeshShadowMapRenderView::Single(shadow_view) => {
                         let num_shadow_map_2d = per_frame_submit_data.num_shadow_map_2d;
                         if num_shadow_map_2d >= MAX_SHADOW_MAPS_2D {
                             log::warn!("More 2D shadow maps than the mesh shader can support");
@@ -170,7 +179,7 @@ impl<'prepare> PrepareJobEntryPoints<'prepare> for DynMeshPrepareJob<'prepare> {
 
                         per_frame_submit_data.num_shadow_map_2d += 1;
                     }
-                    MeshBasicShadowMapRenderView::Cube(shadow_views) => {
+                    MeshShadowMapRenderView::Cube(shadow_views) => {
                         let num_shadow_map_cube = per_frame_submit_data.num_shadow_map_cube;
                         if num_shadow_map_cube >= MAX_SHADOW_MAPS_CUBE {
                             log::warn!("More cube shadow maps than the mesh shader can support");

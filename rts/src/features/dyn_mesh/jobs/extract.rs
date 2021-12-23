@@ -5,18 +5,21 @@ use rafx::{
     distill::loader::handle::Handle,
     render_feature_extract_job_predule::*,
 };
-use rafx_plugins::{
-    components::{
-        DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
-    },
-    features::mesh_basic::MeshBasicRenderOptions,
+use rafx_plugins::components::{
+    DirectionalLightComponent, PointLightComponent, SpotLightComponent, TransformComponent,
 };
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::MeshBasicRenderOptions as MeshRenderOptions;
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::MeshAdvRenderOptions as MeshRenderOptions;
 
 use super::*;
 
 pub struct DynMeshExtractJob<'extract> {
     world: ResourceRefBorrow<'extract, World>,
-    mesh_render_options: Option<ResourceRefBorrow<'extract, MeshBasicRenderOptions>>,
+    mesh_render_options: Option<ResourceRefBorrow<'extract, MeshRenderOptions>>,
     asset_manager: AssetManagerExtractRef,
     depth_material: Handle<MaterialAsset>,
     render_objects: DynMeshRenderObjectSet,
@@ -39,7 +42,7 @@ impl<'extract> DynMeshExtractJob<'extract> {
                 world: extract_context.extract_resources.fetch::<World>(),
                 mesh_render_options: extract_context
                     .extract_resources
-                    .try_fetch::<MeshBasicRenderOptions>(),
+                    .try_fetch::<MeshRenderOptions>(),
                 asset_manager: extract_context
                     .render_resources
                     .fetch::<AssetManagerRenderResource>()

@@ -1,12 +1,17 @@
 use distill::loader::handle::Handle;
 use rafx::{assets::MaterialAsset, render_feature_renderer_prelude::*};
-use rafx_plugins::features::mesh_basic::MeshBasicShadowMapResource;
-
-use super::*;
-use crate::phases::{
+use rafx_plugins::phases::{
     DepthPrepassRenderPhase, OpaqueRenderPhase, ShadowMapRenderPhase, TransparentRenderPhase,
     WireframeRenderPhase,
 };
+
+#[cfg(feature = "basic-pipeline")]
+use rafx_plugins::features::mesh_basic::MeshBasicShadowMapResource as MeshShadowMapResource;
+
+#[cfg(not(feature = "basic-pipeline"))]
+use rafx_plugins::features::mesh_adv::MeshAdvShadowMapResource as MeshShadowMapResource;
+
+use super::*;
 
 pub struct DynMeshStaticResources {
     pub depth_material: Handle<MaterialAsset>,
@@ -84,7 +89,7 @@ impl RenderFeaturePlugin for DynMeshRendererPlugin {
 
         render_resources.insert(DynMeshStaticResources { depth_material });
 
-        let mut shadow_map_resource = render_resources.fetch_mut::<MeshBasicShadowMapResource>();
+        let mut shadow_map_resource = render_resources.fetch_mut::<MeshShadowMapResource>();
         shadow_map_resource.add_shadow_map_feature::<DynMeshRenderFeature>();
 
         Ok(())
